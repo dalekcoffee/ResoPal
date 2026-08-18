@@ -76,11 +76,16 @@ If we can capture a *used* instance in-world, a ResoPal-generated texture could 
 
 ## 5. Blocked / unverified
 
-- **`palify.org` is unreachable from this environment** (egress proxy returns 403 on CONNECT).
-  I could not confirm their deck API shape, whether responses are CORS-enabled, or whether
-  `/cards/w1024/*.webp` sends `Access-Control-Allow-Origin`. **This single fact decides whether
-  the site can be pure static GitHub Pages or needs a small worker** — see PLAN.md Phase 0.
-- Card art is Pocketpair IP served by Palify. Re-hosting composed atlases on our own domain is a
-  different posture from a browser composing them locally. Flagged in PLAN.md, your call.
-- The `.txt` / `.csv` exports you supplied contain a main deck only. Palify decks reportedly also
-  carry a **soul deck**; the exports show no section for it. Needs confirming.
+- **`palify.org` is unreachable from this environment** (egress proxy returns 403 on CONNECT), so
+  every claim about Palify's API in these docs comes from their published terms and Dalek, not
+  from a fetch I made. Fixing this is an environment setting — see PLAN.md Phase 0.
+- **Resolved by Dalek:** Palify publish a free read-only JSON API (`palify.org/developers`),
+  usable on condition that we **credit them and cache responses**. That is our data source; we do
+  not scrape. Caching is a hard requirement, not an optimisation — see PLAN.md "Caching policy".
+- **Resolved by Dalek:** decks carry a soul deck. It becomes a **second deck object** containing
+  only soul cards, and the user can pick soul cards from Palify's full soul-card list.
+- **Still open:** whether Palify's deck endpoint and `/cards/w1024/*.webp` send CORS headers. This
+  is now the only Phase 0 blocker, and it still decides static-site vs Worker.
+- **Still open:** re-hosting composed atlases on our own domain (Phase 2 only). Their API terms
+  cover the API; a derived image we serve ourselves is a separate question. Much less fraught now
+  that they explicitly welcome community tools, but worth a courtesy ask.

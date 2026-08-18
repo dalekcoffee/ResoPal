@@ -30,6 +30,7 @@ in-game *parser*. The parsing lives on the web; the game only ever receives an a
 | Import by public deck URL | ✅ Yes — website, and in-game via the companion |
 | Import by profile URL (pick a deck) | ✅ Yes — website; in-game as a deck picker if the API supports listing |
 | Import private decks via .txt / .csv | ✅ Website only. Confirmed: flux has no file I/O |
+| Soul decks | ✅ Auto-generated as a **second deck**, plus a picker over all Palify soul cards |
 | 100% in-game | ✅ For public decks, via companion + hosted manifest. ❌ For files |
 | Grab card fronts from Palify URLs by code | ✅ `https://palify.org/cards/w1024/<CODE>.webp` |
 | Modify the in-game builder? | ❌ **No.** Add a companion beside it |
@@ -50,21 +51,43 @@ Ukilop's, never in place of it, and the website credits the Deck Maker by name o
 produces an import. If Phase 3 ever generates a deck without the Deck Maker, it still carries a
 "deck format by Ukilop" credit slot.
 
+**Palify is the second mandatory credit.** Their read-only JSON API is free to use on the
+condition that we credit them and cache responses. Every page that shows Palify data, and the
+in-game companion panel, credits Palify as the data and card-art source with a link back. Two
+credits, both permanent: **Ukilop for the deck system, Palify for the data.**
+
 ## Phases
 
-### Phase 0 — unblock (do this first, it forks the architecture)
+### Phase 0 — unblock
 
-1. Confirm Palify's deck API: endpoint shape for `/decks/<uuid>` and `/u/<handle>`, and whether
-   there is a documented JSON API. (A public read-only Palworld TCG JSON API exists at
-   `palworldtcg.gg/developers` with an `/openapi.json` — worth evaluating as a fallback or
-   cross-reference source.)
-2. **Check CORS on both the deck endpoint and `/cards/w1024/*.webp`.** This is the fork:
-   - CORS present -> the whole Phase 1 site is static, GitHub Pages, no server, no cost.
-   - CORS absent -> we need a tiny Cloudflare Worker to proxy fetches and to un-taint the canvas
-     for atlas composition. Still cheap, but it is now infrastructure.
-3. Decide the re-hosting posture with Palify (see Risks).
-4. Confirm whether decks carry a soul deck and how it should appear in Resonite — one deck object
-   or two.
+1. ~~Find a data source.~~ **Settled: Palify's own free read-only JSON API**
+   (`https://palify.org/developers`). No scraping, no third-party mirror. Read their endpoint
+   list and confirm: single-deck fetch, profile/user deck listing, full card catalogue including
+   printings and soul cards.
+2. **Check CORS on the deck endpoint and on `/cards/w1024/*.webp`.** This is now the only open
+   fork:
+   - CORS present -> Phase 1 is pure static GitHub Pages. No server, no cost.
+   - CORS absent -> a small Cloudflare Worker proxies fetches and un-taints the canvas for atlas
+     composition. Still cheap, but it is now infrastructure. The Worker is also where the cache
+     lives, so if Phase 2 is happening anyway, this is less of a loss than it sounds.
+3. Confirm the soul-deck shape in the API payload, and get the full soul-card list for the picker.
+4. Send Palify a courtesy note about Phase 2 hosting composed atlases (see Risks).
+
+### Caching policy (a condition of use, not an optimisation)
+
+Palify ask that we cache. We should over-deliver on this — it costs us nothing and it is the
+whole reason the API stays free.
+
+| Data | Volatility | Strategy |
+|---|---|---|
+| Card catalogue (153 cards, 242 printings) | changes on set release | Fetch **once at build time**, commit the snapshot, refresh on a weekly scheduled job. Normal users make **zero** Palify metadata requests. |
+| Deck payload by UUID | user can edit their deck | Cache ~1h, stale-while-revalidate |
+| Profile deck listing | user adds/removes decks | Cache ~15m |
+| Card images | immutable per code | Never re-fetch within a session; cache 30d if we ever proxy them |
+
+Plus: cap concurrent image fetches at ~6, never fetch the same code twice for one deck, and send
+a `User-Agent` that identifies ResoPal with a link back so Palify can see who we are and contact
+us if we misbehave.
 
 ### Phase 1 — the website (MVP, ships value immediately)
 
@@ -81,8 +104,16 @@ Atlas rules, derived from the decoded deck:
 - Duplicates: a deck with `3x Eikthyrdeer` gets three cells, because the Deck Maker builds one
   card per frame. `GridFrames` = total physical cards, not unique cards.
 
-At this point the user flow is: paste URL -> download two PNGs -> import both to Resonite -> drop
-into the maker -> set 3 numbers -> bake. **This works today against an unmodified V1.4.4.**
+**Soul decks.** A Palify deck carries a soul deck alongside the main deck. It becomes a
+**second, separate deck object in Resonite** containing only the soul cards — its own atlas, its
+own three numbers, its own bake. Both decks share the card back by default, with an option to
+give the soul deck its own. Because we hold Palify's full card catalogue anyway, the site also
+offers a **soul-card picker over every soul card Palify knows about**, so a user can assemble or
+adjust a soul deck even when the source (a `.txt` or `.csv`, which carry no soul section) has none.
+
+At this point the user flow is: paste URL -> download the PNGs -> import to Resonite -> drop into
+the maker -> set 3 numbers -> bake, once per deck. **This works today against an unmodified
+V1.4.4.**
 
 ### Phase 2 — the in-game companion ("ResoPal Importer")
 
@@ -93,11 +124,13 @@ A small panel that sits next to the Deck Maker. Never modifies it; only writes t
 3. Response is deliberately trivial to parse — no JSON, because flux has no JSON nodes:
    ```
    v1
-   https://<our-cdn>/atlas/<code>.png
-   https://<our-cdn>/back/<code>.png
-   9|6|50
    Green/Purple Trial
+   https://<our-cdn>/back/<code>.png
+   main|https://<our-cdn>/atlas/<code>-main.png|9|6|50
+   soul|https://<our-cdn>/atlas/<code>-soul.png|2|1|2
    ```
+   One line per deck, so the companion bakes the main deck and the soul deck in turn. A deck with
+   no soul cards simply omits the `soul` line.
 4. Writes atlas URL into `FrontTexture`'s `StaticTexture2D.URL`, back into `BackTexture`,
    the three integers into the Column / Row / total `LegacyNumericUpDown`s, then triggers bake.
 5. Panel shows the deck name and credits Ukilop and ResoPal.
@@ -123,13 +156,17 @@ exactly why it is Phase 3 and not Phase 1.
 
 - **Re-hosting card art.** Phase 1 composes atlases in the user's browser and hosts nothing —
   clean. Phase 2 requires us to serve composed atlases from our own domain, which is
-  re-distributing Pocketpair art via Palify's CDN. Recommendation: ask Palify first, keep hosted
-  atlases short-lived (24h) and keyed to the deck, and be ready to drop to "browser-composed only"
-  if they object. **Your call — I have not contacted anyone.**
+  re-distributing Pocketpair art. Palify's API terms cover the API, not derived images we serve
+  ourselves, so this stays a courtesy ask: keep hosted atlases short-lived (24h), keyed to the
+  deck, and be ready to drop to "browser-composed only" if they object. **I have not contacted
+  anyone.**
+- **Being a good API citizen.** The caching table above is a commitment, not a suggestion. If we
+  ever find ourselves fetching the card catalogue per page load, we have broken the deal.
 - **CORS** may force the Worker. Cheap, but it changes "static site" to "service".
 - **Deck Maker version drift.** We depend on field names and the atlas contract of V1.4.4. Pin the
   version in the companion's UI and re-verify on each Deck Maker release.
 - **`Deck Maker Memory`** (FINDINGS.md §4) could remove the three-number typing step entirely in
   Phase 1. Needs one in-world capture to decode.
 - **Palify unreachable from my environment** — every claim about Palify's API in this document is
-  from your examples and a web search, not from my own fetch.
+  from their published terms, your examples and a web search, not from my own fetch. Fix by
+  setting the cloud environment's network access to **Custom** and allowing `palify.org`.
