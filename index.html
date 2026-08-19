@@ -44,6 +44,17 @@
   @keyframes rp-rays { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
   @keyframes rp-slam { 0% { transform:scale(1.9); opacity:0; letter-spacing:.5em; } 45% { transform:scale(1); opacity:1; letter-spacing:.16em; } 82% { opacity:1; } 100% { opacity:0; transform:scale(1.04); } }
   @keyframes rp-ring { 0% { transform:scale(.5); opacity:.9; } 100% { transform:scale(2.1); opacity:0; } }
+
+/* The page leans on motion: a drifting starfield, section rises, confetti bursts,
+   ray sweeps. Readers who ask their OS for less of it should get less of it - the
+   layout and colour are untouched, only the movement stops. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
 </style>
 </helmet>
 
@@ -774,6 +785,7 @@ const CARDS = [
 ];
 const SOULS = ['SOUL-000','SOUL-001','SOUL-002','SOUL-003','SOUL-005','SOUL-006','SOUL-007','SOUL-008'];
 const RESREC = 'resrec:///U-ukilop/R-e7100d16-9b62-4d74-b8e0-058b0492764f';
+const BLANK_PX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const RARITY_HUE = {C:'#9aa6c8', U:'#a4d4ba', R:'#a3cfd8', RR:'#c2a3e2', SR:'#e3c893', OSR:'#e0b393', SP:'#dfa2ab', SSP:'#e5a8c0'};
 const CACHE_KEY = 'resopal.demo.imgcache.v1';
 const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR', 'TSP'];
@@ -812,6 +824,7 @@ class Component extends DCLogic {
     } catch (e) {}
     window.addEventListener('resize', this.onResize);
     document.addEventListener('dragstart', this.noDrag);
+    document.addEventListener('error', this.imgFail, true);
     fetch('data/pack-weights.json').then(r => r.json()).then(j => {
       const set = j && j.sets && j.sets.BP01;
       if (!set) return;
@@ -822,8 +835,16 @@ class Component extends DCLogic {
     }).catch(() => {});
   }
   noDrag = (e) => { if (e.target && e.target.tagName === 'IMG') e.preventDefault(); };
+  // Every card sits on a striped placeholder so a slow or failed load still looks
+  // intentional - but a broken <img> paints the browser's own broken icon over it.
+  // Swap the source for a transparent pixel so the placeholder shows through as
+  // designed. Capture phase: resource error events do not bubble.
+  imgFail = (e) => {
+    const el = e.target;
+    if (el && el.tagName === 'IMG' && el.src !== BLANK_PX) el.src = BLANK_PX;
+  };
   onResize = () => { if (Math.abs(window.innerWidth - this.state.vw) > 8) this.setState({ vw: window.innerWidth }); };
-  componentWillUnmount() { clearTimeout(this.celT); clearTimeout(this.holdT); clearTimeout(this.outT); clearTimeout(this.openT); clearTimeout(this.liftT); if (this.timer) clearInterval(this.timer); if (this.iq) clearInterval(this.iq); if (this.raf) cancelAnimationFrame(this.raf); window.removeEventListener('resize', this.onResize); document.removeEventListener('dragstart', this.noDrag); }
+  componentWillUnmount() { clearTimeout(this.celT); clearTimeout(this.holdT); clearTimeout(this.outT); clearTimeout(this.openT); clearTimeout(this.liftT); if (this.timer) clearInterval(this.timer); if (this.iq) clearInterval(this.iq); if (this.raf) cancelAnimationFrame(this.raf); clearTimeout(this.copyT); window.removeEventListener('resize', this.onResize); document.removeEventListener('dragstart', this.noDrag); document.removeEventListener('error', this.imgFail, true); }
 
   total() { return CARDS.reduce((s, c) => s + c.n, 0); }
   sel(code) { const c = CARDS.find(x => x.code === code); return this.state.variants[code] || c.prints[0][0]; }
@@ -842,7 +863,8 @@ class Component extends DCLogic {
     const el = e.currentTarget, w = el.naturalWidth, h = el.naturalHeight;
     if (!w || !h) return;
     const code = el.getAttribute('data-code'), wide = w > h * 1.05;
-    if (!code || this.wide === undefined) this.wide = {};
+    if (this.wide === undefined) this.wide = {};
+    if (!code) return;
     if (this.wide[code] === wide) return;
     this.wide[code] = wide;
     this.forceUpdate();
@@ -967,6 +989,10 @@ class Component extends DCLogic {
   }
 
   glide(top) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      window.scrollTo(0, Math.max(0, top));   // still lands on the section, without the travel
+      return;
+    }
     const start = window.scrollY, dist = Math.max(0, top) - start, t0 = performance.now(), dur = Math.min(700, 240 + Math.abs(dist) * 0.5);
     if (this.raf) cancelAnimationFrame(this.raf);
     const tick = now => {
@@ -1476,14 +1502,38 @@ class Component extends DCLogic {
     return vals;
   }
 
-  copy(text, key) {
-    try {
-      const p = navigator.clipboard && navigator.clipboard.writeText(text);
-      if (p && p.catch) p.catch(() => {});
-    } catch (e) {}
+  // Path B's whole instruction is "paste this into Resonite", so a copy that
+  // silently fails while the button still reads "Copied" is worse than no button.
+  // navigator.clipboard is undefined outside a secure context and its write can
+  // reject (permission, unfocused document) - in both cases fall back to
+  // execCommand, and only report success when something actually wrote.
+  markCopied(key) {
     this.setState({ copied: key });
     clearTimeout(this.copyT);
     this.copyT = setTimeout(() => this.setState({ copied: null }), 1800);
+  }
+
+  legacyCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  copy(text, key) {
+    let p = null;
+    try { p = navigator.clipboard && navigator.clipboard.writeText(text); } catch (e) {}
+    // legacyCopy runs inside the click gesture when there is no async hop
+    if (p && p.then) p.then(() => this.markCopied(key), () => { if (this.legacyCopy(text)) this.markCopied(key); });
+    else if (this.legacyCopy(text)) this.markCopied(key);
   }
 }
 </script>

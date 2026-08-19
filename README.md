@@ -47,6 +47,7 @@ docs/
   DESIGN-PROMPT.md brief the design was built from
   PULL-API.md      draft /api/pull contract for the in-game pack ripper
   BOOSTER.md       in-world booster packs: feasibility and build order
+  SITE-REVIEW.md   defects found in the front end, and how they were fixed
 ```
 
 The front end still runs on demo data: a 16-card array, simulated generation, client-side pack
