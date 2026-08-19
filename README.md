@@ -46,6 +46,7 @@ docs/
   DESIGN-SPEC.md   the front end: screens, tokens, state, interactions
   DESIGN-PROMPT.md brief the design was built from
   PULL-API.md      draft /api/pull contract for the in-game pack ripper
+  BOOSTER.md       in-world booster packs: feasibility and build order
 ```
 
 The front end still runs on demo data: a 16-card array, simulated generation, client-side pack
