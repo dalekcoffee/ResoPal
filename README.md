@@ -37,7 +37,8 @@ index.html      the site - served at resopal.dalek.coffee via GitHub Pages
 support.js      runtime the front end is built on
 assets/         DefaultBack.png (default card back), pack-bp01.png (booster art)
 data/           pack pull weights and the two trial decks
-tools/          the working generator (see below)
+web/            the browser build of the generator - bakes the package client-side
+tools/          the same pipeline as a command line tool (see below)
 docs/
   PIPELINE.md      how a deck is built; package format; the fixes and why
   PALIFY-API.md    what Palify actually offers, CORS, catalogue shape, soul cards

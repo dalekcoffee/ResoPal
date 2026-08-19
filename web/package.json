@@ -1,0 +1,11 @@
+{
+  "name": "resopal-web",
+  "private": true,
+  "type": "module",
+  "description": "Browser build of the deck generator: composes the card atlas and patches a baked Deck Maker template, entirely client-side.",
+  "scripts": {
+    "build": "esbuild bake.js --bundle --format=esm --outfile=bake.bundle.js && cp node_modules/brotli-wasm/pkg.web/brotli_wasm_bg.wasm ."
+  },
+  "dependencies": { "bson": "^7.2.0", "brotli-wasm": "^3.0.1", "jszip": "^3.10.1" },
+  "devDependencies": { "esbuild": "^0.25.0" }
+}

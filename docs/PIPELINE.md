@@ -176,3 +176,32 @@ original credit string is preserved character-for-character, `<color=red>` marku
   Card images & deck data by Palify - palify.org
   ResoPal import tool by Dalek - resopal.dalek.coffee
 ```
+
+## Browser port (`web/`)
+
+`web/` is the browser build of everything in `tools/`. `trim.js` and `credits.js` are byte-for-byte
+copies — they were already dependency-free. The rest is ported:
+
+| Node/Python | Browser |
+|---|---|
+| numpy `solidify` | typed arrays over `ImageData`, same 8-neighbour dilation with wraparound |
+| PIL `resize(LANCZOS)` | `drawImage` with `imageSmoothingQuality:'high'` |
+| PIL `save(WEBP, q95)` | `OffscreenCanvas.convertToBlob({type:'image/webp'})` |
+| `crypto.createHash` | `crypto.subtle.digest('SHA-256')` (async) |
+| `brotli-wasm` CJS build | the web build; its `.wasm` ships beside `bake.bundle.js` |
+
+Output is **structurally identical** to the Node pipeline — same file count, asset count, manifest
+length — but **not byte-identical**, because the browser's WebP encoder and resampler are not
+libwebp `method=6` and LANCZOS. Measured against the approved v7 package: whole-atlas mean absolute
+difference 1.31/255. Compare structure, never bytes.
+
+### Rotation direction is inverted between PIL and canvas
+
+PIL's `Image.ROTATE_270` and a canvas `rotate(270°)` are **not** the same direction. `compose.py`
+uses `ROTATE_270` and `compose.js` uses `ROT = 270`; they only agree because the canvas convention
+is the opposite way round. Getting this wrong is silent — the cards still tile correctly, they are
+just upside down, which is exactly the bug the first port shipped.
+
+Verify by rendering a landscape card (any Structure, e.g. `TD02-008`) and diffing it against a
+known-good bake, both as-is and rotated 180°. If the 180° diff is the smaller one, the direction is
+wrong.
