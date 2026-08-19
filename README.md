@@ -12,9 +12,13 @@ The **generator works end to end.** It produces a verified, importable deck from
 deck: correct card order, rounded corners, transparent edges, landscape cards rotated, custom card
 back, credits, and any card count.
 
-The **web front end is designed but not built.** `design/` holds the high-fidelity design handoff
-from Claude Design — a self-contained HTML prototype plus a spec covering every screen, token and
-interaction. `docs/DESIGN-PROMPT.md` is the brief it was built from.
+The **web front end is a working preview, not a working product.** `index.html` is the
+high-fidelity design from Claude Design, served at the site root. Every screen, interaction and
+animation is real; **the exports are not** — generation is a progress timer and no file is
+produced. `docs/DESIGN-SPEC.md` documents it, `docs/DESIGN-PROMPT.md` is the brief it came from.
+
+Wiring the exports up needs a Cloudflare Worker: Palify sends no CORS headers, so a browser can
+display card art but cannot read its pixels to bake an atlas. See `docs/WORKER.md`.
 
 ## How it works
 
@@ -29,23 +33,22 @@ contract, the package format, and several non-obvious fixes that are easy to und
 ## Repo layout
 
 ```
+index.html      the site - served at resopal.dalek.coffee via GitHub Pages
+support.js      runtime the front end is built on
+assets/         DefaultBack.png (default card back), pack-bp01.png (booster art)
+data/           pack pull weights and the two trial decks
 tools/          the working generator (see below)
-assets/         DefaultBack.png - the default card back
-design/         front-end design handoff - prototype, spec, pack art, starter decks
-  README.md        the spec: screens, tokens, state, interactions
-  ResoPal.dc.html  self-contained HTML prototype; open it in a browser
-  data/            pack pull weights and the two trial decks
 docs/
   PIPELINE.md      how a deck is built; package format; the fixes and why
   PALIFY-API.md    what Palify actually offers, CORS, catalogue shape, soul cards
-  DESIGN-PROMPT.md brief for the web front end
+  WORKER.md        the Cloudflare Worker the front end needs, and why
+  DESIGN-SPEC.md   the front end: screens, tokens, state, interactions
+  DESIGN-PROMPT.md brief the design was built from
   PULL-API.md      draft /api/pull contract for the in-game pack ripper
 ```
 
-`design/` is a reference, not production code. It hardcodes a 16-card demo array, simulates
-generation with a timer, and rolls pack pulls client-side. Rebuild it against the real pipeline.
-`design/assets/DefaultBack.png` is a copy of `assets/DefaultBack.png`, kept so the prototype opens
-standalone.
+The front end still runs on demo data: a 16-card array, simulated generation, client-side pack
+rolls. Replacing those is the current work.
 
 ## Running the generator
 

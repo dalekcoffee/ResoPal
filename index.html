@@ -1,8 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ResoPal — Palworld TCG decks in Resonite</title>
+<meta name="description" content="Turn any Palworld TCG deck from Palify into a ready-to-import, shuffleable deck object for Resonite. Paste a deck link, get a .resonitepackage.">
+<meta name="theme-color" content="#070b17">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a9abee'/%3E%3Cstop offset='1' stop-color='%23a8d3dc'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Crect x='11' y='11' width='10' height='10' rx='1.5' fill='%231a2038' transform='rotate(45 16 16)'/%3E%3C/svg%3E">
+<link rel="canonical" href="https://resopal.dalek.coffee/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ResoPal">
+<meta property="og:url" content="https://resopal.dalek.coffee/">
+<meta property="og:title" content="ResoPal — Palworld TCG decks in Resonite">
+<meta property="og:description" content="Turn any Palworld TCG deck from Palify into a ready-to-import, shuffleable deck object for Resonite. Paste a deck link, get a .resonitepackage.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="ResoPal — Palworld TCG decks in Resonite">
+<meta name="twitter:description" content="Turn any Palworld TCG deck from Palify into a ready-to-import, shuffleable deck object for Resonite. Paste a deck link, get a .resonitepackage.">
 <script src="./support.js"></script>
 </head>
 <body>
@@ -183,12 +196,6 @@
         </sc-if>
       </div>
 
-      <div style="display:flex;align-items:center;gap:12px;padding:13px 32px;border-top:1px dashed rgba(150,170,230,.18);background:rgba(7,11,23,.4)">
-        <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#4f5c80;text-transform:uppercase">Prototype shortcuts</span>
-        <sc-for list="{{ shortcuts }}" as="sc" hint-placeholder-count="4">
-          <button type="button" onClick="{{ sc.go }}" style="padding:6px 11px;border-radius:9px;border:1px dashed rgba(150,170,230,.24);background:transparent;color:#8e9ac0;font:500 11px/1 'JetBrains Mono',monospace;cursor:pointer;transition:all .15s" style-hover="color:#e8ecfa;border-color:rgba(150,170,230,.5)">{{ sc.label }}</button>
-        </sc-for>
-      </div>
     </div>
 
     <sc-if value="{{ showPicker }}" hint-placeholder-val="{{ false }}">
@@ -1193,12 +1200,6 @@ class Component extends DCLogic {
         { kind: 'deck', sample: 'palify.org/decks/f2dd143c\u2026', use: () => this.setState({ input: 'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96', error: null }, this.openDeck) },
         { kind: 'profile', sample: 'palify.org/u/dalek', use: () => this.setState({ input: 'https://palify.org/u/dalek', error: null }, () => this.detect()) },
         { kind: 'file', sample: 'kindling-rush.txt', use: () => this.setState({ input: 'kindling-rush.txt', error: null }, this.openDeck) }
-      ],
-      shortcuts: [
-        { label: 'happy path', go: () => this.setState({ input: 'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96', failNext: false }, this.openDeck) },
-        { label: 'profile: no public decks', go: () => this.setState({ input: 'https://palify.org/u/newuser' }, this.detect) },
-        { label: 'unrecognised link', go: () => this.setState({ input: 'https://palworldtcg.gg/deck/12345', error: 'notlink' }) },
-        { label: s.failNext ? 'next run: RATE-LIMITED \u2713' : 'next run: rate-limited', go: () => this.setState({ failNext: !s.failNext }) }
       ],
       error: !!s.error,
       errorTitle: s.error === 'empty' ? 'Nothing to convert yet' : s.error === 'unknown' ? 'That Palify page isn\u2019t a deck or a profile' : 'That doesn\u2019t look like a Palify link',

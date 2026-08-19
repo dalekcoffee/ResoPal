@@ -21,7 +21,7 @@ The task is to **recreate these designs in the target codebase's existing enviro
 Specifically NOT production-ready in the prototype:
 - Card data is a hardcoded 16-card demo array (`CARDS`). Real cards come from Palify's API.
 - Deck parsing, atlas composition, and .resonitepackage generation are simulated with a timer. The real pipeline is in the repo (`docs/PIPELINE.md`).
-- Pull weights are fetched from `data/pack-weights.json` but rolled client-side. Production should roll server-side (see `../docs/PULL-API.md`).
+- Pull weights are fetched from `data/pack-weights.json` but rolled client-side. Production should roll server-side (see `PULL-API.md`).
 - The "Prototype shortcuts" strip under the URL input (happy path / no public decks / unrecognised link / force rate-limit) is a demo affordance. **Delete it.**
 
 ## Fidelity
@@ -149,7 +149,7 @@ Tier 3 also **locks input for 1.5s** (drag, click, and reveal-all all ignored; t
 
 **Pack summary.** "Pack N — best pull X", the 7 cards at 112×157 with rarity badges (glow rarities get a colored border), then "Rip another pack" / "Import my pulls (N)".
 
-**Binder.** Persistent strip below: 60×84 thumbs sorted by rarity with duplicate-count badges, a per-rarity tally, and a "Copy as code,rarity" button that emits exactly the `format=flat` shape from `../docs/PULL-API.md` for the planned in-game tool.
+**Binder.** Persistent strip below: 60×84 thumbs sorted by rarity with duplicate-count badges, a per-rarity tally, and a "Copy as code,rarity" button that emits exactly the `format=flat` shape from `PULL-API.md` for the planned in-game tool.
 
 ### Bottom bar (generation progress + notices)
 
@@ -277,7 +277,7 @@ Striped placeholder underlay (used behind every card so a failed/slow load still
 
 - `data/pack-weights.json` — pack structure (7 cards: 4C/2U/1 hit) and hit-slot odds, with `perPackBonus` and `globalBonus` multipliers for events, and a `celebrate` block naming which rarities glow/burst. **Bushiroad has not published official Dawn of Palpagos pull rates** — the table is community box-math tuned for fun, and the file says so.
 - `data/td01-red-blue.csv`, `data/td02-green-purple.csv` — the two trial decks behind "Don't have a deck?". Structure and codes are right; per-card quantities are an even 2× split pending an official decklist.
-- `../docs/PULL-API.md` — draft contract for `GET /api/pull` (`format=json|flat`, `seed`, `packs`) for the planned in-game random-pack tool. Not implemented.
+- `PULL-API.md` — draft contract for `GET /api/pull` (`format=json|flat`, `seed`, `packs`) for the planned in-game random-pack tool. Not implemented.
 
 ## Files
 
@@ -288,6 +288,6 @@ Striped placeholder underlay (used behind every card so a failed/slow load still
 `assets/DefaultBack.png` | Default card back
 `assets/pack-bp01.png` | Booster pack art, cropped
 `data/*.json`, `data/*.csv` | Pull weights + trial decks
-`../docs/PULL-API.md` | Draft in-game pull endpoint
+`PULL-API.md` | Draft in-game pull endpoint
 
 To read the design source: the template (markup) and the logic class are both inside `ResoPal.dc.html`. Styles are inline on elements by design; only `@keyframes`, `@font-face` and body resets live in the `<helmet><style>` block.
