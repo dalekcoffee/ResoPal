@@ -79,3 +79,12 @@ Columns 10 / Rows 7 / Total 70 fills the grid and covers any deck up to 70 cards
 Both are credited in-world on every generated deck and are a permanent requirement, not a
 courtesy. Palworld and the Palworld OCG are property of Pocketpair & Bushiroad; ResoPal is an
 unaffiliated fan tool.
+
+## Working on this repo
+
+- Development happens on `claude/palworld-tcg-deck-importer-3ylb7h`.
+- The [Resonite Knowledge Library](https://github.com/dalekcoffee/Resonite-Knowledge-Library) is
+  required reading for any Resonite-side work — especially `protoflux/file-format.md`,
+  `engine/assets-and-import.md` and `protoflux/node-catalog.md`. It carries the working
+  `.resonitepackage` codec at `protoflux/skill/scripts/`. **Clone it alongside, never into, this
+  repo.**
