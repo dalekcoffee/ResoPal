@@ -1,0 +1,11 @@
+{
+  "name": "resopal-tools",
+  "private": true,
+  "type": "module",
+  "description": "Deck package generator: composes a card atlas and patches a baked Deck Maker template into a ready-to-import .resonitepackage.",
+  "dependencies": {
+    "bson": "^7.2.0",
+    "brotli-wasm": "^3.0.1",
+    "jszip": "^3.10.1"
+  }
+}
