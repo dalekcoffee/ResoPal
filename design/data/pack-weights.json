@@ -1,0 +1,70 @@
+{
+  "$comment": "ResoPal pull weights. Bushiroad has NOT published official Dawn of Palpagos pull rates; the hitSlot table below mirrors community box math (palstars / tcgtalk day-one openings of 60 packs) and is tuned for fun, not accuracy. Edit this file to change what players pull.",
+  "version": 1,
+  "updated": "2026-08-19",
+  "sets": {
+    "BP01": {
+      "name": "Dawn of Palpagos",
+      "code": "BP01",
+      "packSize": 7,
+      "packsPerBox": 12,
+      "slots": [
+        {
+          "rarity": "C",
+          "count": 4,
+          "note": "commons"
+        },
+        {
+          "rarity": "U",
+          "count": 2,
+          "note": "uncommons"
+        },
+        {
+          "rarity": "HIT",
+          "count": 1,
+          "note": "always R or better"
+        }
+      ],
+      "hitSlot": {
+        "R": 60.8,
+        "RR": 20,
+        "SR": 10,
+        "SP": 5,
+        "OSR": 2.5,
+        "SSP": 1.2,
+        "SSS": 0.5
+      },
+      "perPackBonus": {
+        "$comment": "Multipliers applied to this set's hit slot only. 1 = published odds. Raise for events.",
+        "RR": 1,
+        "SR": 1,
+        "SP": 1,
+        "OSR": 1,
+        "SSP": 1,
+        "SSS": 1
+      }
+    }
+  },
+  "globalBonus": {
+    "$comment": "Multiplier applied to every above-R rarity in every set. 1 = untouched; 2 = twice as generous.",
+    "value": 1
+  },
+  "celebrate": {
+    "$comment": "Rarities that trigger the on-screen celebration. big = full confetti burst.",
+    "glow": [
+      "RR",
+      "SR",
+      "SP",
+      "OSR",
+      "SSP",
+      "SSS"
+    ],
+    "big": [
+      "SR",
+      "SP",
+      "OSR",
+      "SSP",
+      "SSS"
+    ]
+  }
+}

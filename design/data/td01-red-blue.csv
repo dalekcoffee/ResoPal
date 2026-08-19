@@ -1,0 +1,31 @@
+# ResoPal starter deck - Trial Deck TD01 "Dawn of Palpagos Red / Blue"
+# 50-card main deck + 10 soul cards (soul is chosen in ResoPal, not shipped here).
+# Palify-compatible import format: quantity,code,name. Names resolve from the committed
+# /api/cards catalogue snapshot at load, so the code column is authoritative.
+# Per-card quantities are the even 2x split until the official decklist is confirmed.
+quantity,code,name
+2,TD01-001,
+2,TD01-002,
+2,TD01-003,
+2,TD01-004,
+2,TD01-005,
+2,TD01-006,
+2,TD01-007,
+2,TD01-008,
+2,TD01-009,
+2,TD01-010,
+2,TD01-011,
+2,TD01-012,
+2,TD01-013,
+2,TD01-014,
+2,TD01-015,
+2,TD01-016,
+2,TD01-017,
+2,TD01-018,
+2,TD01-019,
+2,TD01-020,
+2,TD01-021,
+2,TD01-022,
+2,TD01-023,
+2,TD01-024,
+2,TD01-025,

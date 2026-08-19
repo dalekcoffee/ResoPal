@@ -12,7 +12,9 @@ The **generator works end to end.** It produces a verified, importable deck from
 deck: correct card order, rounded corners, transparent edges, landscape cards rotated, custom card
 back, credits, and any card count.
 
-The **web front end is not built yet.** `docs/DESIGN-PROMPT.md` is the brief for it.
+The **web front end is designed but not built.** `design/` holds the high-fidelity design handoff
+from Claude Design — a self-contained HTML prototype plus a spec covering every screen, token and
+interaction. `docs/DESIGN-PROMPT.md` is the brief it was built from.
 
 ## How it works
 
@@ -29,11 +31,21 @@ contract, the package format, and several non-obvious fixes that are easy to und
 ```
 tools/          the working generator (see below)
 assets/         DefaultBack.png - the default card back
+design/         front-end design handoff - prototype, spec, pack art, starter decks
+  README.md        the spec: screens, tokens, state, interactions
+  ResoPal.dc.html  self-contained HTML prototype; open it in a browser
+  data/            pack pull weights and the two trial decks
 docs/
   PIPELINE.md      how a deck is built; package format; the fixes and why
   PALIFY-API.md    what Palify actually offers, CORS, catalogue shape, soul cards
   DESIGN-PROMPT.md brief for the web front end
+  PULL-API.md      draft /api/pull contract for the in-game pack ripper
 ```
+
+`design/` is a reference, not production code. It hardcodes a 16-card demo array, simulates
+generation with a timer, and rolls pack pulls client-side. Rebuild it against the real pipeline.
+`design/assets/DefaultBack.png` is a copy of `assets/DefaultBack.png`, kept so the prototype opens
+standalone.
 
 ## Running the generator
 
