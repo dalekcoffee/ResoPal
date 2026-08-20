@@ -1,0 +1,349 @@
+{
+  "$comment": "Pull pool for TD01, snapshotted from Palify. Regenerate with tools/fetch-pool.mjs - never hand-edit card codes.",
+  "set": "TD01",
+  "name": "Dawn of Palpagos Red・Blue",
+  "source": "https://palify.org/api/cards?set=TD01",
+  "fetched": "2026-08-20",
+  "cards": 25,
+  "landscape": [
+    "TD01-008",
+    "TD01-009",
+    "TD01-019",
+    "TD01-020"
+  ],
+  "byRarity": {
+    "TD": [
+      {
+        "code": "SOUL-001",
+        "base": "SOUL-001",
+        "variant": false
+      },
+      {
+        "code": "TD01-001",
+        "base": "TD01-001",
+        "variant": false
+      },
+      {
+        "code": "TD01-002",
+        "base": "TD01-002",
+        "variant": false
+      },
+      {
+        "code": "TD01-003",
+        "base": "TD01-003",
+        "variant": false
+      },
+      {
+        "code": "TD01-004",
+        "base": "TD01-004",
+        "variant": false
+      },
+      {
+        "code": "TD01-005",
+        "base": "TD01-005",
+        "variant": false
+      },
+      {
+        "code": "TD01-006",
+        "base": "TD01-006",
+        "variant": false
+      },
+      {
+        "code": "TD01-007",
+        "base": "TD01-007",
+        "variant": false
+      },
+      {
+        "code": "TD01-008",
+        "base": "TD01-008",
+        "variant": false
+      },
+      {
+        "code": "TD01-009",
+        "base": "TD01-009",
+        "variant": false
+      },
+      {
+        "code": "TD01-010",
+        "base": "TD01-010",
+        "variant": false
+      },
+      {
+        "code": "TD01-011",
+        "base": "TD01-011",
+        "variant": false
+      },
+      {
+        "code": "TD01-012",
+        "base": "TD01-012",
+        "variant": false
+      },
+      {
+        "code": "TD01-013",
+        "base": "TD01-013",
+        "variant": false
+      },
+      {
+        "code": "TD01-014",
+        "base": "TD01-014",
+        "variant": false
+      },
+      {
+        "code": "TD01-015",
+        "base": "TD01-015",
+        "variant": false
+      },
+      {
+        "code": "TD01-016",
+        "base": "TD01-016",
+        "variant": false
+      },
+      {
+        "code": "TD01-017",
+        "base": "TD01-017",
+        "variant": false
+      },
+      {
+        "code": "TD01-018",
+        "base": "TD01-018",
+        "variant": false
+      },
+      {
+        "code": "TD01-019",
+        "base": "TD01-019",
+        "variant": false
+      },
+      {
+        "code": "TD01-020",
+        "base": "TD01-020",
+        "variant": false
+      },
+      {
+        "code": "TD01-021",
+        "base": "TD01-021",
+        "variant": false
+      },
+      {
+        "code": "TD01-022",
+        "base": "TD01-022",
+        "variant": false
+      },
+      {
+        "code": "TD01-023",
+        "base": "TD01-023",
+        "variant": false
+      },
+      {
+        "code": "TD01-024",
+        "base": "TD01-024",
+        "variant": false
+      }
+    ],
+    "TSR": [
+      {
+        "code": "TD01-001TSR",
+        "base": "TD01-001",
+        "variant": true
+      },
+      {
+        "code": "TD01-005TSR",
+        "base": "TD01-005",
+        "variant": true
+      },
+      {
+        "code": "TD01-007TSR",
+        "base": "TD01-007",
+        "variant": true
+      },
+      {
+        "code": "TD01-008TSR",
+        "base": "TD01-008",
+        "variant": true
+      },
+      {
+        "code": "TD01-011TSR",
+        "base": "TD01-011",
+        "variant": true
+      },
+      {
+        "code": "TD01-012TSR",
+        "base": "TD01-012",
+        "variant": true
+      },
+      {
+        "code": "TD01-014TSR",
+        "base": "TD01-014",
+        "variant": true
+      },
+      {
+        "code": "TD01-017TSR",
+        "base": "TD01-017",
+        "variant": true
+      },
+      {
+        "code": "TD01-018TSR",
+        "base": "TD01-018",
+        "variant": true
+      },
+      {
+        "code": "TD01-022TSR",
+        "base": "TD01-022",
+        "variant": true
+      },
+      {
+        "code": "TD01-023TSR",
+        "base": "TD01-023",
+        "variant": true
+      },
+      {
+        "code": "TD01-024TSR",
+        "base": "TD01-024",
+        "variant": true
+      },
+      {
+        "code": "TD01-024TSR-ERR",
+        "base": "TD01-024",
+        "variant": true
+      }
+    ],
+    "TSP": [
+      {
+        "code": "TD01-001TSP",
+        "base": "TD01-001",
+        "variant": true
+      },
+      {
+        "code": "TD01-012TSP",
+        "base": "TD01-012",
+        "variant": true
+      }
+    ]
+  },
+  "base": {
+    "TD01-001": {
+      "name": "Grizzbolt – Rumbling Tank",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-002": {
+      "name": "Jolthog – Shocking Yet Innocent",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-003": {
+      "name": "Kelpsea Ignis – Balmy Magma",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-004": {
+      "name": "Foxparks – A Toasty Hug",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-005": {
+      "name": "Arsox – Burning Spoils",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-006": {
+      "name": "Mossanda Lux – Vanguard Captain",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-007": {
+      "name": "Blazamut – Molten Sovereign",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "TD01-008": {
+      "name": "Stone Pit",
+      "color": "Red",
+      "type": "Structure"
+    },
+    "TD01-009": {
+      "name": "Weapon Workbench",
+      "color": "Red",
+      "type": "Structure"
+    },
+    "TD01-010": {
+      "name": "Single-Shot Rifle",
+      "color": "Red",
+      "type": "Gear"
+    },
+    "TD01-011": {
+      "name": "Ignis Breath",
+      "color": "Red",
+      "type": "Event"
+    },
+    "TD01-012": {
+      "name": "Elphidran Aqua – Gentle Ripples",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-013": {
+      "name": "Jolthog Cryst – Stoic Yet Innocent",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-014": {
+      "name": "Pengullet – Frequent Flyer",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-015": {
+      "name": "Hangyu Cryst – Frigid Wanderer",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-016": {
+      "name": "Reindrix – Icy Gaze",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-017": {
+      "name": "Suzaku Aqua – Way of the Current",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-018": {
+      "name": "Mammorest Cryst – Roar of the Tundra",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "TD01-019": {
+      "name": "Antique Wooden Chair",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "TD01-020": {
+      "name": "Primitive Workbench",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "TD01-021": {
+      "name": "Single-Shot Sphere Launcher",
+      "color": "Blue",
+      "type": "Gear"
+    },
+    "TD01-022": {
+      "name": "Crystal Breath",
+      "color": "Blue",
+      "type": "Event"
+    },
+    "TD01-023": {
+      "name": "Lamball – My First Pal",
+      "color": "Colorless",
+      "type": "Pal"
+    },
+    "TD01-024": {
+      "name": "Ribbuny – Little Princess",
+      "color": "Colorless",
+      "type": "Pal"
+    },
+    "SOUL-001": {
+      "name": "Soul",
+      "color": null,
+      "type": "Soul"
+    }
+  }
+}

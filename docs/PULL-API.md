@@ -46,6 +46,22 @@ Within a pack, cards are **rarest first** — that is stack order for the deck b
 See `BOOSTER.md` "Stack order" for why, and for the one thing about it only a VR
 check can settle.
 
+## GET /api/deck
+
+The in-world panel carries no deck of its own, so decks are served in the same
+shape as a pull.
+
+    deck    td01 | td02      omit to list what exists
+    format  json | flat      optional, defaults to json
+
+`flat` expands quantities: a 4-of appears as four `code,rarity` lines, because the
+panel spawns one card per line and a physical deck has four of that card. That is
+the same format `/api/pull` emits, so the ProtoFlux side has one parser, not two.
+
+Deck contents come from the committed CSVs via `data/decks.json`
+(`tools/build-decks.mjs`); rarities are looked up in the pool snapshots, so nothing
+here invents card data.
+
 ## Weights
 
 Server rolls against `data/pack-weights.json` — the same file the web ripper reads,

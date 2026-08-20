@@ -8,3 +8,4 @@
  */
 export { default as weights } from '../../data/pack-weights.json' with { type: 'json' };
 export { default as poolBP01 } from '../../data/pool-bp01.json' with { type: 'json' };
+export { default as decks } from '../../data/decks.json' with { type: 'json' };

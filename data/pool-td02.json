@@ -1,0 +1,343 @@
+{
+  "$comment": "Pull pool for TD02, snapshotted from Palify. Regenerate with tools/fetch-pool.mjs - never hand-edit card codes.",
+  "set": "TD02",
+  "name": "Dawn of Palpagos Green・Purple",
+  "source": "https://palify.org/api/cards?set=TD02",
+  "fetched": "2026-08-20",
+  "cards": 25,
+  "landscape": [
+    "TD02-008",
+    "TD02-009",
+    "TD02-019"
+  ],
+  "byRarity": {
+    "TD": [
+      {
+        "code": "SOUL-001",
+        "base": "SOUL-001",
+        "variant": false
+      },
+      {
+        "code": "TD02-001",
+        "base": "TD02-001",
+        "variant": false
+      },
+      {
+        "code": "TD02-002",
+        "base": "TD02-002",
+        "variant": false
+      },
+      {
+        "code": "TD02-003",
+        "base": "TD02-003",
+        "variant": false
+      },
+      {
+        "code": "TD02-004",
+        "base": "TD02-004",
+        "variant": false
+      },
+      {
+        "code": "TD02-005",
+        "base": "TD02-005",
+        "variant": false
+      },
+      {
+        "code": "TD02-006",
+        "base": "TD02-006",
+        "variant": false
+      },
+      {
+        "code": "TD02-007",
+        "base": "TD02-007",
+        "variant": false
+      },
+      {
+        "code": "TD02-008",
+        "base": "TD02-008",
+        "variant": false
+      },
+      {
+        "code": "TD02-009",
+        "base": "TD02-009",
+        "variant": false
+      },
+      {
+        "code": "TD02-010",
+        "base": "TD02-010",
+        "variant": false
+      },
+      {
+        "code": "TD02-011",
+        "base": "TD02-011",
+        "variant": false
+      },
+      {
+        "code": "TD02-012",
+        "base": "TD02-012",
+        "variant": false
+      },
+      {
+        "code": "TD02-013",
+        "base": "TD02-013",
+        "variant": false
+      },
+      {
+        "code": "TD02-014",
+        "base": "TD02-014",
+        "variant": false
+      },
+      {
+        "code": "TD02-015",
+        "base": "TD02-015",
+        "variant": false
+      },
+      {
+        "code": "TD02-016",
+        "base": "TD02-016",
+        "variant": false
+      },
+      {
+        "code": "TD02-017",
+        "base": "TD02-017",
+        "variant": false
+      },
+      {
+        "code": "TD02-018",
+        "base": "TD02-018",
+        "variant": false
+      },
+      {
+        "code": "TD02-019",
+        "base": "TD02-019",
+        "variant": false
+      },
+      {
+        "code": "TD02-020",
+        "base": "TD02-020",
+        "variant": false
+      },
+      {
+        "code": "TD02-021",
+        "base": "TD02-021",
+        "variant": false
+      },
+      {
+        "code": "TD02-022",
+        "base": "TD02-022",
+        "variant": false
+      },
+      {
+        "code": "TD02-023",
+        "base": "TD02-023",
+        "variant": false
+      },
+      {
+        "code": "TD02-024",
+        "base": "TD02-024",
+        "variant": false
+      }
+    ],
+    "TSR": [
+      {
+        "code": "TD02-001TSR",
+        "base": "TD02-001",
+        "variant": true
+      },
+      {
+        "code": "TD02-003TSR",
+        "base": "TD02-003",
+        "variant": true
+      },
+      {
+        "code": "TD02-006TSR",
+        "base": "TD02-006",
+        "variant": true
+      },
+      {
+        "code": "TD02-007TSR",
+        "base": "TD02-007",
+        "variant": true
+      },
+      {
+        "code": "TD02-008TSR",
+        "base": "TD02-008",
+        "variant": true
+      },
+      {
+        "code": "TD02-012TSR",
+        "base": "TD02-012",
+        "variant": true
+      },
+      {
+        "code": "TD02-014TSR",
+        "base": "TD02-014",
+        "variant": true
+      },
+      {
+        "code": "TD02-016TSR",
+        "base": "TD02-016",
+        "variant": true
+      },
+      {
+        "code": "TD02-018TSR",
+        "base": "TD02-018",
+        "variant": true
+      },
+      {
+        "code": "TD02-021TSR",
+        "base": "TD02-021",
+        "variant": true
+      },
+      {
+        "code": "TD02-023TSR",
+        "base": "TD02-023",
+        "variant": true
+      },
+      {
+        "code": "TD02-024TSR",
+        "base": "TD02-024",
+        "variant": true
+      }
+    ],
+    "TSP": [
+      {
+        "code": "TD02-001TSP",
+        "base": "TD02-001",
+        "variant": true
+      },
+      {
+        "code": "TD02-012TSP",
+        "base": "TD02-012",
+        "variant": true
+      }
+    ]
+  },
+  "base": {
+    "TD02-001": {
+      "name": "Mossanda – Guard Captain",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-002": {
+      "name": "Gumoss – Dreamy Seedling",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-003": {
+      "name": "Flopie – Snack Lover",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-004": {
+      "name": "Dinossom – Radiant Fragrance",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-005": {
+      "name": "Eikthyrdeer Terra – Guardian of Nature",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-006": {
+      "name": "Broncherry – Brimming Adoration",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-007": {
+      "name": "Mammorest – Roar of the Wilds",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "TD02-008": {
+      "name": "Berry Plantation",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "TD02-009": {
+      "name": "Campfire",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "TD02-010": {
+      "name": "Refined Metal Spear",
+      "color": "Green",
+      "type": "Gear"
+    },
+    "TD02-011": {
+      "name": "Stone Blast",
+      "color": "Green",
+      "type": "Event"
+    },
+    "TD02-012": {
+      "name": "Astegon – Aegis Wyvern of Death",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-013": {
+      "name": "Hoocrates – Embodiment of Wisdom",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-014": {
+      "name": "Leezpunk – Treasure Bandit",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-015": {
+      "name": "Cawgnito – Looming Shadow",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-016": {
+      "name": "Incineram – Lurking Stalker",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-017": {
+      "name": "Blazehowl Noct – Darkflame Defender",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-018": {
+      "name": "Felbat – Lifestealer",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "TD02-019": {
+      "name": "Hanging Trap",
+      "color": "Purple",
+      "type": "Structure"
+    },
+    "TD02-020": {
+      "name": "Cawgnito Hat",
+      "color": "Purple",
+      "type": "Gear"
+    },
+    "TD02-021": {
+      "name": "Strike from the Darkness",
+      "color": "Purple",
+      "type": "Event"
+    },
+    "TD02-022": {
+      "name": "Medical Supplies",
+      "color": "Purple",
+      "type": "Event"
+    },
+    "TD02-023": {
+      "name": "Cattiva – My First Pal",
+      "color": "Colorless",
+      "type": "Pal"
+    },
+    "TD02-024": {
+      "name": "Chikipi – My First Pal",
+      "color": "Colorless",
+      "type": "Pal"
+    },
+    "SOUL-001": {
+      "name": "Soul",
+      "color": null,
+      "type": "Soul"
+    }
+  }
+}

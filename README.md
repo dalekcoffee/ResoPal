@@ -41,15 +41,15 @@ contract, the package format, and several non-obvious fixes that are easy to und
 ```
 index.html      the site - served at resopal.dalek.coffee via GitHub Pages
 support.js      runtime the front end is built on
-assets/         DefaultBack.png (default card back), pack-bp01.png (booster art)
+assets/         logo.png (the mark, used as favicon and in-world), DefaultBack.png, pack-bp01.png
 data/
   template.resonitepackage  the stripped Deck Maker template the site patches
   art/            card art the bake can read same-origin
-  pool-bp01.json  the BP01 catalogue snapshot the pack roll draws from
+  pool-*.json     catalogue snapshots the roll draws from; decks.json for the trial decks
   *.csv           the two trial decks; pack-weights.json
 web/            the browser build of the generator - bakes the package client-side
 tools/          the same pipeline as a command line tool, plus check-codes.html
-booster/        the in-world booster spawner - builds a .resonitepackage that pulls at runtime
+booster/        the in-world panel - builds a .resonitepackage whose buttons fetch at runtime
 worker/         the Cloudflare Worker: Palify art, and the pack roll - README has the setup
 docs/
   PIPELINE.md      how a deck is built; package format; the fixes and why
@@ -70,8 +70,9 @@ is still simulated in the demo deck path.
 
 Two ways to hold a pack, both rolled by the same endpoint:
 
-- **In-world** — drag in `booster/out/ResoPal_Booster_BP01.resonitepackage`. It asks for host
-  access, pulls seven cards, and points seven textures at the image proxy. No download, no bake.
+- **In-world** — drag in `booster/out/ResoPal_Panel.resonitepackage`. A panel with five buttons:
+  either trial deck, or 1/3/10 boosters. It asks for host access, fetches the list from resopal,
+  and streams the art from the proxy. No download, no bake, and nothing about a deck is baked in.
 - **On the site** — rip a pack, export it as a real deck object with Ukilop's beveled geometry.
 
 `?seed=` reproduces one from the other. Cards come back rarest-first, which is stack order: flip

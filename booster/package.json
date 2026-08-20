@@ -2,10 +2,10 @@
   "name": "resopal-booster",
   "private": true,
   "type": "module",
-  "description": "In-world booster pack spawner: builds a .resonitepackage that pulls seven cards from /api/pull at runtime.",
+  "description": "In-world ResoPal panel: a UIX panel whose buttons fetch a deck or a booster pull and lay the cards out in front of you.",
   "scripts": {
-    "build": "node build-spawner.mjs",
-    "test": "node test-parse.mjs"
+    "build": "node build-panel.mjs",
+    "test": "node test-panel.mjs"
   },
   "dependencies": {
     "bson": "^7.2.0",

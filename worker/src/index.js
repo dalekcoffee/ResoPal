@@ -13,7 +13,7 @@
  * few hundred bytes of arithmetic, and it has to live somewhere neither the
  * player's devtools nor the in-world tool can reach.
  */
-import { weights, poolBP01 } from './data.js';
+import { weights, poolBP01, decks } from './data.js';
 import { rollPacks, toFlat, newSeed } from './roll.js';
 
 // Sets that can be rolled. Adding BP02 is: snapshot its pool with
@@ -169,6 +169,42 @@ function pull(request, url, h) {
 }
 
 /**
+ * GET /api/deck - a committed deck list, in the same shape as a pull.
+ *
+ * The in-world panel carries no deck of its own; it asks for one. Serving decks
+ * in the SAME `code,rarity` flat format as /api/pull means the ProtoFlux side has
+ * one parser instead of two, and a deck and a booster differ only in how many
+ * lines come back.
+ *
+ * Quantities are expanded: a 4-of appears as four lines, because the panel spawns
+ * one card per line and a physical deck has four of that card.
+ */
+function deck(request, url, h) {
+  const id = (url.searchParams.get('deck') || '').toLowerCase();
+  const format = url.searchParams.get('format') || 'json';
+
+  if (format !== 'json' && format !== 'flat') return fail(400, 'format must be json or flat', h);
+  if (id === '') {
+    // No id: list what there is, so the panel can populate itself rather than
+    // hardcoding which decks exist.
+    const list = Object.values(decks.decks).map((d) => ({ id: d.id, set: d.set, name: d.name, total: d.total }));
+    return new Response(
+      format === 'flat' ? list.map((d) => `${d.id},${d.set},${d.total},${d.name}`).join('\n') + '\n' : JSON.stringify({ decks: list }),
+      { headers: { ...h, 'content-type': format === 'flat' ? 'text/plain; charset=utf-8' : 'application/json', 'cache-control': 'public, max-age=3600' } });
+  }
+  if (!/^[a-z0-9-]{1,32}$/.test(id) || !decks.decks[id]) return fail(404, `no deck ${id}`, h);
+
+  const d = decks.decks[id];
+  const cards = d.cards.flatMap((c) => Array.from({ length: c.n }, () => ({ code: c.code, base: c.code, rarity: c.rarity })));
+  const headers = { ...h, 'cache-control': 'public, max-age=3600' };
+
+  if (format === 'flat')
+    return new Response(toFlat(cards), { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8' } });
+  return new Response(JSON.stringify({ deck: d.id, set: d.set, name: d.name, total: d.total, cards }),
+    { headers: { ...headers, 'content-type': 'application/json' } });
+}
+
+/**
  * Palify deck and profile pages are Next.js routes, not an API. The only
  * machine-readable form is the RSC flight payload, requested with `RSC: 1`.
  *
@@ -203,6 +239,7 @@ export default {
       });
 
     if (p === '/api/pull') return pull(request, url, h);
+    if (p === '/api/deck') return deck(request, url, h);
 
     let m;
     if ((m = p.match(/^\/img\/([^/]+)$/)))

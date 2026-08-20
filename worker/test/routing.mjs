@@ -29,6 +29,10 @@ const cases = [
   ['/api/pull?format=xml', 400, null],
   ['/api/pull?set=BP99', 404, null],
   ['/api/pull?seed=bad%20seed', 400, null],
+  ['/api/deck', 200, null],
+  ['/api/deck?deck=td02&format=flat', 200, null],
+  ['/api/deck?deck=nope', 404, null],
+  ['/api/deck?deck=td02&format=xml', 400, null],
   ['/deck/f2dd143c-8e6f-4142-87d2-051195185f96', 200, 'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96'],
   ['/deck/not-a-uuid', 400, null],
   ['/profile/dalek', 200, 'https://palify.org/u/dalek'],
@@ -108,6 +112,18 @@ check('each pack is independently sorted',
     const p = twelve.pulls.filter((x) => x.pack === i + 1);
     return p.length === 7 && p.every((c, j) => j === 0 || RANK.indexOf(c.rarity) >= RANK.indexOf(p[j - 1].rarity));
   }));
+
+// ── /api/deck: the panel's other source ──────────────────────────────────────
+console.log('\n/api/deck:');
+const td02 = await (await get('/api/deck?deck=td02&format=flat')).text();
+const deckLines = td02.trimEnd().split('\n');
+check('td02 expands quantities to 50 physical cards', deckLines.length === 50, `${deckLines.length} lines`);
+check('same code,rarity shape as a pull', deckLines.every((l) => /^[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4},[A-Z]{1,3}$/.test(l)), deckLines[0]);
+const td02json = await (await get('/api/deck?deck=td02')).json();
+check('json agrees with flat', td02json.cards.length === 50 && td02json.cards[0].code === deckLines[0].split(',')[0]);
+check('deck is labelled with its set', td02json.set === 'TD02');
+const listing = await (await get('/api/deck')).json();
+check('listing names every deck', listing.decks.length >= 2 && listing.decks.every((d) => d.id && d.set && d.total > 0));
 
 // Runs last: it deliberately empties the token bucket for this IP.
 let sawThrottle = false;
