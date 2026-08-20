@@ -1,0 +1,1450 @@
+{
+  "$comment": "Pull pool for BP01, snapshotted from Palify. Regenerate with tools/fetch-pool.mjs - never hand-edit card codes.",
+  "set": "BP01",
+  "name": "Dawn of Palpagos",
+  "source": "https://palify.org/api/cards?set=BP01",
+  "fetched": "2026-08-20",
+  "cards": 101,
+  "landscape": [
+    "BP01-015",
+    "BP01-016",
+    "BP01-017",
+    "BP01-018",
+    "BP01-039",
+    "BP01-040",
+    "BP01-041",
+    "BP01-042",
+    "BP01-043",
+    "BP01-063",
+    "BP01-064",
+    "BP01-065",
+    "BP01-066",
+    "BP01-067",
+    "BP01-088",
+    "BP01-089",
+    "BP01-090",
+    "BP01-091",
+    "BP01-092"
+  ],
+  "byRarity": {
+    "RR": [
+      {
+        "code": "BP01-001",
+        "base": "BP01-001",
+        "variant": false
+      },
+      {
+        "code": "BP01-002",
+        "base": "BP01-002",
+        "variant": false
+      },
+      {
+        "code": "BP01-023",
+        "base": "BP01-023",
+        "variant": false
+      },
+      {
+        "code": "BP01-025",
+        "base": "BP01-025",
+        "variant": false
+      },
+      {
+        "code": "BP01-026",
+        "base": "BP01-026",
+        "variant": false
+      },
+      {
+        "code": "BP01-046",
+        "base": "BP01-046",
+        "variant": false
+      },
+      {
+        "code": "BP01-049",
+        "base": "BP01-049",
+        "variant": false
+      },
+      {
+        "code": "BP01-050",
+        "base": "BP01-050",
+        "variant": false
+      },
+      {
+        "code": "BP01-070",
+        "base": "BP01-070",
+        "variant": false
+      },
+      {
+        "code": "BP01-073",
+        "base": "BP01-073",
+        "variant": false
+      },
+      {
+        "code": "BP01-074",
+        "base": "BP01-074",
+        "variant": false
+      },
+      {
+        "code": "BP01-095",
+        "base": "BP01-095",
+        "variant": false
+      }
+    ],
+    "OSR": [
+      {
+        "code": "BP01-001OSR",
+        "base": "BP01-001",
+        "variant": true
+      },
+      {
+        "code": "BP01-002OSR",
+        "base": "BP01-002",
+        "variant": true
+      },
+      {
+        "code": "BP01-023OSR",
+        "base": "BP01-023",
+        "variant": true
+      },
+      {
+        "code": "BP01-025OSR",
+        "base": "BP01-025",
+        "variant": true
+      },
+      {
+        "code": "BP01-026OSR",
+        "base": "BP01-026",
+        "variant": true
+      },
+      {
+        "code": "BP01-027OSR",
+        "base": "BP01-027",
+        "variant": true
+      },
+      {
+        "code": "BP01-046OSR",
+        "base": "BP01-046",
+        "variant": true
+      },
+      {
+        "code": "BP01-049OSR",
+        "base": "BP01-049",
+        "variant": true
+      },
+      {
+        "code": "BP01-050OSR",
+        "base": "BP01-050",
+        "variant": true
+      },
+      {
+        "code": "BP01-051OSR",
+        "base": "BP01-051",
+        "variant": true
+      },
+      {
+        "code": "BP01-070OSR",
+        "base": "BP01-070",
+        "variant": true
+      },
+      {
+        "code": "BP01-073OSR",
+        "base": "BP01-073",
+        "variant": true
+      },
+      {
+        "code": "BP01-074OSR",
+        "base": "BP01-074",
+        "variant": true
+      },
+      {
+        "code": "BP01-075OSR",
+        "base": "BP01-075",
+        "variant": true
+      },
+      {
+        "code": "BP01-095OSR",
+        "base": "BP01-095",
+        "variant": true
+      }
+    ],
+    "SSP": [
+      {
+        "code": "BP01-001SSP",
+        "base": "BP01-001",
+        "variant": true
+      },
+      {
+        "code": "BP01-025SSP",
+        "base": "BP01-025",
+        "variant": true
+      },
+      {
+        "code": "BP01-049SSP",
+        "base": "BP01-049",
+        "variant": true
+      },
+      {
+        "code": "BP01-073SSP",
+        "base": "BP01-073",
+        "variant": true
+      }
+    ],
+    "SP": [
+      {
+        "code": "BP01-002SP",
+        "base": "BP01-002",
+        "variant": true
+      },
+      {
+        "code": "BP01-015SP",
+        "base": "BP01-015",
+        "variant": true
+      },
+      {
+        "code": "BP01-023SP",
+        "base": "BP01-023",
+        "variant": true
+      },
+      {
+        "code": "BP01-026SP",
+        "base": "BP01-026",
+        "variant": true
+      },
+      {
+        "code": "BP01-027SP",
+        "base": "BP01-027",
+        "variant": true
+      },
+      {
+        "code": "BP01-046SP",
+        "base": "BP01-046",
+        "variant": true
+      },
+      {
+        "code": "BP01-050SP",
+        "base": "BP01-050",
+        "variant": true
+      },
+      {
+        "code": "BP01-051SP",
+        "base": "BP01-051",
+        "variant": true
+      },
+      {
+        "code": "BP01-070SP",
+        "base": "BP01-070",
+        "variant": true
+      },
+      {
+        "code": "BP01-074SP",
+        "base": "BP01-074",
+        "variant": true
+      },
+      {
+        "code": "BP01-075SP",
+        "base": "BP01-075",
+        "variant": true
+      },
+      {
+        "code": "BP01-095SP",
+        "base": "BP01-095",
+        "variant": true
+      }
+    ],
+    "R": [
+      {
+        "code": "BP01-003",
+        "base": "BP01-003",
+        "variant": false
+      },
+      {
+        "code": "BP01-004",
+        "base": "BP01-004",
+        "variant": false
+      },
+      {
+        "code": "BP01-005",
+        "base": "BP01-005",
+        "variant": false
+      },
+      {
+        "code": "BP01-015",
+        "base": "BP01-015",
+        "variant": false
+      },
+      {
+        "code": "BP01-019",
+        "base": "BP01-019",
+        "variant": false
+      },
+      {
+        "code": "BP01-020",
+        "base": "BP01-020",
+        "variant": false
+      },
+      {
+        "code": "BP01-027",
+        "base": "BP01-027",
+        "variant": false
+      },
+      {
+        "code": "BP01-028",
+        "base": "BP01-028",
+        "variant": false
+      },
+      {
+        "code": "BP01-029",
+        "base": "BP01-029",
+        "variant": false
+      },
+      {
+        "code": "BP01-030",
+        "base": "BP01-030",
+        "variant": false
+      },
+      {
+        "code": "BP01-039",
+        "base": "BP01-039",
+        "variant": false
+      },
+      {
+        "code": "BP01-044",
+        "base": "BP01-044",
+        "variant": false
+      },
+      {
+        "code": "BP01-051",
+        "base": "BP01-051",
+        "variant": false
+      },
+      {
+        "code": "BP01-052",
+        "base": "BP01-052",
+        "variant": false
+      },
+      {
+        "code": "BP01-053",
+        "base": "BP01-053",
+        "variant": false
+      },
+      {
+        "code": "BP01-054",
+        "base": "BP01-054",
+        "variant": false
+      },
+      {
+        "code": "BP01-063",
+        "base": "BP01-063",
+        "variant": false
+      },
+      {
+        "code": "BP01-064",
+        "base": "BP01-064",
+        "variant": false
+      },
+      {
+        "code": "BP01-075",
+        "base": "BP01-075",
+        "variant": false
+      },
+      {
+        "code": "BP01-076",
+        "base": "BP01-076",
+        "variant": false
+      },
+      {
+        "code": "BP01-077",
+        "base": "BP01-077",
+        "variant": false
+      },
+      {
+        "code": "BP01-078",
+        "base": "BP01-078",
+        "variant": false
+      },
+      {
+        "code": "BP01-088",
+        "base": "BP01-088",
+        "variant": false
+      },
+      {
+        "code": "BP01-093",
+        "base": "BP01-093",
+        "variant": false
+      }
+    ],
+    "SR": [
+      {
+        "code": "BP01-003SR",
+        "base": "BP01-003",
+        "variant": true
+      },
+      {
+        "code": "BP01-004SR",
+        "base": "BP01-004",
+        "variant": true
+      },
+      {
+        "code": "BP01-005SR",
+        "base": "BP01-005",
+        "variant": true
+      },
+      {
+        "code": "BP01-006SR",
+        "base": "BP01-006",
+        "variant": true
+      },
+      {
+        "code": "BP01-007SR",
+        "base": "BP01-007",
+        "variant": true
+      },
+      {
+        "code": "BP01-019SR",
+        "base": "BP01-019",
+        "variant": true
+      },
+      {
+        "code": "BP01-020SR",
+        "base": "BP01-020",
+        "variant": true
+      },
+      {
+        "code": "BP01-028SR",
+        "base": "BP01-028",
+        "variant": true
+      },
+      {
+        "code": "BP01-029SR",
+        "base": "BP01-029",
+        "variant": true
+      },
+      {
+        "code": "BP01-030SR",
+        "base": "BP01-030",
+        "variant": true
+      },
+      {
+        "code": "BP01-031SR",
+        "base": "BP01-031",
+        "variant": true
+      },
+      {
+        "code": "BP01-039SR",
+        "base": "BP01-039",
+        "variant": true
+      },
+      {
+        "code": "BP01-044SR",
+        "base": "BP01-044",
+        "variant": true
+      },
+      {
+        "code": "BP01-047SR",
+        "base": "BP01-047",
+        "variant": true
+      },
+      {
+        "code": "BP01-052SR",
+        "base": "BP01-052",
+        "variant": true
+      },
+      {
+        "code": "BP01-053SR",
+        "base": "BP01-053",
+        "variant": true
+      },
+      {
+        "code": "BP01-054SR",
+        "base": "BP01-054",
+        "variant": true
+      },
+      {
+        "code": "BP01-055SR",
+        "base": "BP01-055",
+        "variant": true
+      },
+      {
+        "code": "BP01-056SR",
+        "base": "BP01-056",
+        "variant": true
+      },
+      {
+        "code": "BP01-063SR",
+        "base": "BP01-063",
+        "variant": true
+      },
+      {
+        "code": "BP01-064SR",
+        "base": "BP01-064",
+        "variant": true
+      },
+      {
+        "code": "BP01-076SR",
+        "base": "BP01-076",
+        "variant": true
+      },
+      {
+        "code": "BP01-077SR",
+        "base": "BP01-077",
+        "variant": true
+      },
+      {
+        "code": "BP01-078SR",
+        "base": "BP01-078",
+        "variant": true
+      },
+      {
+        "code": "BP01-079SR",
+        "base": "BP01-079",
+        "variant": true
+      },
+      {
+        "code": "BP01-080SR",
+        "base": "BP01-080",
+        "variant": true
+      },
+      {
+        "code": "BP01-081SR",
+        "base": "BP01-081",
+        "variant": true
+      },
+      {
+        "code": "BP01-088SR",
+        "base": "BP01-088",
+        "variant": true
+      },
+      {
+        "code": "BP01-093SR",
+        "base": "BP01-093",
+        "variant": true
+      },
+      {
+        "code": "BP01-100SR",
+        "base": "BP01-100",
+        "variant": true
+      }
+    ],
+    "U": [
+      {
+        "code": "BP01-006",
+        "base": "BP01-006",
+        "variant": false
+      },
+      {
+        "code": "BP01-007",
+        "base": "BP01-007",
+        "variant": false
+      },
+      {
+        "code": "BP01-008",
+        "base": "BP01-008",
+        "variant": false
+      },
+      {
+        "code": "BP01-009",
+        "base": "BP01-009",
+        "variant": false
+      },
+      {
+        "code": "BP01-010",
+        "base": "BP01-010",
+        "variant": false
+      },
+      {
+        "code": "BP01-016",
+        "base": "BP01-016",
+        "variant": false
+      },
+      {
+        "code": "BP01-017",
+        "base": "BP01-017",
+        "variant": false
+      },
+      {
+        "code": "BP01-031",
+        "base": "BP01-031",
+        "variant": false
+      },
+      {
+        "code": "BP01-032",
+        "base": "BP01-032",
+        "variant": false
+      },
+      {
+        "code": "BP01-033",
+        "base": "BP01-033",
+        "variant": false
+      },
+      {
+        "code": "BP01-040",
+        "base": "BP01-040",
+        "variant": false
+      },
+      {
+        "code": "BP01-041",
+        "base": "BP01-041",
+        "variant": false
+      },
+      {
+        "code": "BP01-045",
+        "base": "BP01-045",
+        "variant": false
+      },
+      {
+        "code": "BP01-047",
+        "base": "BP01-047",
+        "variant": false
+      },
+      {
+        "code": "BP01-055",
+        "base": "BP01-055",
+        "variant": false
+      },
+      {
+        "code": "BP01-057",
+        "base": "BP01-057",
+        "variant": false
+      },
+      {
+        "code": "BP01-058",
+        "base": "BP01-058",
+        "variant": false
+      },
+      {
+        "code": "BP01-059",
+        "base": "BP01-059",
+        "variant": false
+      },
+      {
+        "code": "BP01-065",
+        "base": "BP01-065",
+        "variant": false
+      },
+      {
+        "code": "BP01-066",
+        "base": "BP01-066",
+        "variant": false
+      },
+      {
+        "code": "BP01-068",
+        "base": "BP01-068",
+        "variant": false
+      },
+      {
+        "code": "BP01-079",
+        "base": "BP01-079",
+        "variant": false
+      },
+      {
+        "code": "BP01-082",
+        "base": "BP01-082",
+        "variant": false
+      },
+      {
+        "code": "BP01-083",
+        "base": "BP01-083",
+        "variant": false
+      },
+      {
+        "code": "BP01-084",
+        "base": "BP01-084",
+        "variant": false
+      },
+      {
+        "code": "BP01-085",
+        "base": "BP01-085",
+        "variant": false
+      },
+      {
+        "code": "BP01-089",
+        "base": "BP01-089",
+        "variant": false
+      },
+      {
+        "code": "BP01-090",
+        "base": "BP01-090",
+        "variant": false
+      },
+      {
+        "code": "BP01-098",
+        "base": "BP01-098",
+        "variant": false
+      },
+      {
+        "code": "BP01-100",
+        "base": "BP01-100",
+        "variant": false
+      }
+    ],
+    "C": [
+      {
+        "code": "BP01-011",
+        "base": "BP01-011",
+        "variant": false
+      },
+      {
+        "code": "BP01-012",
+        "base": "BP01-012",
+        "variant": false
+      },
+      {
+        "code": "BP01-013",
+        "base": "BP01-013",
+        "variant": false
+      },
+      {
+        "code": "BP01-014",
+        "base": "BP01-014",
+        "variant": false
+      },
+      {
+        "code": "BP01-018",
+        "base": "BP01-018",
+        "variant": false
+      },
+      {
+        "code": "BP01-021",
+        "base": "BP01-021",
+        "variant": false
+      },
+      {
+        "code": "BP01-022",
+        "base": "BP01-022",
+        "variant": false
+      },
+      {
+        "code": "BP01-024",
+        "base": "BP01-024",
+        "variant": false
+      },
+      {
+        "code": "BP01-034",
+        "base": "BP01-034",
+        "variant": false
+      },
+      {
+        "code": "BP01-035",
+        "base": "BP01-035",
+        "variant": false
+      },
+      {
+        "code": "BP01-036",
+        "base": "BP01-036",
+        "variant": false
+      },
+      {
+        "code": "BP01-037",
+        "base": "BP01-037",
+        "variant": false
+      },
+      {
+        "code": "BP01-038",
+        "base": "BP01-038",
+        "variant": false
+      },
+      {
+        "code": "BP01-042",
+        "base": "BP01-042",
+        "variant": false
+      },
+      {
+        "code": "BP01-043",
+        "base": "BP01-043",
+        "variant": false
+      },
+      {
+        "code": "BP01-048",
+        "base": "BP01-048",
+        "variant": false
+      },
+      {
+        "code": "BP01-056",
+        "base": "BP01-056",
+        "variant": false
+      },
+      {
+        "code": "BP01-060",
+        "base": "BP01-060",
+        "variant": false
+      },
+      {
+        "code": "BP01-061",
+        "base": "BP01-061",
+        "variant": false
+      },
+      {
+        "code": "BP01-062",
+        "base": "BP01-062",
+        "variant": false
+      },
+      {
+        "code": "BP01-067",
+        "base": "BP01-067",
+        "variant": false
+      },
+      {
+        "code": "BP01-069",
+        "base": "BP01-069",
+        "variant": false
+      },
+      {
+        "code": "BP01-071",
+        "base": "BP01-071",
+        "variant": false
+      },
+      {
+        "code": "BP01-072",
+        "base": "BP01-072",
+        "variant": false
+      },
+      {
+        "code": "BP01-080",
+        "base": "BP01-080",
+        "variant": false
+      },
+      {
+        "code": "BP01-081",
+        "base": "BP01-081",
+        "variant": false
+      },
+      {
+        "code": "BP01-086",
+        "base": "BP01-086",
+        "variant": false
+      },
+      {
+        "code": "BP01-087",
+        "base": "BP01-087",
+        "variant": false
+      },
+      {
+        "code": "BP01-091",
+        "base": "BP01-091",
+        "variant": false
+      },
+      {
+        "code": "BP01-092",
+        "base": "BP01-092",
+        "variant": false
+      },
+      {
+        "code": "BP01-094",
+        "base": "BP01-094",
+        "variant": false
+      },
+      {
+        "code": "BP01-096",
+        "base": "BP01-096",
+        "variant": false
+      },
+      {
+        "code": "BP01-097",
+        "base": "BP01-097",
+        "variant": false
+      },
+      {
+        "code": "BP01-099",
+        "base": "BP01-099",
+        "variant": false
+      }
+    ],
+    "PR": [
+      {
+        "code": "PR-002",
+        "base": "BP01-012",
+        "variant": true
+      },
+      {
+        "code": "PR-003",
+        "base": "BP01-014",
+        "variant": true
+      },
+      {
+        "code": "PR-004",
+        "base": "BP01-032",
+        "variant": true
+      },
+      {
+        "code": "PR-005",
+        "base": "BP01-038",
+        "variant": true
+      },
+      {
+        "code": "PR-006",
+        "base": "BP01-058",
+        "variant": true
+      },
+      {
+        "code": "PR-007",
+        "base": "BP01-059",
+        "variant": true
+      },
+      {
+        "code": "PR-008",
+        "base": "BP01-082",
+        "variant": true
+      },
+      {
+        "code": "PR-009",
+        "base": "BP01-087",
+        "variant": true
+      }
+    ],
+    "S": [
+      {
+        "code": "PR-002S",
+        "base": "BP01-012",
+        "variant": true
+      },
+      {
+        "code": "PR-003S",
+        "base": "BP01-014",
+        "variant": true
+      },
+      {
+        "code": "PR-004S",
+        "base": "BP01-032",
+        "variant": true
+      },
+      {
+        "code": "PR-005S",
+        "base": "BP01-038",
+        "variant": true
+      },
+      {
+        "code": "PR-006S",
+        "base": "BP01-058",
+        "variant": true
+      },
+      {
+        "code": "PR-007S",
+        "base": "BP01-059",
+        "variant": true
+      },
+      {
+        "code": "PR-008S",
+        "base": "BP01-082",
+        "variant": true
+      },
+      {
+        "code": "PR-009S",
+        "base": "BP01-087",
+        "variant": true
+      }
+    ],
+    "SSS": [
+      {
+        "code": "SOUL-002",
+        "base": "SOUL-002",
+        "variant": false
+      }
+    ]
+  },
+  "base": {
+    "BP01-001": {
+      "name": "Jormuntide Ignis – Savage Lava Dragon",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-002": {
+      "name": "Suzaku – Hellfire Wings",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-003": {
+      "name": "Gobfin Ignis – Blazing Hothead",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-004": {
+      "name": "Bushi – Ephemeral Blade",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-005": {
+      "name": "Reptyro – Ore Gorger",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-006": {
+      "name": "Foxparks – Light of Courage",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-007": {
+      "name": "Kitsun – Wyrmbane Fangs",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-008": {
+      "name": "Sparkit – Hazardous Contact",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-009": {
+      "name": "Univolt – Valiant Thunderclap",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-010": {
+      "name": "Ragnahawk – Emberwing Striker",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-011": {
+      "name": "Rooby – Brave Sparks",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-012": {
+      "name": "Flambelle – Scorching Tears",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-013": {
+      "name": "Pyrin – Cinder Steed",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-014": {
+      "name": "Blazehowl – Hellflame Defender",
+      "color": "Red",
+      "type": "Pal"
+    },
+    "BP01-015": {
+      "name": "Mounted Machine Gun",
+      "color": "Red",
+      "type": "Structure"
+    },
+    "BP01-016": {
+      "name": "Primitive Furnace",
+      "color": "Red",
+      "type": "Structure"
+    },
+    "BP01-017": {
+      "name": "Flame Cauldron",
+      "color": "Red",
+      "type": "Structure"
+    },
+    "BP01-018": {
+      "name": "Alarm Bell",
+      "color": "Red",
+      "type": "Structure"
+    },
+    "BP01-019": {
+      "name": "Foxparks' Harness",
+      "color": "Red",
+      "type": "Gear"
+    },
+    "BP01-020": {
+      "name": "Pump-Action Shotgun",
+      "color": "Red",
+      "type": "Gear"
+    },
+    "BP01-021": {
+      "name": "Makeshift Handgun",
+      "color": "Red",
+      "type": "Gear"
+    },
+    "BP01-022": {
+      "name": "Stone Pickaxe",
+      "color": "Red",
+      "type": "Gear"
+    },
+    "BP01-023": {
+      "name": "Axel's Strategy",
+      "color": "Red",
+      "type": "Event"
+    },
+    "BP01-024": {
+      "name": "Treasure Chest Found!",
+      "color": "Red",
+      "type": "Event"
+    },
+    "BP01-025": {
+      "name": "Chillet – Dragon Whisperer",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-026": {
+      "name": "Relaxaurus – Hungry Gunner",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-027": {
+      "name": "Jormuntide – Surging Sea Serpent",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-028": {
+      "name": "Pengullet – Yearning for the Sky",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-029": {
+      "name": "Azurobe – Water Dragon Waltz",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-030": {
+      "name": "Reptyro Cryst – Glacial Devourer",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-031": {
+      "name": "Penking – Mighty Warrior of the Deep",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-032": {
+      "name": "Fuack – Manic Wave Ripper",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-033": {
+      "name": "Wumpo – Frostpeak Sentinel",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-034": {
+      "name": "Teafant – Fountain of Cheer",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-035": {
+      "name": "Mau Cryst – Harbinger of Riches",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-036": {
+      "name": "Celaray – Loop De Loop",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-037": {
+      "name": "Surfent – Swift Swimmer",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-038": {
+      "name": "Cryolinx – Arctic Ordeal",
+      "color": "Blue",
+      "type": "Pal"
+    },
+    "BP01-039": {
+      "name": "Antique Curtain",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "BP01-040": {
+      "name": "Antique Dresser",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "BP01-041": {
+      "name": "Hot Spring",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "BP01-042": {
+      "name": "Antique Mirror",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "BP01-043": {
+      "name": "Sphere Workbench",
+      "color": "Blue",
+      "type": "Structure"
+    },
+    "BP01-044": {
+      "name": "Pengullet Rocket Launcher",
+      "color": "Blue",
+      "type": "Gear"
+    },
+    "BP01-045": {
+      "name": "Grappling Gun",
+      "color": "Blue",
+      "type": "Gear"
+    },
+    "BP01-046": {
+      "name": "Victor's Strategy",
+      "color": "Blue",
+      "type": "Event"
+    },
+    "BP01-047": {
+      "name": "Pal Sphere",
+      "color": "Blue",
+      "type": "Event"
+    },
+    "BP01-048": {
+      "name": "Aurora Guide",
+      "color": "Blue",
+      "type": "Event"
+    },
+    "BP01-049": {
+      "name": "Lyleen – Blessing of the Goddess",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-050": {
+      "name": "Digtoise – Seismic Drillback",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-051": {
+      "name": "Petallia – Sweet Blessings",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-052": {
+      "name": "Rushoar – Reckless Destruction",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-053": {
+      "name": "Elizabee – Queen of the Flower Garden",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-054": {
+      "name": "Warsect – Iron Fortress",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-055": {
+      "name": "Vaelet – Bewitching Blossom",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-056": {
+      "name": "Lifmunk – Promising Newbie",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-057": {
+      "name": "Dumud – Mellow Bounty",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-058": {
+      "name": "Gumoss – Curious Sprout",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-059": {
+      "name": "Digtoise – Keen Needleback",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-060": {
+      "name": "Tanzee – Cheerful Worker",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-061": {
+      "name": "Beegarde – Knight of the Flower Garden",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-062": {
+      "name": "Wumpo Botan – Tropical Sentinel",
+      "color": "Green",
+      "type": "Pal"
+    },
+    "BP01-063": {
+      "name": "Breeding Farm",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "BP01-064": {
+      "name": "Cola Vending Machine",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "BP01-065": {
+      "name": "Feed Box",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "BP01-066": {
+      "name": "Ranch",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "BP01-067": {
+      "name": "No Pals Beyond Sign",
+      "color": "Green",
+      "type": "Structure"
+    },
+    "BP01-068": {
+      "name": "Digtoise's Headband",
+      "color": "Green",
+      "type": "Gear"
+    },
+    "BP01-069": {
+      "name": "Farming Hat",
+      "color": "Green",
+      "type": "Gear"
+    },
+    "BP01-070": {
+      "name": "Lily's Strategy",
+      "color": "Green",
+      "type": "Event"
+    },
+    "BP01-071": {
+      "name": "Found an Egg!",
+      "color": "Green",
+      "type": "Event"
+    },
+    "BP01-072": {
+      "name": "Blessing of the Flower Spirit",
+      "color": "Green",
+      "type": "Event"
+    },
+    "BP01-073": {
+      "name": "Helzephyr – Wings of the Moonless Night",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-074": {
+      "name": "Shadowbeak – Seed of Despair",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-075": {
+      "name": "Katress – Abyssal Sorcerer",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-076": {
+      "name": "Tombat – Out of Nowhere!?",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-077": {
+      "name": "Pyrin Noct – Steed of Azure Flames",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-078": {
+      "name": "Lyleen Noct – Providence of the Goddess",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-079": {
+      "name": "Depresso – Late Night Hustler",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-080": {
+      "name": "Daedream – First Slumber",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-081": {
+      "name": "Lovander – Heartstealer",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-082": {
+      "name": "Daedream – Deep Slumber",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-083": {
+      "name": "Vanwyrm – Marauder of the Skies",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-084": {
+      "name": "Menasting – Darkness-Dwelling Scorpion",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-085": {
+      "name": "Maraith – Twilight Messenger",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-086": {
+      "name": "Nox – The Silent One",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-087": {
+      "name": "Loupmoon – Glinting Moonlight",
+      "color": "Purple",
+      "type": "Pal"
+    },
+    "BP01-088": {
+      "name": "Lamp",
+      "color": "Purple",
+      "type": "Structure"
+    },
+    "BP01-089": {
+      "name": "Shoddy Bed",
+      "color": "Purple",
+      "type": "Structure"
+    },
+    "BP01-090": {
+      "name": "Medieval Medicine Workbench",
+      "color": "Purple",
+      "type": "Structure"
+    },
+    "BP01-091": {
+      "name": "Wooden Wall",
+      "color": "Purple",
+      "type": "Structure"
+    },
+    "BP01-092": {
+      "name": "Viewing Cage",
+      "color": "Purple",
+      "type": "Structure"
+    },
+    "BP01-093": {
+      "name": "Meat Cleaver",
+      "color": "Purple",
+      "type": "Gear"
+    },
+    "BP01-094": {
+      "name": "Daedream's Necklace",
+      "color": "Purple",
+      "type": "Gear"
+    },
+    "BP01-095": {
+      "name": "Zoe's Strategy",
+      "color": "Purple",
+      "type": "Event"
+    },
+    "BP01-096": {
+      "name": "Dark Cannon",
+      "color": "Purple",
+      "type": "Event"
+    },
+    "BP01-097": {
+      "name": "Black Marketeer",
+      "color": "Purple",
+      "type": "Event"
+    },
+    "BP01-098": {
+      "name": "Elphidran – Gentle Radiance",
+      "color": "Colorless",
+      "type": "Pal"
+    },
+    "BP01-099": {
+      "name": "Direhowl – Proud Fang",
+      "color": "Colorless",
+      "type": "Pal"
+    },
+    "BP01-100": {
+      "name": "The Adventure Begins",
+      "color": "Colorless",
+      "type": "Event"
+    },
+    "SOUL-002": {
+      "name": "Soul",
+      "color": null,
+      "type": "Soul"
+    }
+  }
+}

@@ -20,6 +20,15 @@ const cases = [
   ['/img/TD01-001?w=9999', 400, null],
   ['/img/..%2F..%2Fetc%2Fpasswd', 400, null],
   ['/img/EVIL$CODE', 400, null],
+  ['/api/pull', 200, null],
+  ['/api/pull?format=flat', 200, null],
+  ['/api/pull?packs=12', 200, null],
+  ['/api/pull?packs=0', 400, null],
+  ['/api/pull?packs=13', 400, null],
+  ['/api/pull?packs=abc', 400, null],
+  ['/api/pull?format=xml', 400, null],
+  ['/api/pull?set=BP99', 404, null],
+  ['/api/pull?seed=bad%20seed', 400, null],
   ['/deck/f2dd143c-8e6f-4142-87d2-051195185f96', 200, 'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96'],
   ['/deck/not-a-uuid', 400, null],
   ['/profile/dalek', 200, 'https://palify.org/u/dalek'],
@@ -44,5 +53,67 @@ console.log('  RSC header sent:', lastUpstream.headers.RSC === '1' ? 'yes' : 'NO
 // unknown origin must not be echoed back
 const r = await worker.fetch(new Request('https://w.example/health', { headers: { Origin: 'https://evil.example' } }), {}, ctx);
 console.log('  unknown origin ->', r.headers.get('access-control-allow-origin'), r.headers.get('access-control-allow-origin') === ORIGIN ? '(not echoed, good)' : '(ECHOED - bad)');
+
+// ── /api/pull contract ────────────────────────────────────────────────────────
+// The endpoint is the only roll there is, so the properties the deck bake and the
+// in-world spawner rely on get asserted here rather than assumed.
+const { default: weights } = await import('../../data/pack-weights.json', { with: { type: 'json' } });
+const RANK = weights.rank;
+const get = (path) => worker.fetch(new Request('https://w.example' + path, { headers: { Origin: ORIGIN } }), {}, ctx);
+const check = (name, ok, detail = '') => { if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail && !ok ? '  ' + detail : ''}`); };
+
+console.log('\n/api/pull:');
+const one = await (await get('/api/pull')).json();
+check('7 cards in a pack', one.pulls.length === 7, `got ${one.pulls.length}`);
+check('slots are 4C + 2U + 1 HIT',
+  JSON.stringify(one.pulls.reduce((a, p) => (a[p.slot] = (a[p.slot] || 0) + 1, a), {})) === '{"HIT":1,"U":2,"C":4}');
+check('sorted rarest first',
+  one.pulls.every((p, i) => i === 0 || RANK.indexOf(p.rarity) >= RANK.indexOf(one.pulls[i - 1].rarity)),
+  one.pulls.map((p) => p.rarity).join(' '));
+check('set is labelled BP01', one.set === 'BP01' && one.setName === 'Dawn of Palpagos');
+check('reports a seed', typeof one.seed === 'string' && one.seed.length > 0);
+check('no unavailable rarities for BP01', one.unavailable === undefined, JSON.stringify(one.unavailable));
+
+const pool = (await import('../../data/pool-bp01.json', { with: { type: 'json' } })).default;
+const known = new Set(Object.values(pool.byRarity).flat().map((p) => p.code));
+check('every code exists in the Palify snapshot', one.pulls.every((p) => known.has(p.code)));
+check('every rarity matches the snapshot',
+  one.pulls.every((p) => pool.byRarity[p.rarity].some((x) => x.code === p.code)));
+
+const a = await (await get('/api/pull?seed=a3f19c')).json();
+const b = await (await get('/api/pull?seed=a3f19c')).json();
+check('same seed, same pull', JSON.stringify(a.pulls) === JSON.stringify(b.pulls));
+const c = await (await get('/api/pull?seed=other1')).json();
+check('different seed, different pull', JSON.stringify(c.pulls) !== JSON.stringify(a.pulls));
+
+const seeded = await get('/api/pull?seed=a3f19c');
+const unseeded = await get('/api/pull');
+check('seeded pulls are cacheable', /immutable/.test(seeded.headers.get('cache-control')));
+check('unseeded pulls are never cached', unseeded.headers.get('cache-control') === 'no-store');
+
+const flatRes = await get('/api/pull?seed=a3f19c&format=flat');
+const flat = await flatRes.text();
+check('flat is text/plain', /text\/plain/.test(flatRes.headers.get('content-type')));
+const lines = flat.trimEnd().split('\n');
+check('flat has one line per card', lines.length === 7, `${lines.length} lines`);
+check('flat is code,rarity', lines.every((l) => /^[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4},[A-Z]{1,3}$/.test(l)), lines.join(' | '));
+check('flat matches json for the same seed',
+  flat.trimEnd() === a.pulls.map((p) => p.code + ',' + p.rarity).join('\n'));
+
+const twelve = await (await get('/api/pull?packs=12&seed=box001')).json();
+check('12 packs = 84 cards', twelve.pulls.length === 84, `got ${twelve.pulls.length}`);
+check('packs are numbered 1..12', new Set(twelve.pulls.map((p) => p.pack)).size === 12);
+check('each pack is independently sorted',
+  [...Array(12)].every((_, i) => {
+    const p = twelve.pulls.filter((x) => x.pack === i + 1);
+    return p.length === 7 && p.every((c, j) => j === 0 || RANK.indexOf(c.rarity) >= RANK.indexOf(p[j - 1].rarity));
+  }));
+
+// Runs last: it deliberately empties the token bucket for this IP.
+let sawThrottle = false;
+for (let i = 0; i < 80 && !sawThrottle; i++) sawThrottle = (await get('/api/pull')).status === 429;
+check('a hammering client eventually gets 429', sawThrottle);
+
 console.log(bad ? `\n${bad} FAILURES` : '\nall routing cases pass');
 globalThis.fetch = realFetch;
+process.exitCode = bad ? 1 : 0;

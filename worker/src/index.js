@@ -8,7 +8,17 @@
  *
  * It deliberately does NOT bake anything. An 8192x8192 RGBA bitmap is 256 MiB
  * against a Worker's 128 MB ceiling; the bake stays in the browser.
+ *
+ * It also owns /api/pull - the booster roll. That one IS compute, but it is a
+ * few hundred bytes of arithmetic, and it has to live somewhere neither the
+ * player's devtools nor the in-world tool can reach.
  */
+import { weights, poolBP01 } from './data.js';
+import { rollPacks, toFlat, newSeed } from './roll.js';
+
+// Sets that can be rolled. Adding BP02 is: snapshot its pool with
+// tools/fetch-pool.mjs, add its weights to data/pack-weights.json, add a line here.
+const POOLS = { BP01: poolBP01 };
 
 const ALLOWED = [
   'https://resopal.dalek.coffee',
@@ -20,6 +30,8 @@ const CODE = /^[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4}$/;
 const WIDTHS = new Set(['256', '512', '1024']);
 const HANDLE = /^[A-Za-z0-9_.-]{1,40}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SET = /^[A-Z][A-Z0-9]{1,5}$/;
+const SEED = /^[A-Za-z0-9_.:-]{1,64}$/;
 
 const UPSTREAM = 'https://palify.org';
 
@@ -65,6 +77,98 @@ async function image(request, ctx, code, width, h) {
 }
 
 /**
+ * Per-IP throttle.
+ *
+ * Honest about what it is: this counts inside ONE isolate, and Cloudflare runs
+ * many. It slows a lazy loop from a single client; it is not a guarantee, and a
+ * determined spammer spread across colos walks straight past it. That is an
+ * acceptable trade for a fan tool with nothing behind it worth stealing - the
+ * roll is stateless, and a re-roll costs the player nothing but their own time.
+ * The real fix, if abuse ever shows up, is Cloudflare's Rate Limiting binding or
+ * a Durable Object; both need account config this Worker deliberately avoids.
+ */
+const BUCKET = new Map();
+const RATE = { burst: 30, perMinute: 30 };
+function throttled(ip) {
+  const now = Date.now();
+  const b = BUCKET.get(ip) || { tokens: RATE.burst, at: now };
+  b.tokens = Math.min(RATE.burst, b.tokens + ((now - b.at) / 60000) * RATE.perMinute);
+  b.at = now;
+  if (BUCKET.size > 5000) BUCKET.clear();      // isolates are short-lived; never let this grow
+  if (b.tokens < 1) { BUCKET.set(ip, b); return true; }
+  b.tokens -= 1;
+  BUCKET.set(ip, b);
+  return false;
+}
+
+/**
+ * GET /api/pull - roll booster packs. See docs/PULL-API.md.
+ *
+ * Two formats because there are two very different callers. `json` is for the
+ * website. `flat` is `code,rarity` one per line, for ProtoFlux, which has no
+ * JSON parser and takes strings apart one IndexOfString at a time - that format
+ * is not a convenience, it is the only pleasant option in-world.
+ *
+ * Cards come back RAREST FIRST within each pack. The deck bake lays the atlas
+ * out in list order, so list order is stack order: rarest on top, commons at the
+ * bottom. Flipped over in-world that reads bottom-up - commons first, hit last.
+ */
+function pull(request, url, h) {
+  const q = url.searchParams;
+  const setCode = (q.get('set') || 'BP01').toUpperCase();
+  const format = q.get('format') || 'json';
+  const packsRaw = q.get('packs') || '1';
+  const seedRaw = q.get('seed');
+
+  if (!SET.test(setCode) || !POOLS[setCode]) return fail(404, `no pool for set ${setCode}`, h);
+  if (format !== 'json' && format !== 'flat') return fail(400, 'format must be json or flat', h);
+  if (!/^\d{1,2}$/.test(packsRaw)) return fail(400, 'packs must be a number', h);
+  const packs = Number(packsRaw);
+  if (packs < 1 || packs > 12) return fail(400, 'packs must be 1-12', h);
+  if (seedRaw !== null && !SEED.test(seedRaw)) return fail(400, 'bad seed', h);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'anon';
+  if (throttled(ip)) return fail(429, 'slow down', { ...h, 'retry-after': '60' });
+
+  // A pinned seed is a pure function of its inputs, so it can be cached hard;
+  // an unpinned one must never be, or two players share a "random" pack.
+  const seed = seedRaw ?? newSeed();
+  const cacheControl = seedRaw !== null
+    ? 'public, max-age=31536000, immutable'
+    : 'no-store';
+
+  let rolled;
+  try {
+    rolled = rollPacks({ pool: POOLS[setCode], weights, setCode, packs, seed });
+  } catch (e) {
+    return fail(500, String(e.message || e), h);
+  }
+
+  if (format === 'flat')
+    return new Response(toFlat(rolled.pulls), {
+      headers: { ...h, 'content-type': 'text/plain; charset=utf-8', 'cache-control': cacheControl },
+    });
+
+  const body = {
+    set: setCode,
+    setName: weights.sets[setCode]?.name ?? null,
+    packs,
+    seed,
+    generated: new Date().toISOString(),
+    pulls: rolled.pulls,
+    best: rolled.best,
+  };
+  // Only present when the weights ask for a rarity the pool cannot supply. It is
+  // in the response rather than swallowed because silently substituting another
+  // rarity would change the odds without anyone noticing.
+  if (rolled.unavailable.length) body.unavailable = rolled.unavailable;
+
+  return new Response(JSON.stringify(body), {
+    headers: { ...h, 'content-type': 'application/json', 'cache-control': cacheControl },
+  });
+}
+
+/**
  * Palify deck and profile pages are Next.js routes, not an API. The only
  * machine-readable form is the RSC flight payload, requested with `RSC: 1`.
  *
@@ -97,6 +201,8 @@ export default {
       return new Response(JSON.stringify({ ok: true, service: 'resopal-proxy' }), {
         headers: { ...h, 'content-type': 'application/json' },
       });
+
+    if (p === '/api/pull') return pull(request, url, h);
 
     let m;
     if ((m = p.match(/^\/img\/([^/]+)$/)))

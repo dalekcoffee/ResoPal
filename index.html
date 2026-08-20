@@ -252,7 +252,7 @@
           <div style="width:34px;height:34px;border-radius:11px;background:rgba(160,162,220,.16);border:1px solid rgba(160,162,220,.42);color:#b0b3ea;font:600 13px/33px 'JetBrains Mono',monospace;text-align:center">01</div>
           <div style="flex:1">
             <div style="font:400 25px/1.2 'Newsreader',serif">Rip a pack</div>
-            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Dawn of Palpagos &mdash; 7 cards a pack: four commons, two uncommons, one hit slot that&rsquo;s always Rare or better.</div>
+            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px"><span style="font:600 12px/1 'JetBrains Mono',monospace;letter-spacing:.06em;color:#b0b3ea;padding:3px 6px;border-radius:6px;background:rgba(160,162,220,.14);border:1px solid rgba(160,162,220,.3);margin-right:8px">{{ setCode }}</span>{{ setName }} &mdash; 7 cards a pack: four commons, two uncommons, one hit slot that&rsquo;s always Rare or better.</div>
           </div>
           <div style="display:flex;gap:9px;padding-top:6px">
             <div style="padding:9px 13px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(150,170,230,.14);text-align:center;white-space:nowrap">
@@ -765,23 +765,27 @@
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;exportLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;hero&quot;,&quot;pair&quot;],&quot;default&quot;:&quot;hero&quot;,&quot;tsType&quot;:&quot;'hero' | 'pair'&quot;,&quot;section&quot;:&quot;Export screen&quot;},&quot;starfield&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Atmosphere&quot;},&quot;defaultSoulCount&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:1,&quot;max&quot;:20,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Defaults&quot;}}">
+// The demo deck shown before anyone imports one. Every code, name, colour and
+// printing here comes from data/pool-bp01.json (regenerate with tools/fetch-pool.mjs)
+// - an earlier hand-written version had three wrong names and two Pals labelled as
+// Structures, which is the failure mode CLAUDE.md's "never invent card data" is about.
 const CARDS = [
-  {code:'BP01-001', name:'Jormuntide Ignis \u2013 Savage Lava Dragon', n:2, hue:'#dd9c9c', prints:[['BP01-001','RR'],['BP01-001OSR','OSR'],['BP01-001SSP','SSP']]},
+  {code:'BP01-001', name:'Jormuntide Ignis \u2013 Savage Lava Dragon', n:2, hue:'#dd9c9c', prints:[['BP01-001','RR'],['BP01-001SSP','SSP'],['BP01-001OSR','OSR']]},
   {code:'BP01-002', name:'Suzaku \u2013 Hellfire Wings', n:3, hue:'#dd9c9c', prints:[['BP01-002','RR'],['BP01-002OSR','OSR'],['BP01-002SP','SP']]},
   {code:'BP01-003', name:'Gobfin Ignis \u2013 Blazing Hothead', n:3, hue:'#dd9c9c', prints:[['BP01-003','R'],['BP01-003SR','SR']]},
-  {code:'BP01-004', name:'Bushi \u2013 Ephemeral Blade', n:4, hue:'#dd9c9c', prints:[['BP01-004','R']]},
-  {code:'BP01-005', name:'Reptyro \u2013 Ore Gorger', n:4, hue:'#dd9c9c', prints:[['BP01-005','R']]},
-  {code:'BP01-006', name:'Foxparks \u2013 Light of Courage', n:4, hue:'#dd9c9c', prints:[['BP01-006','U']]},
-  {code:'BP01-007', name:'Kitsun \u2013 Wyrmbane Fangs', n:2, hue:'#9dc2dd', prints:[['BP01-007','U']]},
-  {code:'BP01-008', name:'Sparkit \u2013 Hazardous Contact', n:3, hue:'#e3c893', prints:[['BP01-008','U']]},
-  {code:'BP01-009', name:'Univolt \u2013 Valiant Thunderclap', n:3, hue:'#e3c893', prints:[['BP01-009','U']]},
+  {code:'BP01-004', name:'Bushi \u2013 Ephemeral Blade', n:4, hue:'#dd9c9c', prints:[['BP01-004','R'],['BP01-004SR','SR']]},
+  {code:'BP01-005', name:'Reptyro \u2013 Ore Gorger', n:4, hue:'#dd9c9c', prints:[['BP01-005','R'],['BP01-005SR','SR']]},
+  {code:'BP01-006', name:'Foxparks \u2013 Light of Courage', n:4, hue:'#dd9c9c', prints:[['BP01-006','U'],['BP01-006SR','SR']]},
+  {code:'BP01-007', name:'Kitsun \u2013 Wyrmbane Fangs', n:2, hue:'#dd9c9c', prints:[['BP01-007','U'],['BP01-007SR','SR']]},
+  {code:'BP01-008', name:'Sparkit \u2013 Hazardous Contact', n:3, hue:'#dd9c9c', prints:[['BP01-008','U']]},
+  {code:'BP01-009', name:'Univolt \u2013 Valiant Thunderclap', n:3, hue:'#dd9c9c', prints:[['BP01-009','U']]},
   {code:'BP01-010', name:'Ragnahawk \u2013 Emberwing Striker', n:3, hue:'#dd9c9c', prints:[['BP01-010','U']]},
   {code:'BP01-011', name:'Rooby \u2013 Brave Sparks', n:4, hue:'#dd9c9c', prints:[['BP01-011','C']]},
-  {code:'BP01-012', name:'Flambelle \u2013 Scorching Tears', n:4, hue:'#dd9c9c', prints:[['BP01-012','C']]},
-  {code:'BP01-013', name:'Blazehowl \u2013 Hellflame Defender', n:2, hue:'#dd9c9c', prints:[['BP01-013','R']]},
+  {code:'BP01-012', name:'Flambelle \u2013 Scorching Tears', n:4, hue:'#dd9c9c', prints:[['BP01-012','C'],['PR-002','PR'],['PR-002S','S']]},
+  {code:'BP01-013', name:'Pyrin \u2013 Cinder Steed', n:2, hue:'#dd9c9c', prints:[['BP01-013','C']]},
   {code:'TD02-005', name:'Eikthyrdeer Terra \u2013 Guardian of Nature', n:4, hue:'#a3ccae', prints:[['TD02-005','C']]},
-  {code:'BP01-081', name:'Structure \u00b7 BP01-081', n:3, hue:'#cfc7a8', structure:true, prints:[['BP01-081','C']]},
-  {code:'BP01-085', name:'Structure \u00b7 BP01-085', n:2, hue:'#cfc7a8', structure:true, prints:[['BP01-085','C']]}
+  {code:'BP01-081', name:'Lovander \u2013 Heartstealer', n:3, hue:'#c2a3e2', prints:[['BP01-081','C'],['BP01-081SR','SR']]},
+  {code:'BP01-085', name:'Maraith \u2013 Twilight Messenger', n:2, hue:'#c2a3e2', prints:[['BP01-085','U']]}
 ];
 const SOULS = ['SOUL-000','SOUL-001','SOUL-002','SOUL-003','SOUL-005','SOUL-006','SOUL-007','SOUL-008'];
 const RESREC = 'resrec:///U-ukilop/R-e7100d16-9b62-4d74-b8e0-058b0492764f';
@@ -794,6 +798,15 @@ const ART_PROXY = 'https://resopal-proxy.dalek.workers.dev';
 const RARITY_HUE = {C:'#9aa6c8', U:'#a4d4ba', R:'#a3cfd8', RR:'#c2a3e2', SR:'#e3c893', OSR:'#e0b393', SP:'#dfa2ab', SSP:'#e5a8c0'};
 const CACHE_KEY = 'resopal.demo.imgcache.v1';
 const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR', 'TSP'];
+// The only booster set that exists so far. Everything set-specific reads through
+// this key - the pool file, the weights entry, the label - so BP02 is a data drop
+// (tools/fetch-pool.mjs + a weights entry), not an edit to this file.
+const SET = 'BP01';
+const STACK_RAREST_FIRST = true;   // see rows(): index 0 is one fixed end of the stack
+const COLOR_HUE = { Red: '#dd9c9c', Blue: '#9dc2dd', Green: '#a3ccae', Purple: '#c2a3e2', Colorless: '#cfc7a8' };
+
+// Filled from data/pool-<set>.json at mount: rarity -> [{p: printing, b: base card}].
+// Until then it falls back to the demo deck so the very first frame can still roll.
 const POOL = {};
 CARDS.forEach(c => c.prints.forEach(p => { (POOL[p[1]] = POOL[p[1]] || []).push({ p: p[0], b: c.code, name: c.name, hue: c.hue }); }));
 const WEIGHTS = {
@@ -801,7 +814,8 @@ const WEIGHTS = {
   hitSlot: { R: 60.8, RR: 20, SR: 10, SP: 5, OSR: 2.5, SSP: 1.2, SSS: 0.5 },
   globalBonus: 1,
   glow: ['RR', 'SR', 'SP', 'OSR', 'SSP', 'SSS'],
-  big: ['SR', 'SP', 'OSR', 'SSP', 'SSS']
+  big: ['SR', 'SP', 'OSR', 'SSP', 'SSS'],
+  name: 'Dawn of Palpagos'
 };
 
 class Component extends DCLogic {
@@ -810,7 +824,7 @@ class Component extends DCLogic {
     step: 0, variants: {}, soulSkipped: false, soulCode: 'SOUL-001', soulCount: 10,
     backSrc: 'assets/DefaultBack.png', backCustom: false, zoom: 1, rot: 0, ox: 0, oy: 0,
     deckLabel: 'Kindling Rush', soulOwnBack: false, failNext: false,
-    mode: 'deck', packStage: 'sealed', tear: 0, pack: [], revealIdx: 0, flipped: false,
+    mode: 'deck', packStage: 'sealed', tear: 0, pack: [], revealIdx: 0, flipped: false, setName: WEIGHTS.name,
     celebrate: null, packCount: 0, binder: [], discarded: {}, fromPulls: false,
     cardDX: 0, cardOut: 0, cardDrag: false, snap: false, hold: false, celId: null,
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
@@ -831,13 +845,62 @@ class Component extends DCLogic {
     document.addEventListener('dragstart', this.noDrag);
     document.addEventListener('error', this.imgFail, true);
     fetch('data/pack-weights.json').then(r => r.json()).then(j => {
-      const set = j && j.sets && j.sets.BP01;
+      const set = j && j.sets && j.sets[SET];
       if (!set) return;
       const g = (j.globalBonus && j.globalBonus.value) || 1, pb = set.perPackBonus || {};
       const hit = {};
+      // R is the hit slot's floor, so it is deliberately not scaled - raising the
+      // rares has to raise them *against* R or a bonus changes nothing. Same rule
+      // as worker/src/roll.js; both read this one file.
       Object.keys(set.hitSlot).forEach(k => { hit[k] = set.hitSlot[k] * (k === 'R' ? 1 : (pb[k] || 1) * g); });
-      this.weights = { slots: set.slots.map(s => ({ rarity: s.rarity, count: s.count })), hitSlot: hit, glow: (j.celebrate || {}).glow || WEIGHTS.glow, big: (j.celebrate || {}).big || WEIGHTS.big };
+      this.rank = j.rank || RANK;
+      this.weights = { slots: set.slots.map(s => ({ rarity: s.rarity, count: s.count })), hitSlot: hit, glow: (j.celebrate || {}).glow || WEIGHTS.glow, big: (j.celebrate || {}).big || WEIGHTS.big, name: set.name || WEIGHTS.name };
+      this.setState({ setName: set.name || WEIGHTS.name });
     }).catch(() => {});
+
+    // The real catalogue, replacing the demo deck as the thing the ripper pulls
+    // from. Committed rather than fetched from Palify, who ask that responses be
+    // cached - a player ripping packs makes zero Palify metadata requests.
+    fetch('data/pool-' + SET.toLowerCase() + '.json').then(r => r.json()).then(j => {
+      if (!j || !j.byRarity) return;
+      Object.keys(POOL).forEach(k => delete POOL[k]);
+      Object.keys(j.byRarity).forEach(rarity => {
+        POOL[rarity] = j.byRarity[rarity].map(e => {
+          const b = j.base[e.base] || {};
+          return { p: e.code, b: e.base, name: b.name || e.base, hue: COLOR_HUE[b.color] || '#cfc7a8' };
+        });
+      });
+      this.landscape = new Set(j.landscape || []);
+      this.fillPacks();
+    }).catch(() => {});
+  }
+
+  // ── where a pack actually comes from ────────────────────────────────────────
+  // The roll belongs to the Worker (docs/PULL-API.md): a browser roll is one
+  // devtools breakpoint away from being whatever the player wants, and the
+  // in-world spawner has to get the same odds from somewhere. So packs are
+  // fetched ahead in a small queue and handed out synchronously, which keeps
+  // every existing call site unchanged.
+  //
+  // The local roll below stays as the fallback. It is not a second source of
+  // truth - it reads the same pool and the same weights - but it IS client-side,
+  // so a pack that came from it is marked `local` and the export says so.
+  fillPacks(want = 3) {
+    if (this.filling || this.packQueue && this.packQueue.length >= want) return;
+    this.filling = true;
+    const n = want - ((this.packQueue || []).length);
+    fetch(ART_PROXY + '/api/pull?set=' + SET + '&packs=' + n)
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('pull ' + r.status))))
+      .then(j => {
+        const packs = {};
+        (j.pulls || []).forEach(c => (packs[c.pack] = packs[c.pack] || []).push(c));
+        this.packQueue = (this.packQueue || []).concat(Object.keys(packs).map(k => packs[k].map(c => {
+          const src = (POOL[c.rarity] || []).find(x => x.p === c.code) || {};
+          return { id: Math.random().toString(36).slice(2, 9), rarity: c.rarity, code: c.code, base: c.base, name: src.name || c.base, hue: src.hue || '#9aa6c8', seed: j.seed };
+        })));
+        this.filling = false;
+      })
+      .catch(() => { this.filling = false; this.serverDown = true; });
   }
   noDrag = (e) => { if (e.target && e.target.tagName === 'IMG') e.preventDefault(); };
   // Every card sits on a striped placeholder so a slow or failed load still looks
@@ -915,26 +978,43 @@ class Component extends DCLogic {
 
   w() { return this.weights || WEIGHTS; }
 
+  // Hand out a server-rolled pack if one is queued, else roll here. Either way the
+  // result is ordered LEAST rare first, because that is reveal order: you swipe
+  // through the commons and the hit is the last card left. The export flips it -
+  // see packRows().
   rollPack() {
+    const queued = (this.packQueue || []).shift();
+    this.fillPacks();
+    if (queued) return queued.slice().reverse();   // the endpoint sends rarest first
+    return this.rollLocal();
+  }
+
+  rollLocal() {
     const w = this.w(), out = [];
     const rand = () => { this.seed = (this.seed * 1664525 + 1013904223) >>> 0; return this.seed / 4294967296; };
     if (this.seed === undefined) this.seed = (Math.random() * 4294967296) >>> 0;
     const hit = () => {
-      const t = w.hitSlot, keys = Object.keys(t), sum = keys.reduce((s, k) => s + t[k], 0);
+      // Rarities the pool cannot supply are dropped, never swapped for a different
+      // rarity: silently changing the odds is worse than visibly having fewer.
+      const t = w.hitSlot, keys = Object.keys(t).filter(k => (POOL[k] || []).length);
+      const sum = keys.reduce((s, k) => s + t[k], 0);
       let r = rand() * sum;
       for (const k of keys) { r -= t[k]; if (r <= 0) return k; }
-      return 'R';
+      return keys[keys.length - 1] || 'R';
     };
     w.slots.forEach(sl => {
       for (let i = 0; i < sl.count; i++) {
-        let rarity = sl.rarity === 'HIT' ? hit() : sl.rarity;
-        if (!POOL[rarity]) rarity = POOL.SSP ? 'SSP' : 'RR';
-        const list = POOL[rarity], c = list[Math.floor(rand() * list.length)];
-        out.push({ id: Math.random().toString(36).slice(2, 9), rarity, code: c.p, base: c.b, name: c.name, hue: c.hue });
+        const rarity = sl.rarity === 'HIT' ? hit() : sl.rarity;
+        const list = POOL[rarity];
+        if (!list || !list.length) continue;
+        const c = list[Math.floor(rand() * list.length)];
+        out.push({ id: Math.random().toString(36).slice(2, 9), rarity, code: c.p, base: c.b, name: c.name, hue: c.hue, local: true });
       }
     });
-    return out.sort((a, b) => RANK.indexOf(b.rarity) - RANK.indexOf(a.rarity));
+    return out.sort((a, b) => this.rankOf(b.rarity) - this.rankOf(a.rarity));
   }
+
+  rankOf(rarity) { const r = this.rank || RANK; const i = r.indexOf(rarity); return i < 0 ? r.length : i; }
 
   tierOf(rarity) {
     if (['SSS', 'SSP', 'OSR'].indexOf(rarity) >= 0) return 3;
@@ -993,7 +1073,19 @@ class Component extends DCLogic {
         g[p.code].n++;
       });
       Object.keys(g).forEach(k => src.push(g[k]));
-      src.sort((a, b) => RANK.indexOf(a.rarity) - RANK.indexOf(b.rarity) || a.key.localeCompare(b.key));
+      // Stack order for a ripped pack: RAREST FIRST.
+      //
+      // The atlas is laid out in this list's order and the deck's flux drives each
+      // card's offset from its IndexOfChild, so list index IS stack position -
+      // entry 0 sits at one fixed end of the stack. Putting the hit at index 0
+      // means the pile reads commons-first when you flip it over and swipe, and
+      // the rare is the last thing you uncover.
+      //
+      // Which physical end index 0 lands on is the one thing here that only a VR
+      // check can settle. If it comes out inverted, flip STACK_RAREST_FIRST - the
+      // rest of the pipeline does not care which way round this is.
+      src.sort((a, b) => (this.rankOf(a.rarity) - this.rankOf(b.rarity)) * (STACK_RAREST_FIRST ? 1 : -1)
+        || a.key.localeCompare(b.key));
     } else {
       this.cards().forEach(c => src.push({ key: c.code, base: c.code, name: c.name, hue: c.hue, failed: !!c.failed, n: c.n, rarity: c.prints[0][1] }));
     }
@@ -1192,6 +1284,8 @@ class Component extends DCLogic {
       })),
       packCount: s.packCount,
       packsWord: s.packCount === 1 ? 'pack' : 'packs',
+      setCode: SET,
+      setName: s.setName || WEIGHTS.name,
       binderCount: s.binder.length,
       hasBinder: s.binder.length > 0,
       binderLabel: s.binder.length + ' cards from ' + s.packCount + (s.packCount === 1 ? ' pack' : ' packs'),

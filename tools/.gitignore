@@ -1,0 +1,6 @@
+node_modules/
+# Vendored from the Resonite Knowledge Library, not owned by this repo.
+# patch.mjs imports it; copy it in before running the Node pipeline:
+#   cp <knowledge-library>/protoflux/skill/scripts/decode.mjs tools/
+decode.mjs
+out/
