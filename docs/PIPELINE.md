@@ -195,6 +195,21 @@ length — but **not byte-identical**, because the browser's WebP encoder and re
 libwebp `method=6` and LANCZOS. Measured against the approved v7 package: whole-atlas mean absolute
 difference 1.31/255. Compare structure, never bytes.
 
+### Two packages in one run, and why one bitmap serves one bake
+
+The soul deck is not a separate pipeline: it is the same `bakeDeck` over a one-code deck
+(`[{code: soulCode, n: soulCount}]`), because every `Soul` printing is the same card with different
+art — see `docs/PALIFY-API.md`. "Generate and download both" therefore runs `bakeDeck` twice
+against the same template `ArrayBuffer`, which is safe; JSZip reads it without taking ownership.
+
+What is **not** safe is reusing decoded art. `composeAtlas` calls `bmp.close()` on every bitmap it
+draws, so an `ImageBitmap` can be handed to exactly one bake — the second gets a detached bitmap and
+`drawImage` throws. It only bites when two packages are built in a row, and only for a code that
+appears in both, so it survives every single-package test. The art cache in `index.html` therefore
+caches the **fetched Blob** and decodes per bake; the measuring pass that reads each card's aspect
+ratio parks its one decode for the first bake to consume. Caching the bitmap instead looks like the
+obvious optimisation and is the bug.
+
 ### Rotation direction is inverted between PIL and canvas
 
 PIL's `Image.ROTATE_270` and a canvas `rotate(90°)` are **not** the same direction. `compose.py`
