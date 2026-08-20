@@ -790,7 +790,7 @@ const BLANK_PX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAA
 // only come from an origin that sends CORS headers. Palify sends none, which is what
 // the proxy in docs/WORKER.md exists to solve. Point this at the deployed Worker and
 // every deck bakes; leave it empty and only the art committed under data/art/ works.
-const ART_PROXY = '';
+const ART_PROXY = 'https://resopal-proxy.dalek.workers.dev';
 const RARITY_HUE = {C:'#9aa6c8', U:'#a4d4ba', R:'#a3cfd8', RR:'#c2a3e2', SR:'#e3c893', OSR:'#e0b393', SP:'#dfa2ab', SSP:'#e5a8c0'};
 const CACHE_KEY = 'resopal.demo.imgcache.v1';
 const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR', 'TSP'];
