@@ -7,7 +7,7 @@
 import { solidify, toImageData, toCanvas } from './imgfix.js';
 
 export const COLS = 10, ROWS = 7;   // must match the baked template's AtlasInfo GridSize
-export const ROT = 270;   // canvas rotates the opposite way from PIL's ROTATE_270; verified against the approved v7 bake
+export const ROT = 90;    // clockwise, matching compose.py's ROTATE_270; verified against the atlas inside the approved v7 package
 const CELL_ASPECT = 0.700;          // the template's cell; card art is 0.7156
 
 const encode = (cv, quality) => cv.convertToBlob({ type: 'image/webp', quality });

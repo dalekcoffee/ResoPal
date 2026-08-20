@@ -2481,7 +2481,7 @@ function toCanvas(img) {
 // compose.js
 var COLS = 10;
 var ROWS = 7;
-var ROT = 270;
+var ROT = 90;
 var CELL_ASPECT = 0.7;
 var encode = (cv, quality) => cv.convertToBlob({ type: "image/webp", quality });
 async function composeAtlas(deck, loadArt, landscape, opts = {}) {

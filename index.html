@@ -786,6 +786,11 @@ const CARDS = [
 const SOULS = ['SOUL-000','SOUL-001','SOUL-002','SOUL-003','SOUL-005','SOUL-006','SOUL-007','SOUL-008'];
 const RESREC = 'resrec:///U-ukilop/R-e7100d16-9b62-4d74-b8e0-058b0492764f';
 const BLANK_PX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+// Baking reads pixels, and a cross-origin image taints the canvas - so bake art can
+// only come from an origin that sends CORS headers. Palify sends none, which is what
+// the proxy in docs/WORKER.md exists to solve. Point this at the deployed Worker and
+// every deck bakes; leave it empty and only the art committed under data/art/ works.
+const ART_PROXY = '';
 const RARITY_HUE = {C:'#9aa6c8', U:'#a4d4ba', R:'#a3cfd8', RR:'#c2a3e2', SR:'#e3c893', OSR:'#e0b393', SP:'#dfa2ab', SSP:'#e5a8c0'};
 const CACHE_KEY = 'resopal.demo.imgcache.v1';
 const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR', 'TSP'];
@@ -855,6 +860,7 @@ class Component extends DCLogic {
   // Bake art must be same-origin or the canvas is tainted and unreadable - see
   // docs/WORKER.md. Thumbnails still come from Palify; only the bake needs pixels.
   bakeArt(code) { return 'data/art/' + code + '.webp'; }
+  proxyArt(code) { return ART_PROXY ? ART_PROXY.replace(/\/$/, '') + '/img/' + code + '?w=1024' : null; }
 
   async loadStarter(set, name) {
     const file = set === 'TD01' ? 'data/td01-red-blue.csv' : 'data/td02-green-purple.csv';
@@ -1099,8 +1105,18 @@ class Component extends DCLogic {
       const landscape = new Set(), bitmaps = new Map();
       const loadArt = async code => {
         if (bitmaps.has(code)) return bitmaps.get(code);
-        const res = await fetch(this.bakeArt(code));
-        if (!res.ok) throw new Error('No card image for ' + code + ' (HTTP ' + res.status + ')');
+        let res = await fetch(this.bakeArt(code));
+        if (!res.ok) {
+          const via = this.proxyArt(code);
+          // no proxy configured, so there is nowhere readable left to look
+          if (!via) throw new Error(
+            'No readable card image for ' + code + '. Baking has to read the image\u2019s pixels, and '
+            + 'Palify sends no CORS headers, so its art can be shown but never read. Only cards with art '
+            + 'committed under data/art/ can be baked until the image proxy is deployed \u2014 see docs/WORKER.md.');
+          try { res = await fetch(via, { mode: 'cors' }); }
+          catch (e) { throw new Error('The image proxy did not answer for ' + code + ' (' + (e && e.message) + ')'); }
+          if (!res.ok) throw new Error('The image proxy returned HTTP ' + res.status + ' for ' + code);
+        }
         const bmp = await createImageBitmap(await res.blob());
         if (bmp.width > bmp.height * 1.05) landscape.add(code);
         bitmaps.set(code, bmp);

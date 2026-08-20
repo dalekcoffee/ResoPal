@@ -206,6 +206,19 @@ Verify by rendering a landscape card (any Structure, e.g. `TD02-008`) and diffin
 known-good bake, both as-is and rotated 180°. If the 180° diff is the smaller one, the direction is
 wrong.
 
+**Extract the reference atlas from inside the package you are comparing against — never from a
+loose intermediate file.** This bug shipped twice. The second time was because the comparison used
+`front_8192.webp` left lying in the build directory, which predated the rotation fix by twenty
+minutes: the browser was "corrected" to match an atlas that was itself wrong, and the diff came
+back clean because both sides were wrong in the same way. A stale oracle is worse than no oracle,
+because it manufactures confidence. Pull the atlas out of the `.resonitepackage` every time:
+
+```js
+// the only trustworthy reference is the one that actually shipped
+for (const [name, e] of Object.entries(zip.files))
+  if (bytes.length > 5e6 && bytes.slice(8, 12).toString() === 'WEBP') // the atlas
+```
+
 ## The shipped template
 
 `data/template.resonitepackage` is a Deck Maker export run through `tools/strip_template.mjs`,
