@@ -1,0 +1,10 @@
+name = "resopal-proxy"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Uncomment AFTER the workers.dev URL is confirmed working, and only if
+# dalek.coffee is a zone in this Cloudflare account. Cloudflare creates the DNS
+# record itself; do not add a CNAME by hand.
+# [[routes]]
+# pattern = "resopalworker.dalek.coffee"
+# custom_domain = true
