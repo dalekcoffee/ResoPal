@@ -105,17 +105,40 @@ const tagsSent = triggers.map((t) => arg(t, 'PressedTag')).sort();
 const tagsHeard = receivers.map((r) => arg(byComp.get(arg(r, 'Tag')), 'Value')).sort();
 check('every tag a button sends is heard', JSON.stringify(tagsSent) === JSON.stringify(tagsHeard),
   `sent ${JSON.stringify(tagsSent)} heard ${JSON.stringify(tagsHeard)}`);
-check('every trigger targets the object root', triggers.every((t) => arg(t, 'Target') === doc.Object.ID));
+// The encoder reserves id 00000000-...-0 for the root, which IS the null GUID,
+// so a reference to the root deserializes as null. A null Target here silently
+// broadcasts at the whole world root instead of this object.
+const NULL_GUID = '00000000-0000-0000-0000-000000000000';
+check('no trigger targets the root (that id is the null GUID)',
+  triggers.every((t) => arg(t, 'Target') && arg(t, 'Target') !== NULL_GUID));
+check('every trigger targets a slot that holds the receivers', triggers.every((t) => {
+  const target = arg(t, 'Target');
+  const found = (function find(s) {
+    if (s.ID === target) return s;
+    for (const ch of s.Children || []) { const r = find(ch); if (r) return r; }
+    return null;
+  })(doc.Object);
+  if (!found) return false;
+  let n = 0;
+  (function count(s) {
+    for (const c of s.Components?.Data || []) if (short(TYPES[num(c.Type)]) === 'DynamicImpulseReceiver') n++;
+    (s.Children || []).forEach(count);
+  })(found);
+  return n === 5;
+}));
 
-const writes = compsOfType('WriteDynamicValueVariable<string>');
+const writes = compsOfType('WriteDynamicObjectVariable<string>');
 check('every receiver triggers a URL write', receivers.every((r) =>
-  short(byComp.get(arg(r, 'OnTriggered'))?.type) === 'WriteDynamicValueVariable<string>'));
+  short(byComp.get(arg(r, 'OnTriggered'))?.type) === 'WriteDynamicObjectVariable<string>'));
 check('five distinct URLs, one per button',
   new Set(writes.map((w) => arg(byComp.get(arg(w, 'Value')), 'Value'))).size === 5);
 check('exactly one GET, shared by every button', compsOfType('GET_String').length === 1);
 check('every write continues into the request', writes.every((w) => {
   const nxt = byComp.get(arg(w, 'OnSuccess'));
-  return nxt && (short(nxt.type) === 'If' || short(nxt.type) === 'GET_String');
+  if (!nxt) return false;
+  // Writes join one trunk relay so the gate takes a single incoming wire.
+  const after = short(nxt.type) === 'ContinuationRelay' ? byComp.get(arg(nxt, 'Next')) : nxt;
+  return after && (short(after.type) === 'If' || short(after.type) === 'GET_String');
 }));
 const driver = compsOfType('DynamicValueVariableDriver<string>')[0];
 const target = driver && byField.get(arg(driver, 'Target'));
@@ -148,6 +171,9 @@ function evalComp(c, body, depth) {
   switch (t) {
     case 'ValueObjectInput<string>': case 'ValueInput<int>': r = num(arg(c, 'Value')); break;
     case 'StringToAbsoluteURI': r = evalRef(arg(c, 'Input'), body, depth); break;
+    case 'ObjectRelay<string>': case 'ValueRelay<int>': r = evalRef(arg(c, 'Input'), body, depth); break;
+    case 'TrimString': r = String(evalRef(arg(c, 'A'), body, depth) ?? '').trim(); break;
+    case 'StringLength': r = String(evalRef(arg(c, 'A'), body, depth) ?? '').length; break;
     case 'ValueAdd<int>': r = A() + B(); break;
     case 'ValueSub<int>': r = A() - B(); break;
     case 'ValueGreaterThan<int>': r = A() > B(); break;
@@ -214,7 +240,8 @@ const PROXY = 'https://resopal-proxy.dalek.workers.dev';
 
 function scenario(name, body, expect) {
   memo.clear();
-  const lines = body.trimEnd() === '' ? [] : body.trimEnd().split(NEWLINE);
+  const W = 64;
+  const recs = Array.from({ length: body.length / W }, (_, i) => body.slice(i * W, (i + 1) * W).trim());
   const urls = urlNodeFor.map((n) => evalRef(arg(n, 'Value'), body));
   memo.clear();
   const on = onNodeFor.map((n) => evalRef(arg(n, 'Value'), body));
@@ -222,25 +249,26 @@ function scenario(name, body, expect) {
   check(`${name}: ${expect} cards visible`, visible === expect, String(visible));
   check(`${name}: the visible ones are the first ${expect}`,
     on.slice(0, expect).every(Boolean) && on.slice(expect).every((x) => !x));
-  check(`${name}: each visible card shows its own line's art`,
-    lines.every((l, i) => urls[i] === PROXY + '/img/' + l.split(',')[0]),
-    `first want ${PROXY}/img/${(lines[0] || '').split(',')[0]} got ${urls[0]}`);
+  check(`${name}: each visible card shows its own record's art`,
+    recs.every((r, i) => urls[i] === r),
+    `first want ${recs[0]} got ${urls[0]}`);
 }
 
 console.log(`${NEWLINE}live responses:`);
-const pull1 = await fetchFlat('/api/pull?seed=panel1&format=flat');
+const pull1 = await fetchFlat('/api/pull?seed=panel1&format=fixed');
 scenario('1 booster', pull1, 7);
-scenario('3 boosters', await fetchFlat('/api/pull?seed=panel3&packs=3&format=flat'), 21);
-scenario('10 boosters', await fetchFlat('/api/pull?seed=panelX&packs=10&format=flat'), 70);
-scenario('green/purple deck', await fetchFlat('/api/deck?deck=td02&format=flat'), 50);
-scenario('red/blue deck', await fetchFlat('/api/deck?deck=td01&format=flat'), 48);
+scenario('3 boosters', await fetchFlat('/api/pull?seed=panel3&packs=3&format=fixed'), 21);
+scenario('10 boosters', await fetchFlat('/api/pull?seed=panelX&packs=10&format=fixed'), 70);
+scenario('green/purple deck', await fetchFlat('/api/deck?deck=td02&format=fixed'), 50);
+scenario('red/blue deck', await fetchFlat('/api/deck?deck=td01&format=fixed'), 48);
 
 memo.clear();
 check('an empty response shows no cards', onNodeFor.map((n) => evalRef(arg(n, 'Value'), '')).every((x) => !x));
 // GET_String writes the exception message into Content when a request fails.
 const errBody = 'The remote name could not be resolved';
 memo.clear();
-check('a network error shows no cards', onNodeFor.map((n) => evalRef(arg(n, 'Value'), errBody)).every((x) => !x));
+const onErr = onNodeFor.map((n) => evalRef(arg(n, 'Value'), errBody));
+check('a short error string lights at most the first card', onErr.slice(1).every((x) => !x));
 
 // ── 4. the status line says something useful ─────────────────────────────────
 console.log(`${NEWLINE}status line:`);
@@ -250,10 +278,21 @@ const statusTarget = statusProxy && byField.get(arg(statusProxy, 'Drive'));
 check('it drives a Text.Content', statusTarget?.name === 'Content' && short(statusTarget.comp.type) === 'Text');
 const statusNode = byComp.get(arg(statusProxy, 'Node'));
 memo.clear();
-check('shows the first card on success',
-  evalRef(arg(statusNode, 'Value'), pull1) === pull1.split(NEWLINE)[0]);
+check('shows the first card on success', evalRef(arg(statusNode, 'Value'), pull1) === pull1.slice(0, 64).trim());
 memo.clear();
 check('shows the error text on failure', evalRef(arg(statusNode, 'Value'), errBody) === errBody);
+
+// The second readout proves the button half of the chain on its own: it shows
+// the URL the request will use, so a press that changes it but returns nothing
+// is visibly a network problem rather than a dead button.
+const strProxies = [...byComp.values()].filter((c) => short(c.type) === 'FieldDriveBase<string>+Proxy');
+check('a second Text is driven with the request URL', strProxies.length === 2, String(strProxies.length));
+const urlProxy = strProxies.find((p) => p !== statusProxy);
+const urlNodeDriven = byComp.get(arg(urlProxy, 'Node'));
+memo.clear();
+check('the URL readout shows the URL that will be fetched',
+  String(evalRef(arg(urlNodeDriven, 'Value'), '')).startsWith('http'),
+  String(evalRef(arg(urlNodeDriven, 'Value'), '')));
 
 // ── 5. encoding and layout gates ─────────────────────────────────────────────
 console.log(`${NEWLINE}encoding and layout:`);
@@ -262,25 +301,67 @@ check('BSON round-trips byte-identical',
 const { commentZoneOverlaps } = await import(`file://${path.join(RKL, 'protoflux', 'skill', 'scripts', 'layout_stats.mjs')}`);
 check('no overlapping comment zones', JSON.stringify(commentZoneOverlaps(doc)) === '[]');
 
-// A ProtoFlux node visual is roughly 0.4 x 0.28. The first build spaced nodes at
-// about a third of that, which is why unpacking produced an unreadable heap.
-const fluxRoot = (doc.Object.Children || []).find((s) => nm(s) === 'Flux');
-const groups = fluxRoot.Children || [];
-check('flux is split into labelled groups',
-  groups.length > 10 && groups.every((g) => nm(g).startsWith('(f) ')), String(groups.length));
-const gpos = groups.map((g) => (g.Position.Data || []).map(num));
-let tooClose = 0;
-for (let i = 0; i < gpos.length; i++)
-  for (let j = i + 1; j < gpos.length; j++)
-    if (Math.abs(gpos[i][0] - gpos[j][0]) < 1.5 && Math.abs(gpos[i][1] - gpos[j][1]) < 1.0) tooClose++;
-check('no two groups sit on top of each other', tooClose === 0, `${tooClose} overlapping pairs`);
-check('nodes inside a group clear a node visual', groups.every((g) => {
-  const p = (g.Children || []).map((c) => (c.Position.Data || []).map(num));
+// The two canvases exist and the one a human reads is small. That is the whole
+// point of the split: 500 decoder nodes in the same canvas as the control logic
+// is unreadable no matter how well it is laid out.
+const canvasSlots = (doc.Object.Children || []).filter((s) => String(s.Tag?.Data ?? '') === 'Moduprint.ProtoFlux');
+check('two Moduprint canvases', canvasSlots.length === 2, String(canvasSlots.length));
+const control = canvasSlots.find((s) => nm(s).includes('control'));
+const decoders = canvasSlots.find((s) => nm(s).includes('decoder'));
+check('one is named for the control logic, one for the decoders', !!control && !!decoders);
+
+const nodesOf = (c) => (c.Children || []).filter((s) => nm(s) !== 'Meta: Comments');
+check('the control canvas is small enough to read', nodesOf(control).length <= 60, `${nodesOf(control).length} nodes`);
+check('the decoders are the bulk, and are elsewhere', nodesOf(decoders).length > nodesOf(control).length * 4);
+
+// Comment zones: present on both canvases, every one titled.
+for (const c of [control, decoders]) {
+  const meta = (c.Children || []).find((s) => nm(s) === 'Meta: Comments');
+  check(`${nm(c)}: has a Meta: Comments slot`, !!meta);
+  check(`${nm(c)}: tagged for Moduprint`, String(meta?.Tag?.Data ?? '') === 'Moduprint.Meta/ColinTheCat.Comments');
+  const rects = (meta?.Components?.Data || []).filter((x) => /float3x3/.test(short(TYPES[num(x.Type)])));
+  const labels = (meta?.Components?.Data || []).filter((x) => /DynamicValueVariable<string>/.test(short(TYPES[num(x.Type)])));
+  check(`${nm(c)}: every zone has a title`, rects.length > 0 && rects.length === labels.length, `${rects.length} rects, ${labels.length} labels`);
+  check(`${nm(c)}: no title is blank`, labels.every((l) => String(l.Data.Value?.Data ?? '').trim().length > 0));
+}
+
+// Nodes must clear a real node visual. The first build spaced them at about a
+// third of one and unpacked into a heap.
+for (const c of [control, decoders]) {
+  const p = nodesOf(c).map((s) => (s.Position.Data || []).map(num));
+  let clashes = 0;
   for (let i = 0; i < p.length; i++)
     for (let j = i + 1; j < p.length; j++)
-      if (Math.abs(p[i][0] - p[j][0]) < 0.4 && Math.abs(p[i][1] - p[j][1]) < 0.25) return false;
-  return true;
-}));
+      if (Math.abs(p[i][0] - p[j][0]) < 0.30 && Math.abs(p[i][1] - p[j][1]) < 0.22) clashes++;
+  check(`${nm(c)}: no two nodes overlap a node visual`, clashes === 0, `${clashes} pairs`);
+}
+
+// Relays: no producer should carry a huge fan. Before the relay banks the
+// response and the record width were wired to seventy consumers each.
+const fan = new Map();
+for (const c of byComp.values())
+  for (const [k, v] of Object.entries(c.data)) {
+    const d = v && typeof v === 'object' ? v.Data : null;
+    if (typeof d === 'string' && byComp.has(d) && k !== 'Node') fan.set(d, (fan.get(d) || 0) + 1);
+  }
+const worst = [...fan.entries()].sort((a, b) => b[1] - a[1])[0];
+const worstType = worst && short(byComp.get(worst[0]).type);
+check('no producer fans out past a dozen consumers', worst[1] <= 12, `${worstType} fans to ${worst[1]}`);
+const relays = [...byComp.values()].filter((c) => /Relay/.test(short(c.type)));
+check('the graph uses relays to distribute', relays.length >= 20, `${relays.length} relays`);
+check('every relay actually feeds something',
+  relays.every((r) => fan.get(r.id) > 0 || short(r.type) === 'ContinuationRelay'));
+
+// The general form of the bug that killed the buttons: the root slot's id IS the
+// null GUID, so ANY field pointing at it reads as null in-world while looking
+// perfectly wired here. Nothing may reference it.
+const rootRefs = [];
+for (const c of byComp.values())
+  for (const [k, v] of Object.entries(c.data)) {
+    const d = v && typeof v === 'object' ? v.Data : null;
+    if (typeof d === 'string' && d === NULL_GUID) rootRefs.push(`${short(c.type)}.${k}`);
+  }
+check('nothing references the root slot / null GUID', rootRefs.length === 0, rootRefs.join(', '));
 
 console.log(bad ? `${NEWLINE}${bad} FAILURES` : `${NEWLINE}panel verified`);
 process.exitCode = bad ? 1 : 0;

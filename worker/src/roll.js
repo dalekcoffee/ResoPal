@@ -117,3 +117,32 @@ export function rollPacks({ pool, weights, setCode, packs = 1, seed }) {
 
 /** `code,rarity` per line - the only shape ProtoFlux can take apart cheaply. */
 export const toFlat = (pulls) => pulls.map((c) => `${c.code},${c.rarity}`).join('\n') + '\n';
+
+/**
+ * Fixed-width art URLs, one RECORD_WIDTH-char record per card.
+ *
+ * This exists for ProtoFlux and nothing else. With variable-length lines, card i
+ * can only be found by walking i newlines, which makes each card depend on the
+ * one before it - a 70-deep chain, three extra nodes per card, and a graph no
+ * one can read. At a fixed width card i starts at i*64 flat, so every card
+ * decodes independently from a constant.
+ *
+ * Each record is the full URL, right-padded with spaces, then a newline - so it
+ * stays readable in a browser while still being fixed-width. The engine's
+ * TrimString removes both.
+ *
+ * A URL that will not fit is an error rather than a truncation: a silently
+ * clipped URL would load nothing and say nothing about why.
+ */
+export const RECORD_WIDTH = 64;
+
+export function toFixed(pulls, artBase) {
+  const out = [];
+  for (const c of pulls) {
+    const url = artBase + c.code;
+    if (url.length > RECORD_WIDTH - 1)
+      throw new Error(`art URL ${url.length} chars exceeds the ${RECORD_WIDTH - 1} the fixed format allows`);
+    out.push(url.padEnd(RECORD_WIDTH - 1, ' ') + '\n');
+  }
+  return out.join('');
+}

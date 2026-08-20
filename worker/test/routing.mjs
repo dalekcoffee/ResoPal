@@ -29,6 +29,8 @@ const cases = [
   ['/api/pull?format=xml', 400, null],
   ['/api/pull?set=BP99', 404, null],
   ['/api/pull?seed=bad%20seed', 400, null],
+  ['/api/pull?format=fixed', 200, null],
+  ['/api/deck?deck=td02&format=fixed', 200, null],
   ['/api/deck', 200, null],
   ['/api/deck?deck=td02&format=flat', 200, null],
   ['/api/deck?deck=nope', 404, null],
@@ -124,6 +126,26 @@ check('json agrees with flat', td02json.cards.length === 50 && td02json.cards[0]
 check('deck is labelled with its set', td02json.set === 'TD02');
 const listing = await (await get('/api/deck')).json();
 check('listing names every deck', listing.decks.length >= 2 && listing.decks.every((d) => d.id && d.set && d.total > 0));
+
+// ── format=fixed: the shape the in-world decoder depends on ──────────────────
+// Every assertion here is something the ProtoFlux side would fail silently on.
+console.log('\nformat=fixed:');
+const W = 64;
+const fixedRes = await get('/api/pull?seed=fx&packs=3&format=fixed');
+const fixed = await fixedRes.text();
+check('announces its record width', fixedRes.headers.get('x-record-width') === String(W));
+check('length is an exact multiple of the record width', fixed.length % W === 0, `${fixed.length}`);
+check('21 records for 3 packs', fixed.length / W === 21, `${fixed.length / W}`);
+const recs = Array.from({ length: fixed.length / W }, (_, i) => fixed.slice(i * W, (i + 1) * W));
+check('every record ends in a newline', recs.every((r) => r.endsWith('\n')));
+check('every record trims to an absolute art URL',
+  recs.every((r) => /^https:\/\/[^\s]+\/img\/[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4}$/.test(r.trim())), recs[0]);
+const fixedFlat = await (await get('/api/pull?seed=fx&packs=3&format=flat')).text();
+check('fixed and flat agree card for card, in order',
+  recs.map((r) => r.trim().split('/img/')[1]).join(',') === fixedFlat.trimEnd().split('\n').map((l) => l.split(',')[0]).join(','));
+const deckFixed = await (await get('/api/deck?deck=td02&format=fixed')).text();
+check('a deck uses the same record width', deckFixed.length === 50 * W, `${deckFixed.length / W} records`);
+check('no record is truncated', recs.every((r) => r.trim().length <= W - 1));
 
 // Runs last: it deliberately empties the token bucket for this IP.
 let sawThrottle = false;

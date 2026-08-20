@@ -1,21 +1,30 @@
-// Build the ResoPal in-world panel: a UIX panel with buttons that fetch a deck
-// or a booster pull from resopal and lay the cards out in front of you.
+// Build the ResoPal in-world panel: a UIX panel whose buttons fetch a deck or a
+// booster pull from resopal and lay the cards out in front of you.
 //
-// This replaces an earlier build that emitted logic-only ProtoFlux with no UI. It
-// was unusable for two reasons worth writing down: there was nothing to look at
-// unless the network call already worked, and the node positions were spaced
-// tighter than a ProtoFlux node visual, so unpacking produced an overlapping heap.
-// Both are fixed here - the panel is visible and interactive before any request
-// happens, and the graph is grouped into labelled (f) clusters on a real grid.
+// Three builds' worth of lessons are baked in here:
 //
-// Nothing about a deck is baked in. The panel knows five URLs; the card codes,
-// their count and their order all arrive over the wire.
+//  1. There must be something to look at before any network call succeeds. The
+//     first build was logic-only ProtoFlux and showed nothing.
+//  2. Node positions must clear a real node visual. The first build spaced them
+//     at about a third of one and unpacked into a heap.
+//  3. A classpath that reads plausibly is not a classpath that exists. The second
+//     build emitted `WriteDynamicValueVariable<string>`, which cannot exist -
+//     that node is declared `where T : unmanaged` - so every button did nothing.
+//     `verify-classpaths.mjs` now checks every emitted type against the
+//     decompiled source, constraints included, and is part of `npm test`.
+//
+// The graph is split across TWO Moduprint canvases on purpose. Everything a human
+// needs in order to read or debug this lives in `Flux - control`, which is about
+// thirty nodes. The seventy card decoders are a generated array and live in
+// `Flux - card decoders`, so unpacking the control canvas stays fathomable.
+//
+// Nothing about a deck is baked in. The panel knows five URLs; the card art,
+// how many cards there are and what order they come in all arrive over the wire.
 //
 //   RKL=/path/to/Resonite-Knowledge-Library node build-panel.mjs
 //
-// Every classpath and field shape below was read out of a real decoded package -
-// mostly the owner's own WS_Connector panel - or the decompiled engine. Guessed
-// classpaths fail silently in-world, so nothing here is guessed.
+// Every classpath and field shape was read out of a real decoded package - mostly
+// the owner's own WS_Connector panel - or the decompiled engine. None is guessed.
 
 import { Int32 } from 'bson';
 import path from 'node:path';
@@ -36,32 +45,32 @@ const { ProtoFlux } = await import(`file://${encoder}`);
 
 // ── configuration ────────────────────────────────────────────────────────────
 const PROXY = process.env.PROXY || 'https://resopal-proxy.dalek.workers.dev';
-const ART = `${PROXY}/img/`;
-// The site serves the mark; the panel loads it over http rather than embedding a
-// copy, so re-branding is a file swap on resopal and not a rebuild of this.
 const LOGO = process.env.LOGO || 'https://resopal.dalek.coffee/assets/logo.png';
 
-// The buttons. Each is a label and a URL, nothing more - adding a set or a deck
-// is a line here, and the panel never learns what is inside one.
+// format=fixed: one 64-char record per card, holding the whole art URL padded and
+// newline-terminated. The width is a contract with worker/src/roll.js. It is what
+// lets card i start at a constant i*64 instead of being found by walking i
+// newlines - which is three extra nodes per card and a seventy-deep dependency
+// chain nobody can read.
+const RECORD_WIDTH = 64;
+
 const BUTTONS = [
-  { tag: 'deck/td01',  label: 'Trial Deck  ·  Red / Blue',     url: `${PROXY}/api/deck?deck=td01&format=flat` },
-  { tag: 'deck/td02',  label: 'Trial Deck  ·  Green / Purple', url: `${PROXY}/api/deck?deck=td02&format=flat` },
-  { tag: 'pack/1',     label: 'Open 1 Booster  ·  BP01',       url: `${PROXY}/api/pull?set=BP01&packs=1&format=flat` },
-  { tag: 'pack/3',     label: 'Open 3 Boosters  ·  BP01',      url: `${PROXY}/api/pull?set=BP01&packs=3&format=flat` },
-  { tag: 'pack/10',    label: 'Open 10 Boosters  ·  BP01',     url: `${PROXY}/api/pull?set=BP01&packs=10&format=flat` },
+  { tag: 'deck/td01', label: 'Trial Deck  ·  Red / Blue',     url: `${PROXY}/api/deck?deck=td01&format=fixed` },
+  { tag: 'deck/td02', label: 'Trial Deck  ·  Green / Purple', url: `${PROXY}/api/deck?deck=td02&format=fixed` },
+  { tag: 'pack/1',    label: 'Open 1 Booster  ·  BP01',       url: `${PROXY}/api/pull?set=BP01&packs=1&format=fixed` },
+  { tag: 'pack/3',    label: 'Open 3 Boosters  ·  BP01',      url: `${PROXY}/api/pull?set=BP01&packs=3&format=fixed` },
+  { tag: 'pack/10',   label: 'Open 10 Boosters  ·  BP01',     url: `${PROXY}/api/pull?set=BP01&packs=10&format=fixed` },
 ];
 
-// 70 = the largest thing any button can ask for (10 boosters), and the same 10x7
-// the deck template's atlas grid uses. A card is visible exactly when its line
-// parsed, so a 7-card pull leaves the other 63 switched off - no count needed
-// anywhere in the graph.
+// 70 = the largest any button asks for, and the same 10x7 the deck template's
+// atlas grid uses. A card is visible exactly when its record is present, so a
+// 7-card pull leaves the other 63 switched off and nothing counts anything.
+// Lowering this shrinks the decoder canvas proportionally.
 const COLS = 10, ROWS = 7, MAX_CARDS = COLS * ROWS;
 const CARD_W = 0.063, CARD_H = 0.088, GAP = 0.008;
 
-// Canvas units. The slot scale turns them into metres.
-const CANVAS_W = 620, CANVAS_H = 600, CANVAS_SCALE = 0.00058;
+const CANVAS_W = 620, CANVAS_H = 660, CANVAS_SCALE = 0.00058;
 
-// From the ResoPal mark: gold on near-black, with the logo's cyan for the accent.
 const hex = (h, a = 1) => [...h.match(/[\da-f]{2}/gi).map((c) => parseInt(c, 16) / 255), a];
 const GOLD = hex('c8a35e'), INK = hex('12100c'), PANEL = hex('1c1913');
 const BTN = hex('2a251b'), BTN_HI = hex('3d3626'), BTN_PRESS = hex('c8a35e');
@@ -72,25 +81,27 @@ const PB = '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.';
 const FE = '[FrooxEngine]FrooxEngine.';
 const UIX = FE + 'UIX.';
 const T = {
-  // flux
   IsAllowed:   PB + 'FrooxEngine.Network.IsHostAccessAllowedUrl',
   RequestHost: PB + 'FrooxEngine.Network.RequestHostAccessUrl',
   Get:         PB + 'FrooxEngine.Network.GET_String',
   If:          PB + 'If',
   StrIn:       PB + 'ValueObjectInput<string>',
   IntIn:       PB + 'ValueInput<int>',
-  IndexOf:     PB + 'Strings.IndexOfString',
   Substr:      PB + 'Strings.Substring',
-  Concat:      PB + 'Strings.ConcatenateMultiString',
+  Trim:        PB + 'Strings.TrimString',
+  StrLen:      PB + 'Strings.StringLength',
   ToUri:       PB + 'Utility.Uris.StringToAbsoluteURI',
-  IntAdd:      PB + 'Operators.ValueAdd<int>',
-  IntSub:      PB + 'Operators.ValueSub<int>',
   IntGt:       PB + 'Operators.ValueGreaterThan<int>',
   StrPick:     PB + 'ObjectConditional<string>',
-  IntPick:     PB + 'ValueConditional<int>',
+  StrRelay:    PB + 'ObjectRelay<string>',
+  IntRelay:    PB + 'ValueRelay<int>',
+  FlowRelay:   PB + 'ContinuationRelay',
   Receiver:    PB + 'Actions.DynamicImpulseReceiver',
   ReceiverProxy: '[ProtoFlux.Nodes.FrooxEngine]ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiver+Proxy',
-  WriteVar:    PB + 'FrooxEngine.Variables.WriteDynamicValueVariable<string>',
+  // NOT WriteDynamicValueVariable<string>: that node is `where T : unmanaged`,
+  // so the string form cannot exist. This is the object variant, and emitting
+  // the wrong one is what made every button dead.
+  WriteVar:    PB + 'FrooxEngine.Variables.WriteDynamicObjectVariable<string>',
   GlobalStr:   FE + 'ProtoFlux.GlobalValue<string>',
   UriDrive:      '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<Uri>',
   UriDriveProxy: FE + 'ProtoFlux.CoreNodes.FieldDriveBase<Uri>+Proxy',
@@ -98,11 +109,11 @@ const T = {
   StrDriveProxy: FE + 'ProtoFlux.CoreNodes.FieldDriveBase<string>+Proxy',
   BoolDrive:     '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ValueFieldDrive<bool>',
   BoolDriveProxy: FE + 'ProtoFlux.CoreNodes.FieldDriveBase<bool>+Proxy',
-  // scene
   Grabbable: FE + 'Grabbable',
   ObjectRoot: FE + 'ObjectRoot',
   VarSpace: FE + 'DynamicVariableSpace',
   StrVar: FE + 'DynamicValueVariable<string>',
+  F3x3Var: FE + 'DynamicValueVariable<float3x3>',
   VarDriver: FE + 'DynamicValueVariableDriver<string>',
   BoxCollider: FE + 'BoxCollider',
   QuadMesh: FE + 'QuadMesh',
@@ -115,7 +126,6 @@ const T = {
   UIText: FE + 'UI_TextUnlitMaterial',
   BtnTrigger: FE + 'ButtonDynamicImpulseTrigger',
   SpriteProvider: FE + 'SpriteProvider',
-  // uix
   Canvas: UIX + 'Canvas',
   Rect: UIX + 'RectTransform',
   Image: UIX + 'Image',
@@ -134,8 +144,8 @@ const V3 = (x, y, z) => [D(x), D(y), D(z)];
 
 // ── builders ─────────────────────────────────────────────────────────────────
 // Components on slots serialize `persistent-ID` as a bare id; entries in
-// doc.Assets serialize `persistent` as a wrapped bool. Both shapes are verbatim
-// from real packages - mixing them up is a silent load failure.
+// doc.Assets serialize `persistent` as a wrapped bool. Both are verbatim from
+// real packages, and mixing them up is a silent load failure.
 function comp(classpath, fields = {}) {
   const id = pf.nextId();
   const data = { ID: id, 'persistent-ID': pf.nextId(), UpdateOrder: pf.fi(0), Enabled: pf.fd(true) };
@@ -150,7 +160,6 @@ function asset(classpath, fields = {}) {
   for (const [k, v] of Object.entries(fields)) { const w = pf.fd(v); data[k] = w; f[k] = w.ID; }
   return { entry: { Type: pf.typeIndex(classpath), Data: data }, id, f };
 }
-// Like pf.makeSlot, but hands back the Active field id so flux can drive it.
 function slot(name, components = [], pos = [0, 0, 0], children = [], tag = null, id = pf.nextId(), scale = [1, 1, 1]) {
   const position = pf.fd(V3(...pos));
   const rotation = pf.fd([D(0), D(0), D(0), D(1)]);
@@ -166,37 +175,71 @@ function slot(name, components = [], pos = [0, 0, 0], children = [], tag = null,
   };
 }
 
-// ProtoFlux node = one slot, one logic component. Positions are laid out on a
-// grid sized for actual node visuals (~0.4 x 0.28) rather than the far tighter
-// spacing that made the first build unreadable once unpacked.
-const NODE_DX = 0.45, NODE_DY = 0.30;
+// Layout units. The reference canvas runs ~0.28 rows x 0.30 cols with constants
+// hugging their consumer at dx 0.225 (pretty-flux section 2 and 5), so a column
+// of 0.60 and a row of 0.30 clears a node box with room for the pipe.
+const COL = 0.60, ROW = 0.30;
+const NODE_HALF_W = 0.15, NODE_HALF_H = 0.075;
+
 function node(name, classpath, fields = {}, pos = [0, 0, 0]) {
   const c = comp(classpath, fields);
-  return { slot: slot(name, [c.comp], pos), id: c.id, f: c.f };
+  const s = slot(name, [c.comp], pos);
+  return { slot: s, id: c.id, f: c.f, pos };
 }
-// A proxy node: the logic component plus its +Proxy companion on one slot, the
-// shape OnDestroying uses in this repo's own deck template.
 function proxyNode(name, classpath, proxyClasspath, fields = {}, pos = [0, 0, 0], extra = []) {
   const c = comp(classpath, fields);
   const p = comp(proxyClasspath, { Node: c.id, Path: [] });
-  return { slot: slot(name, [c.comp, p.comp, ...extra], pos), id: c.id, f: c.f };
+  return { slot: slot(name, [c.comp, p.comp, ...extra], pos), id: c.id, f: c.f, pos };
 }
 const strIn = (name, s, pos) => node(name, T.StrIn, { Value: s }, pos);
 const intIn = (name, n, pos) => node(name, T.IntIn, { Value: I(n) }, pos);
+const strRelay = (name, src, pos) => node(name, T.StrRelay, { Input: src }, pos);
+const intRelay = (name, src, pos) => node(name, T.IntRelay, { Input: src }, pos);
 
-// The drive pair, for the three field types this panel writes.
 function drive(name, kind, sourceId, targetFieldId, pos) {
-  const [cls, proxyCls] = { uri: [T.UriDrive, T.UriDriveProxy], str: [T.StrDrive, T.StrDriveProxy], bool: [T.BoolDrive, T.BoolDriveProxy] }[kind];
+  const [cls, proxyCls] = {
+    uri: [T.UriDrive, T.UriDriveProxy], str: [T.StrDrive, T.StrDriveProxy], bool: [T.BoolDrive, T.BoolDriveProxy],
+  }[kind];
   const d = comp(cls, { Value: sourceId });
   const p = comp(proxyCls, { Node: d.id, Path: [], Drive: targetFieldId });
-  return { slot: slot(name, [d.comp, p.comp], pos), id: d.id };
+  return { slot: slot(name, [d.comp, p.comp], pos), id: d.id, pos };
+}
+
+/**
+ * A Moduprint comment zone.
+ *
+ * Encoding per pretty-flux section 4: a `Meta: Comments` slot carrying, per zone,
+ * a `DynamicValueVariable<float3x3>` whose rows are [anchor], [signed size
+ * (+w,-h)], [(1,0,0)], paired in order with a `DynamicValueVariable<string>`
+ * title. Zones must be disjoint - `commentZoneOverlaps` gates that, and it is
+ * part of `npm test`.
+ */
+function zones(list) {
+  const comps = [];
+  for (const z of list) {
+    comps.push(comp(T.F3x3Var, {
+      VariableName: `Moduprint/Zone/${comps.length}`,
+      Value: [V3(z.x, z.y, 0), V3(z.w, -z.h, 0), V3(1, 0, 0)],
+      OverrideOnLink: false,
+    }).comp);
+    comps.push(comp(T.StrVar, { VariableName: `Moduprint/ZoneLabel/${comps.length}`, Value: z.title, OverrideOnLink: false }).comp);
+  }
+  return slot('Meta: Comments', comps, [0, 0, 0], [], 'Moduprint.Meta/ColinTheCat.Comments');
+}
+/** Zone rect around a set of placed nodes: pad 0.08, plus title headroom on top. */
+function around(title, nodes, pad = 0.08, headroom = 0.14) {
+  const xs = nodes.map((n) => n.pos[0]), ys = nodes.map((n) => n.pos[1]);
+  const x = Math.min(...xs) - NODE_HALF_W - pad;
+  const x1 = Math.max(...xs) + NODE_HALF_W + pad;
+  const yHi = Math.max(...ys) + NODE_HALF_H + pad + headroom;
+  const yLo = Math.min(...ys) - NODE_HALF_H - pad;
+  return { title, x, y: yHi, w: x1 - x, h: yHi - yLo };
 }
 
 // ── the font ─────────────────────────────────────────────────────────────────
 // UIX Text needs a real font asset: Text.OnAttach assigns the world default, but
 // OnAttach does not run on load, so a null Font renders nothing. This is the same
-// stock font the Deck Maker template already embeds, lifted from our own template
-// rather than someone else's package - it is already in every deck ResoPal ships.
+// stock font the Deck Maker template already embeds, lifted from our own template.
 const templateZip = await JSZip.loadAsync(await readFile(path.join(import.meta.dirname, '..', 'data', 'template.resonitepackage')));
 const FONT_HASH = 'c801b8d2522fb554678f17f4597158b1af3f9be3abd6ce35d5a3112a81e2bf39';
 const fontBytes = await templateZip.file(`Assets/${FONT_HASH}`).async('uint8array');
@@ -234,19 +277,14 @@ const layoutElement = (h) => comp(T.LayoutElement, {
   MinHeight: D(-1), PreferredHeight: D(h), FlexibleHeight: D(-1), Area: D(-1),
   Priority: I(1), UseZeroMetrics: false,
 });
-/** A label sitting inside its parent's rect - no layout controller needed. */
 const label = (name, content, size, color, opts = {}) =>
   slot(name, [rect().comp, text(content, size, color, opts).comp]);
 
-/** A row in the panel: background + fixed height + a centred caption. */
 function bar(name, h, tint, content, size, color, extra = []) {
   return slot(name, [rect().comp, layoutElement(h).comp, image(tint).comp], [0, 0, 0],
     [label(name + ' label', content, size, color), ...extra]);
 }
 
-// UIX Image draws a Sprite, not a texture, so the mark goes through a
-// SpriteProvider. If the file is not on the site yet the texture simply never
-// arrives and the header keeps its bar and title - no broken state.
 const logoTex = asset(T.Texture, {
   URL: LOGO, Uncompressed: false, DirectLoad: false, ForceExactVariant: false,
   PreferredProfile: 'sRGB', MipMapBias: D(0), IsNormalMap: false,
@@ -260,10 +298,7 @@ const logoSprite = asset(T.SpriteProvider, {
 assets.push(logoTex.entry, logoSprite.entry);
 
 const logoMark = () => slot('mark', [
-  comp(T.Rect, {
-    AnchorMin: V2(0.015, 0.08), AnchorMax: V2(0.14, 0.92),
-    OffsetMin: V2(0, 0), OffsetMax: V2(0, 0), Pivot: V2(0.5, 0.5),
-  }).comp,
+  comp(T.Rect, { AnchorMin: V2(0.015, 0.08), AnchorMax: V2(0.14, 0.92), OffsetMin: V2(0, 0), OffsetMax: V2(0, 0), Pivot: V2(0.5, 0.5) }).comp,
   comp(T.Image, {
     Sprite: logoSprite.id, Material: uiMat.id, PreserveAspect: true, NineSliceSizing: 'TextureSize',
     FlipHorizontally: false, FlipVertically: false, InteractionTarget: false,
@@ -272,13 +307,16 @@ const logoMark = () => slot('mark', [
 ]);
 
 /**
- * A button. The Button component tints the Image on this same slot through its
- * ColorDrivers list, and ButtonDynamicImpulseTrigger fires a named impulse at the
- * root on press - so the button and the graph never reference each other. That is
- * what lets the flux live in its own subtree without a cross-object reference to
- * get wrong.
+ * A button. The Button tints the Image on its own slot through ColorDrivers, and
+ * ButtonDynamicImpulseTrigger fires a named impulse at a target hierarchy on
+ * press - so button and graph never reference each other.
+ *
+ * `target` must be a REAL slot. It cannot be the object root: the encoder
+ * reserves id 00000000-...-000000000000 for the root, which is byte-identical to
+ * the null GUID, so a reference to it deserializes as null. A null Target here
+ * silently falls back to broadcasting at the whole world root.
  */
-function button(rootId, { tag, label: caption }) {
+function button(target, { tag, label: caption }) {
   const r = rect();
   const img = image(BTN);
   const btn = comp(T.Button, {
@@ -299,17 +337,14 @@ function button(rootId, { tag, label: caption }) {
     HoverEnter: { Target: null }, HoverStay: { Target: null }, HoverLeave: { Target: null },
   });
   const trigger = comp(T.BtnTrigger, {
-    Target: rootId, ExcludeDisabled: true, PressedTag: `ResoPal/${tag}`,
+    Target: target, ExcludeDisabled: true, PressedTag: `ResoPal/${tag}`,
     PressingTag: null, ReleasedTag: null, HoverEnterTag: null, HoverStayTag: null, HoverLeaveTag: null,
   });
-  return slot(`btn ${tag}`, [r.comp, layoutElement(62).comp, img.comp, btn.comp, trigger.comp], [0, 0, 0],
-    [label('caption', caption, 26, TEXT)]);
+  return slot(`btn ${tag}`, [r.comp, layoutElement(58).comp, img.comp, btn.comp, trigger.comp], [0, 0, 0],
+    [label('caption', caption, 24, TEXT)]);
 }
 
 // ── the cards ────────────────────────────────────────────────────────────────
-// One texture and one material per card. This is the whole reason the in-world
-// object is not the deck object: the deck's cards share a single atlas with the
-// UVs baked into the mesh, so card 3 cannot be pointed anywhere else.
 const cardSlots = [], textures = [], activeFields = [];
 for (let i = 0; i < MAX_CARDS; i++) {
   const tex = asset(T.Texture, {
@@ -319,8 +354,7 @@ for (let i = 0; i < MAX_CARDS; i++) {
     CrunchCompressed: true, MipMaps: true, KeepOriginalMipMaps: false, MipMapFilter: 'Box', Readable: false,
   });
   // Cutout at 0.72, the values the deck bake settled on: Palify art carries its
-  // rounded corners in the alpha, and the art is matted against white so a 0.5
-  // threshold leaves a pale rim (docs/PIPELINE.md).
+  // rounded corners in the alpha, and is matted against white so 0.5 leaves a rim.
   const mat = asset(T.Unlit, {
     TintColor: C([1, 1, 1, 1]), Texture: tex.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
     UseVertexColors: false, ZWrite: 'Auto',
@@ -337,137 +371,170 @@ for (let i = 0; i < MAX_CARDS; i++) {
   textures.push(tex); cardSlots.push(s); activeFields.push(s._slot.activeFieldId);
 }
 
-// ── flux ─────────────────────────────────────────────────────────────────────
-const fluxGroups = [];
-let gx = 0;
-const group = (name, nodes, at) => { fluxGroups.push(slot(name, [], at ?? [gx++ * 3.2, 0, 0], nodes.map((n) => n.slot))); };
+// ═══════════════════════════════════════════════════════════════════════════════
+// CANVAS 1 - control. Everything a human reads. About thirty nodes.
+// ═══════════════════════════════════════════════════════════════════════════════
+const controlId = pf.nextId();          // the impulse target; a real slot, not the root
+const controlNodes = [], controlZones = [];
 
-// The URL the panel is about to fetch lives in a dynamic variable, so five
-// buttons share one request path instead of five GETs with five response bodies
-// to multiplex back together.
-const urlVar = comp(T.StrVar, { VariableName: 'ResoPal/url', Value: BUTTONS[2].url, OverrideOnLink: false });
-const varsSlot = slot('Vars', [urlVar.comp], [0, 0, 0]);
-
-// ValueObjectInput is a node whose Value is a plain field, so a
-// DynamicValueVariableDriver can write the chosen URL straight into it.
-const urlNode = strIn('the URL to fetch', BUTTONS[2].url, [0, 0, 0]);
-const urlDriver = comp(T.VarDriver, {
-  VariableName: 'ResoPal/url', Target: urlNode.f.Value, DefaultValue: BUTTONS[2].url,
-});
-urlNode.slot.Components.Data.push(urlDriver.comp);
-
-const apiUri = node('URL -> Uri', T.ToUri, { Input: urlNode.id }, [NODE_DX, 0, 0]);
-const hostStr = strIn('host', PROXY, [0, -NODE_DY, 0]);
-const hostUri = node('host -> Uri', T.ToUri, { Input: hostStr.id }, [NODE_DX, -NODE_DY, 0]);
-
-const get = node('GET the list', T.Get, {
-  URL: apiUri.id, Content: null, StatusCode: null, OnSent: null, OnResponse: null, OnError: null, OnDenied: null,
-}, [NODE_DX * 3, 0, 0]);
-const BODY = get.f.Content;
-
-const allowed = node('host access granted?', T.IsAllowed, { Host: hostUri.id, Scope: null }, [NODE_DX * 2, -NODE_DY, 0]);
-const reason = strIn('permission reason', 'Fetch Palworld TCG cards from ResoPal', [0, -NODE_DY * 2, 0]);
-const ask = node('ask for host access', T.RequestHost, {
-  Host: hostUri.id, Reason: reason.id, Scope: null, OnGranted: get.id, OnDenied: null, OnIgnored: null,
-}, [NODE_DX * 2, -NODE_DY * 2, 0]);
-const gate = node('allowed ? GET : ask', T.If, { Condition: allowed.id, OnTrue: get.id, OnFalse: ask.id }, [NODE_DX * 2, 0, 0]);
-
-group('(f) fetch', [urlNode, apiUri, hostStr, hostUri, allowed, reason, ask, gate, get]);
-
-// One receiver per button. The tag string lives in a GlobalValue<string> on the
-// receiver's own slot, which is how the engine's own graphs wire it.
-const varPath = strIn('variable: ResoPal/url', 'ResoPal/url', [0, NODE_DY, 0]);
-const buttonNodes = [varPath];
+// Zone 1: the buttons. One receiver per tag, each writing its URL into the
+// shared variable, all joining one trunk relay so the request node takes a
+// single incoming wire (pretty-flux section 2, the owner's own fan rule).
+const varPath = strIn('name: ResoPal/url', 'ResoPal/url', [COL * 1.2, ROW, 0]);
+const pathTrunk = strRelay('name -> all writes', varPath.id, [COL * 1.7, ROW, 0]);
+const joinTrunk = node('any button -> fetch', T.FlowRelay, { Next: null }, [COL * 3.4, -ROW * 2, 0]);
+const buttonNodes = [varPath, pathTrunk, joinTrunk];
 BUTTONS.forEach((b, i) => {
+  const y = -i * ROW;
   const tagValue = comp(T.GlobalStr, { Value: `ResoPal/${b.tag}` });
-  const url = strIn(`url: ${b.tag}`, b.url, [0, -i * NODE_DY, 0]);
-  const write = node(`set URL := ${b.tag}`, T.WriteVar, {
-    Target: null, Path: varPath.id, OnNotFound: null, OnSuccess: gate.id, OnFailed: null, Value: url.id,
-  }, [NODE_DX * 2, -i * NODE_DY, 0]);
+  const url = strIn(`url: ${b.tag}`, b.url, [0, y, 0]);
+  const write = node(`set ResoPal/url := ${b.tag}`, T.WriteVar, {
+    Target: null, Path: pathTrunk.id, OnNotFound: null, OnSuccess: joinTrunk.id, OnFailed: null, Value: url.id,
+  }, [COL * 2.4, y, 0]);
   const recv = proxyNode(`on press: ${b.tag}`, T.Receiver, T.ReceiverProxy,
-    { Tag: tagValue.id, OnTriggered: write.id }, [NODE_DX, -i * NODE_DY, 0], [tagValue.comp]);
-  buttonNodes.push(url, write, recv);
+    { Tag: tagValue.id, OnTriggered: write.id }, [COL * 1.2, y, 0], [tagValue.comp]);
+  buttonNodes.push(url, recv, write);
 });
-group('(f) buttons', buttonNodes);
+controlNodes.push(...buttonNodes);
+controlZones.push(around('1 · a button picks the URL', buttonNodes));
 
-// ── parse: one chain per card ────────────────────────────────────────────────
-// The response is one `CODE,RARITY` line per physical card. Line starts are found
-// by walking newlines with IndexOfString's StartIndex, because ProtoFlux has no
-// split. A card's slot is Active exactly when its own line parsed, which is what
-// makes the count dynamic without the graph ever counting anything.
-const artBase = strIn('art URL prefix', ART, [0, 0, 0]);
-const ONE = intIn('1', 1, [0, -NODE_DY, 0]);
-const ZERO = intIn('line 0 starts at 0', 0, [0, -NODE_DY * 2, 0]);
-const MINUS1 = intIn('-1 (no more lines)', -1, [NODE_DX, -NODE_DY * 2, 0]);
-const NL = strIn('needle: newline', '\n', [0, -NODE_DY * 3, 0]);
-const COMMA = strIn('needle: comma', ',', [0, -NODE_DY * 4, 0]);
-group('(f) constants', [artBase, ONE, ZERO, MINUS1, NL, COMMA], [-3.2, 0, 0]);
+// Zone 2: the request. The chosen URL is driven into a plain input by a
+// DynamicValueVariableDriver, so the graph reads it without a Read node.
+const ZX = COL * 5.2;
+const urlNode = strIn('the URL to fetch', BUTTONS[2].url, [ZX, 0, 0]);
+const urlDriver = comp(T.VarDriver, { VariableName: 'ResoPal/url', Target: urlNode.f.Value, DefaultValue: BUTTONS[2].url });
+urlNode.slot.Components.Data.push(urlDriver.comp);
+const urlTrunk = strRelay('URL -> request + readout', urlNode.id, [ZX + COL * 0.6, 0, 0]);
+const apiUri = node('URL -> Uri', T.ToUri, { Input: urlTrunk.id }, [ZX + COL * 1.2, 0, 0]);
 
-let start = ZERO;
-let firstNewline = null;
-for (let i = 0; i < MAX_CARDS; i++) {
-  const y = (k) => [NODE_DX * k, 0, 0];
-  const comma = node(`find comma`, T.IndexOf, { Str: BODY, Part: COMMA.id, StartIndex: start.id, SearchFromEnd: null, ComparisonMode: null }, y(0));
-  const len = node(`code length`, T.IntSub, { A: comma.id, B: start.id }, y(1));
-  const code = node(`the card code`, T.Substr, { Str: BODY, StartIndex: start.id, Length: len.id }, y(2));
-  const url = node(`art URL`, T.Concat, { Inputs: pf.list([artBase.id, code.id]) }, y(3));
-  const uri = node(`-> Uri`, T.ToUri, { Input: url.id }, y(4));
-  const ok = node(`did this line parse?`, T.IntGt, { A: comma.id, B: start.id }, [0, -NODE_DY, 0]);
-  const dUrl = drive(`drive texture URL`, 'uri', uri.id, textures[i].f.URL, y(5));
-  const dOn = drive(`drive card visible`, 'bool', ok.id, activeFields[i], [NODE_DX * 5, -NODE_DY, 0]);
+const hostStr = strIn('host', PROXY, [ZX, -ROW * 3, 0]);
+const hostUri = node('host -> Uri', T.ToUri, { Input: hostStr.id }, [ZX + COL * 0.6, -ROW * 3, 0]);
+const hostTrunk = strRelay('host -> gate + prompt', hostUri.id, [ZX + COL * 1.2, -ROW * 3, 0]);
+const allowed = node('host access granted?', T.IsAllowed, { Host: hostTrunk.id, Scope: null }, [ZX + COL * 1.8, -ROW * 3, 0]);
+const reason = strIn('permission reason', 'Fetch Palworld TCG cards from ResoPal', [ZX, -ROW * 4, 0]);
+const ask = node('ask for host access', T.RequestHost, {
+  Host: hostTrunk.id, Reason: reason.id, Scope: null, OnGranted: null, OnDenied: null, OnIgnored: null,
+}, [ZX + COL * 1.8, -ROW * 4, 0]);
+const get = node('GET the card list', T.Get, {
+  URL: apiUri.id, Content: null, StatusCode: null, OnSent: null, OnResponse: null, OnError: null, OnDenied: null,
+}, [ZX + COL * 3.0, -ROW * 1, 0]);
+const gate = node('allowed ? GET : ask', T.If, { Condition: allowed.id, OnTrue: get.id, OnFalse: ask.id }, [ZX + COL * 2.4, -ROW * 2, 0]);
+ask.slot.Components.Data[0].Data.OnGranted.Data = get.id;
+joinTrunk.slot.Components.Data[0].Data.Next.Data = gate.id;
 
-  const chain = [comma, len, code, url, uri, ok, dUrl, dOn];
-  if (i < MAX_CARDS - 1) {
-    const nl = node(`find newline`, T.IndexOf, { Str: BODY, Part: NL.id, StartIndex: start.id, SearchFromEnd: null, ComparisonMode: null }, [0, -NODE_DY * 2, 0]);
-    const more = node(`is there another line?`, T.IntGt, { A: nl.id, B: MINUS1.id }, [NODE_DX, -NODE_DY * 2, 0]);
-    const step = node(`next line starts here`, T.IntAdd, { A: nl.id, B: ONE.id }, [NODE_DX * 2, -NODE_DY * 2, 0]);
-    // Past the last line the cursor must STOP, not wrap. IndexOfString returns -1
-    // for a start index below zero or at/after the end, so parking the cursor on
-    // -1 makes every later card find no comma, report false, and stay hidden.
-    // Letting it fall to nl+1 = 0 instead would restart at line 0 and light up
-    // every remaining card with the first card's art - which is exactly what the
-    // first build of this did.
-    const next = node(`or stop here`, T.IntPick, { Condition: more.id, OnTrue: step.id, OnFalse: nl.id }, [NODE_DX * 3, -NODE_DY * 2, 0]);
-    chain.push(nl, more, step, next);
-    if (i === 0) firstNewline = nl;
-    start = next;
+const requestNodes = [urlNode, urlTrunk, apiUri, hostStr, hostUri, hostTrunk, allowed, reason, ask, gate, get];
+controlNodes.push(...requestNodes);
+controlZones.push(around('2 · gate host access, then GET', requestNodes));
+
+// Zone 3: the readouts. Two lines on the panel, both driven straight from this
+// graph, so a failure is legible without opening the flux at all: the URL line
+// proves the button and the variable worked, and the status line carries either
+// the first record or - because GET_String writes the exception message into
+// Content - the network error itself.
+const RX = ZX + COL * 4.4;
+const BODY = get.f.Content;
+const bodyTrunk = strRelay('response -> readout + decoders', BODY, [RX, 0, 0]);
+const NL = strIn('needle: newline', '\n', [RX, -ROW * 2, 0]);
+const firstEnd = node('end of the first record', T.Substr, { Str: bodyTrunk.id, StartIndex: null, Length: null }, [RX + COL * 0.6, -ROW, 0]);
+const firstTrim = node('first record, trimmed', T.Trim, { A: firstEnd.id }, [RX + COL * 1.2, -ROW, 0]);
+const bodyLen = node('response length', T.StrLen, { A: bodyTrunk.id }, [RX + COL * 0.6, -ROW * 2, 0]);
+const lenTrunk = intRelay('length -> decoders + status', bodyLen.id, [RX + COL * 1.2, -ROW * 2, 0]);
+const zeroLen = intIn('0', 0, [RX + COL * 0.6, -ROW * 3, 0]);
+const gotAny = node('did anything come back?', T.IntGt, { A: lenTrunk.id, B: zeroLen.id }, [RX + COL * 1.8, -ROW * 2.5, 0]);
+const statusMsg = node('status: first card, else the error', T.StrPick,
+  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: bodyTrunk.id }, [RX + COL * 2.4, -ROW * 1.5, 0]);
+
+const statusLabel = label('status text', 'Ready — pick a deck or a booster', 19, CYAN);
+const statusFieldId = statusLabel.Components.Data[1].Data.Content.ID;
+const urlLabel = label('url text', PROXY, 14, DIM);
+const urlFieldId = urlLabel.Components.Data[1].Data.Content.ID;
+
+const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [RX + COL * 3.0, -ROW * 1.5, 0]);
+const dUrl = drive('drive the URL readout', 'str', urlTrunk.id, urlFieldId, [RX + COL * 3.0, -ROW * 3.5, 0]);
+
+const readoutNodes = [bodyTrunk, NL, firstEnd, firstTrim, bodyLen, lenTrunk, zeroLen, gotAny, statusMsg, dStatus, dUrl];
+controlNodes.push(...readoutNodes);
+controlZones.push(around('3 · what the panel shows you', readoutNodes));
+
+// The first record is a fixed-width slice like every other one; reuse the same
+// constants the decoders use rather than a second pair.
+const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX, -ROW * 3, 0]);
+const zeroStart = intIn('first record starts at 0', 0, [RX, -ROW * 4, 0]);
+firstEnd.slot.Components.Data[0].Data.StartIndex.Data = zeroStart.id;
+firstEnd.slot.Components.Data[0].Data.Length.Data = recWidth.id;
+controlNodes.push(recWidth, zeroStart);
+controlZones[2] = around('3 · what the panel shows you', readoutNodes.concat([recWidth, zeroStart]));
+
+const controlFlux = slot('Flux - control', [], [0, 1.35, 0],
+  [zones(controlZones), ...controlNodes.map((n) => n.slot)], 'Moduprint.ProtoFlux', controlId);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CANVAS 2 - card decoders. Generated, seventy times the same five nodes.
+// ═══════════════════════════════════════════════════════════════════════════════
+// Because records are fixed width, card i is a constant slice at i*64 - no
+// cursor, no chaining, every card independent of every other. Each row of ten
+// taps the response, the width and the length through its own relay bank, so no
+// producer carries seventy wires.
+const decoderNodes = [], decoderZones = [];
+const CARD_DX = COL * 4.2, CARD_DY = ROW * 3.4;
+
+const busBody = strRelay('response', bodyTrunk.id, [-COL * 3.4, 0, 0]);
+const busWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [-COL * 3.4, -ROW, 0]);
+const busLen = intRelay('response length', lenTrunk.id, [-COL * 3.4, -ROW * 2, 0]);
+const bus = [busBody, busWidth, busLen];
+decoderNodes.push(...bus);
+decoderZones.push(around('bus · one tap per row', bus));
+
+for (let row = 0; row < ROWS; row++) {
+  const rowY = -CARD_DY * row - ROW * 4;
+  const rowBody = strRelay(`row ${row + 1}: response`, busBody.id, [-COL * 1.9, rowY, 0]);
+  const rowWidth = intRelay(`row ${row + 1}: record width`, busWidth.id, [-COL * 1.9, rowY - ROW, 0]);
+  const rowLen = intRelay(`row ${row + 1}: response length`, busLen.id, [-COL * 1.9, rowY - ROW * 2, 0]);
+  const rowNodes = [rowBody, rowWidth, rowLen];
+
+  for (let col = 0; col < COLS; col++) {
+    const i = row * COLS + col;
+    const x = col * CARD_DX;
+    const n = String(i + 1).padStart(2, '0');
+    // Card i's record starts at a constant offset. Everything else is a slice,
+    // a trim and a compare - nothing depends on any other card.
+    const start = intIn(`card ${n}: starts at ${i * RECORD_WIDTH}`, i * RECORD_WIDTH, [x, rowY, 0]);
+    const raw = node(`card ${n}: its record`, T.Substr, { Str: rowBody.id, StartIndex: start.id, Length: rowWidth.id }, [x + COL, rowY, 0]);
+    const url = node(`card ${n}: trim the padding`, T.Trim, { A: raw.id }, [x + COL * 2, rowY, 0]);
+    const uri = node(`card ${n}: -> Uri`, T.ToUri, { Input: url.id }, [x + COL * 3, rowY, 0]);
+    // Present iff the response actually reaches this card's offset.
+    const present = node(`card ${n}: is it there?`, T.IntGt, { A: rowLen.id, B: start.id }, [x + COL, rowY - ROW, 0]);
+    const dUrlCard = drive(`card ${n}: drive art URL`, 'uri', uri.id, textures[i].f.URL, [x + COL * 3, rowY - ROW, 0]);
+    const dOnCard = drive(`card ${n}: drive visible`, 'bool', present.id, activeFields[i], [x + COL * 2, rowY - ROW, 0]);
+    rowNodes.push(start, raw, url, uri, present, dUrlCard, dOnCard);
   }
-  // Groups are spread on a wide grid so an unpacked graph reads as separate
-  // clusters instead of one heap.
-  group(`(f) card ${String(i + 1).padStart(2, '0')}`, chain, [(i % 10) * 3.2, -2.0 - Math.floor(i / 10) * 1.6, 0]);
+  decoderNodes.push(...rowNodes);
+  decoderZones.push(around(
+    row === 0 ? `cards 01–10 · every card is this same five-node slice` : `cards ${String(row * COLS + 1).padStart(2, '0')}–${String(row * COLS + COLS).padStart(2, '0')}`,
+    rowNodes));
 }
 
-// ── status line ──────────────────────────────────────────────────────────────
-// GET_String writes the exception message into Content when a request fails, so
-// showing the first line of the body doubles as the error display - which is the
-// difference between "nothing happened" and knowing why.
-const statusLabel = label('status text', 'Ready — pick a deck or a booster', 20, CYAN, { h: 'Center', v: 'Middle' });
-const statusText = statusLabel.Components.Data[1];
-const statusFieldId = statusText.Data.Content.ID;
-
-const firstLine = node('first line of the response', T.Substr, { Str: BODY, StartIndex: ZERO.id, Length: firstNewline.id }, [0, 0, 0]);
-const gotAny = node('any line at all?', T.IntGt, { A: firstNewline.id, B: ZERO.id }, [0, -NODE_DY, 0]);
-const statusPick = node('first line, else whole body', T.StrPick, { Condition: gotAny.id, OnTrue: firstLine.id, OnFalse: BODY }, [NODE_DX, -NODE_DY, 0]);
-const statusMsg = node('status text', T.Concat, { Inputs: pf.list([statusPick.id]) }, [NODE_DX * 2, 0, 0]);
-const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [NODE_DX * 3, 0, 0]);
-group('(f) status', [firstLine, gotAny, statusPick, statusMsg, dStatus], [-3.2, -2.0, 0]);
+const decoderFlux = slot('Flux - card decoders', [], [0, -1.6, 0],
+  [zones(decoderZones), ...decoderNodes.map((n) => n.slot)], 'Moduprint.ProtoFlux');
 
 // ── assemble ─────────────────────────────────────────────────────────────────
-const rootId = pf.rootId;
+const urlVar = comp(T.StrVar, { VariableName: 'ResoPal/url', Value: BUTTONS[2].url, OverrideOnLink: false });
+const varsSlot = slot('Vars', [urlVar.comp], [0, 0, 0]);
 
 const bg = slot('BG', [
   rect().comp,
   image(INK).comp,
   comp(T.VerticalLayout, {
     PaddingTop: D(18), PaddingRight: D(18), PaddingBottom: D(18), PaddingLeft: D(18),
-    Spacing: D(12), HorizontalAlign: 'Center', VerticalAlign: 'Top',
+    Spacing: D(11), HorizontalAlign: 'Center', VerticalAlign: 'Top',
     ForceExpandWidth: true, ForceExpandHeight: false,
   }).comp,
 ], [0, 0, 0], [
   bar('Header', 76, GOLD, '<b>RESOPAL</b>', 40, INK, [logoMark()]),
-  slot('Status', [rect().comp, layoutElement(56).comp, image(PANEL).comp], [0, 0, 0], [statusLabel]),
-  ...BUTTONS.map((b) => button(rootId, b)),
-  label('Footer', 'Cards & data by Palify · palify.org', 16, DIM),
+  slot('Status', [rect().comp, layoutElement(50).comp, image(PANEL).comp], [0, 0, 0], [statusLabel]),
+  slot('URL', [rect().comp, layoutElement(28).comp, image(INK).comp], [0, 0, 0], [urlLabel]),
+  ...BUTTONS.map((b) => button(controlId, b)),
+  label('Footer', 'Cards & data by Palify · palify.org', 15, DIM),
 ]);
 
 const canvasRect = rect();
@@ -488,12 +555,9 @@ canvas.comp.Data.UpdateOrder = pf.fi(100000);
 canvasCollider.comp.Data.UpdateOrder = pf.fi(1000000);
 
 const canvasSlot = slot('UI Canvas', [canvas.comp, canvasRect.comp, canvasCollider.comp],
-  [0, 0.62, 0], [bg], null, pf.nextId(), [CANVAS_SCALE, CANVAS_SCALE, CANVAS_SCALE]);
+  [0, 0.66, 0], [bg], null, pf.nextId(), [CANVAS_SCALE, CANVAS_SCALE, CANVAS_SCALE]);
 
 const cards = slot('Cards', [], [0, 0, 0], cardSlots);
-const flux = slot('Flux', [], [0, 1.2, 0], fluxGroups, 'Moduprint.ProtoFlux');
-
-// Palify's credit is a permanent requirement, not a courtesy.
 const credits = slot('credits', [], [0, 0, 0], [
   slot('Card images & deck data by Palify - palify.org'),
   slot('ResoPal by Dalek - resopal.dalek.coffee'),
@@ -503,7 +567,7 @@ const root = slot('ResoPal', [
   comp(T.Grabbable, { Scalable: true }).comp,
   comp(T.ObjectRoot, {}).comp,
   comp(T.VarSpace, { SpaceName: 'ResoPal', OnlyDirectBinding: false }).comp,
-], [0, 0, 0], [varsSlot, canvasSlot, cards, credits, flux], null, rootId);
+], [0, 0, 0], [varsSlot, canvasSlot, cards, credits, controlFlux, decoderFlux], null, pf.rootId);
 
 const res = await pf.exportPackage({
   name: 'ResoPal Panel',
@@ -514,9 +578,10 @@ const res = await pf.exportPackage({
   typeVersions: TYPE_VERSIONS,
 });
 
-console.log(`\n  buttons    ${BUTTONS.length}`);
-BUTTONS.forEach((b) => console.log(`               ${b.label.padEnd(34)} ${b.url}`));
-console.log(`  cards      up to ${MAX_CARDS} (${COLS}x${ROWS}), shown only when their line parsed`);
-console.log(`  flux       ${fluxGroups.length} labelled groups`);
-console.log(`  panel      ${CANVAS_W}x${CANVAS_H} units at ${CANVAS_SCALE} = ${(CANVAS_W * CANVAS_SCALE).toFixed(2)}x${(CANVAS_H * CANVAS_SCALE).toFixed(2)} m`);
+console.log(`\n  buttons        ${BUTTONS.length}`);
+BUTTONS.forEach((b) => console.log(`                   ${b.label.padEnd(32)} ${b.url}`));
+console.log(`  control canvas ${controlNodes.length} nodes, ${controlZones.length} comment zones`);
+console.log(`  decoder canvas ${decoderNodes.length} nodes, ${decoderZones.length} comment zones`);
+console.log(`  cards          up to ${MAX_CARDS} (${COLS}x${ROWS}), each a constant slice at i*${RECORD_WIDTH}`);
+console.log(`  panel          ${CANVAS_W}x${CANVAS_H} units at ${CANVAS_SCALE} = ${(CANVAS_W * CANVAS_SCALE).toFixed(2)}x${(CANVAS_H * CANVAS_SCALE).toFixed(2)} m`);
 if (!res.ok) process.exitCode = 1;

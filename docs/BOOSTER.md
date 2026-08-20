@@ -7,11 +7,23 @@ rolls through the former, and `booster/out/ResoPal_Panel.resonitepackage` is a g
 five buttons — two trial decks and 1/3/10 boosters. See `booster/README.md`. P3 (cloud spawn) and
 P4 (the tear wrapper) are not started.
 
-The first attempt at this shipped logic-only ProtoFlux with no UI, and it was rightly rejected as
-unusable: there was nothing to look at unless the network call already worked, and the node
-positions were spaced tighter than a ProtoFlux node visual, so unpacking produced an overlapping
-heap. Both are now gated by tests — `booster/test-panel.mjs` asserts the panel's UI exists and that
-no two node groups overlap.
+Three builds' worth of lessons, all now gated by tests:
+
+1. The first shipped logic-only ProtoFlux with no UI — nothing to look at unless the network call
+   already worked.
+2. Its node positions were spaced tighter than a ProtoFlux node visual, so unpacking produced an
+   overlapping heap.
+3. The second emitted `WriteDynamicValueVariable<string>`, a type that **cannot exist** — that node
+   is declared `where T : unmanaged`. The package encoded perfectly, validated with zero dangling
+   references, and in-world every button did nothing, because the component never resolved.
+
+That third one is the important lesson: **a wrong classpath fails silently, so "it encoded cleanly"
+proves very little.** `booster/verify-classpaths.mjs` now checks every emitted type against the
+decompiled engine source, generic constraints included, and runs as part of `npm test`.
+
+The graph is now split across two Moduprint canvases — a ~42-node control canvas that is the only
+one worth unpacking, and a generated decoder canvas — with comment zones, relay banks and the
+pretty-flux layout gates. `booster/GRAPH.md` is the map.
 
 Every capability it needs is confirmed first-party. The design below is shaped around three hard
 constraints that are easy to design past by accident.

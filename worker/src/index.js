@@ -14,11 +14,15 @@
  * player's devtools nor the in-world tool can reach.
  */
 import { weights, poolBP01, decks } from './data.js';
-import { rollPacks, toFlat, newSeed } from './roll.js';
+import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
 
 // Sets that can be rolled. Adding BP02 is: snapshot its pool with
 // tools/fetch-pool.mjs, add its weights to data/pack-weights.json, add a line here.
 const POOLS = { BP01: poolBP01 };
+
+// Fixed-format records carry whole URLs, so the Worker decides where art comes
+// from. The in-world tool then needs one address, not two.
+const artBase = (url) => `${url.origin}/img/`;
 
 const ALLOWED = [
   'https://resopal.dalek.coffee',
@@ -121,7 +125,7 @@ function pull(request, url, h) {
   const seedRaw = q.get('seed');
 
   if (!SET.test(setCode) || !POOLS[setCode]) return fail(404, `no pool for set ${setCode}`, h);
-  if (format !== 'json' && format !== 'flat') return fail(400, 'format must be json or flat', h);
+  if (!['json', 'flat', 'fixed'].includes(format)) return fail(400, 'format must be json, flat or fixed', h);
   if (!/^\d{1,2}$/.test(packsRaw)) return fail(400, 'packs must be a number', h);
   const packs = Number(packsRaw);
   if (packs < 1 || packs > 12) return fail(400, 'packs must be 1-12', h);
@@ -144,10 +148,15 @@ function pull(request, url, h) {
     return fail(500, String(e.message || e), h);
   }
 
-  if (format === 'flat')
-    return new Response(toFlat(rolled.pulls), {
-      headers: { ...h, 'content-type': 'text/plain; charset=utf-8', 'cache-control': cacheControl },
+  if (format === 'flat' || format === 'fixed') {
+    let body;
+    try { body = format === 'flat' ? toFlat(rolled.pulls) : toFixed(rolled.pulls, artBase(url)); }
+    catch (e) { return fail(500, String(e.message || e), h); }
+    return new Response(body, {
+      headers: { ...h, 'content-type': 'text/plain; charset=utf-8', 'cache-control': cacheControl,
+        'x-record-width': String(RECORD_WIDTH) },
     });
+  }
 
   const body = {
     set: setCode,
@@ -183,7 +192,7 @@ function deck(request, url, h) {
   const id = (url.searchParams.get('deck') || '').toLowerCase();
   const format = url.searchParams.get('format') || 'json';
 
-  if (format !== 'json' && format !== 'flat') return fail(400, 'format must be json or flat', h);
+  if (!['json', 'flat', 'fixed'].includes(format)) return fail(400, 'format must be json, flat or fixed', h);
   if (id === '') {
     // No id: list what there is, so the panel can populate itself rather than
     // hardcoding which decks exist.
@@ -198,8 +207,12 @@ function deck(request, url, h) {
   const cards = d.cards.flatMap((c) => Array.from({ length: c.n }, () => ({ code: c.code, base: c.code, rarity: c.rarity })));
   const headers = { ...h, 'cache-control': 'public, max-age=3600' };
 
-  if (format === 'flat')
-    return new Response(toFlat(cards), { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8' } });
+  if (format === 'flat' || format === 'fixed') {
+    let body;
+    try { body = format === 'flat' ? toFlat(cards) : toFixed(cards, artBase(url)); }
+    catch (e) { return fail(500, String(e.message || e), h); }
+    return new Response(body, { headers: { ...headers, 'content-type': 'text/plain; charset=utf-8', 'x-record-width': String(RECORD_WIDTH) } });
+  }
   return new Response(JSON.stringify({ deck: d.id, set: d.set, name: d.name, total: d.total, cards }),
     { headers: { ...headers, 'content-type': 'application/json' } });
 }
