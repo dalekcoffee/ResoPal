@@ -205,3 +205,18 @@ just upside down, which is exactly the bug the first port shipped.
 Verify by rendering a landscape card (any Structure, e.g. `TD02-008`) and diffing it against a
 known-good bake, both as-is and rotated 180°. If the 180° diff is the smaller one, the direction is
 wrong.
+
+## The shipped template
+
+`data/template.resonitepackage` is a Deck Maker export run through `tools/strip_template.mjs`,
+which removes the payloads every bake throws away anyway: the fallback font chain, the placeholder
+atlas and the placeholder back. **20.78 MB → 1.65 MB.** `Metadata/*.bitmap` sidecars are kept —
+`patch.js` reads the old ones to build the new ones — and the doc is untouched, so `patch.js` still
+runs its own font strip and texture swap and simply finds less to do. Verified: a bake from the
+stripped template is structurally identical to one from the full export.
+
+Re-run it whenever you re-bake the template:
+
+```bash
+node tools/strip_template.mjs src=DeckRounded.resonitepackage out=../data/template.resonitepackage
+```

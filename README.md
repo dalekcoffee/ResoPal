@@ -12,13 +12,13 @@ The **generator works end to end.** It produces a verified, importable deck from
 deck: correct card order, rounded corners, transparent edges, landscape cards rotated, custom card
 back, credits, and any card count.
 
-The **web front end is a working preview, not a working product.** `index.html` is the
-high-fidelity design from Claude Design, served at the site root. Every screen, interaction and
-animation is real; **the exports are not** — generation is a progress timer and no file is
-produced. `docs/DESIGN-SPEC.md` documents it, `docs/DESIGN-PROMPT.md` is the brief it came from.
+**The website exports real decks.** Load the Green/Purple trial deck, step through review, soul
+deck and card back, press Generate, and the browser downloads a `.resonitepackage` that is
+structurally identical to the hand-built v7 package. No server involved.
 
-Wiring the exports up needs a Cloudflare Worker: Palify sends no CORS headers, so a browser can
-display card art but cannot read its pixels to bake an atlas. See `docs/WORKER.md`.
+The limit is card art, not code. The bake has to *read* image pixels, and a cross-origin image
+taints the canvas — so only cards whose art is committed under `data/art/` can be baked today
+(currently the TD02 trial deck). Deck URLs and arbitrary decks need the proxy in `docs/WORKER.md`.
 
 ## How it works
 
@@ -36,7 +36,10 @@ contract, the package format, and several non-obvious fixes that are easy to und
 index.html      the site - served at resopal.dalek.coffee via GitHub Pages
 support.js      runtime the front end is built on
 assets/         DefaultBack.png (default card back), pack-bp01.png (booster art)
-data/           pack pull weights and the two trial decks
+data/
+  template.resonitepackage  the stripped Deck Maker template the site patches
+  art/            card art the bake can read same-origin
+  *.csv           the two trial decks; pack-weights.json
 web/            the browser build of the generator - bakes the package client-side
 tools/          the same pipeline as a command line tool (see below)
 docs/

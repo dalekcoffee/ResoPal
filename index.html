@@ -809,7 +809,7 @@ class Component extends DCLogic {
     celebrate: null, packCount: 0, binder: [], discarded: {}, fromPulls: false,
     cardDX: 0, cardOut: 0, cardDrag: false, snap: false, hold: false, celId: null,
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
-    gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null,
+    gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null, deck: null,
     vw: typeof window !== 'undefined' ? window.innerWidth : 1440, imgBudget: 6
   };
 
@@ -846,8 +846,35 @@ class Component extends DCLogic {
   onResize = () => { if (Math.abs(window.innerWidth - this.state.vw) > 8) this.setState({ vw: window.innerWidth }); };
   componentWillUnmount() { clearTimeout(this.celT); clearTimeout(this.holdT); clearTimeout(this.outT); clearTimeout(this.openT); clearTimeout(this.liftT); if (this.timer) clearInterval(this.timer); if (this.iq) clearInterval(this.iq); if (this.raf) cancelAnimationFrame(this.raf); clearTimeout(this.copyT); window.removeEventListener('resize', this.onResize); document.removeEventListener('dragstart', this.noDrag); document.removeEventListener('error', this.imgFail, true); }
 
-  total() { return CARDS.reduce((s, c) => s + c.n, 0); }
-  sel(code) { const c = CARDS.find(x => x.code === code); return this.state.variants[code] || c.prints[0][0]; }
+  // CARDS is the demo catalogue the pack ripper pulls from; a real imported deck
+  // replaces it for the deck-import path only.
+  cards() { return this.state.deck || CARDS; }
+  total() { return this.cards().reduce((s, c) => s + c.n, 0); }
+  sel(code) { const c = this.cards().find(x => x.code === code); return this.state.variants[code] || (c ? c.prints[0][0] : code); }
+
+  // Bake art must be same-origin or the canvas is tainted and unreadable - see
+  // docs/WORKER.md. Thumbnails still come from Palify; only the bake needs pixels.
+  bakeArt(code) { return 'data/art/' + code + '.webp'; }
+
+  async loadStarter(set, name) {
+    const file = set === 'TD01' ? 'data/td01-red-blue.csv' : 'data/td02-green-purple.csv';
+    try {
+      const { parseDeckList } = await import('./web/decklist.js');
+      const { deck } = parseDeckList(await (await fetch(file)).text());
+      this.setDeck(deck, name);
+    } catch (e) { this.openDeck(name); }
+  }
+
+  setDeck(entries, label) {
+    const hue = c => (c.startsWith('TD01') ? '#dd9c9c' : c.startsWith('TD02') ? '#a3ccae' : '#9aa6c8');
+    this.setState({
+      deck: entries.map(e => ({
+        code: e.code, name: e.name || e.code, n: e.n, hue: hue(e.code),
+        prints: [[e.code, 'C']],
+      })),
+      variants: {}, discarded: {}, fromPulls: false,
+    }, () => this.openDeck(label));
+  }
   img(code, w) { return 'https://palify.org/cards/' + (w || 'w256') + '/' + code + '.webp'; }
 
   writeCache() {
@@ -953,10 +980,10 @@ class Component extends DCLogic {
       Object.keys(g).forEach(k => src.push(g[k]));
       src.sort((a, b) => RANK.indexOf(a.rarity) - RANK.indexOf(b.rarity) || a.key.localeCompare(b.key));
     } else {
-      CARDS.forEach(c => src.push({ key: c.code, base: c.code, name: c.name, hue: c.hue, failed: !!c.failed, n: c.n, rarity: c.prints[0][1] }));
+      this.cards().forEach(c => src.push({ key: c.code, base: c.code, name: c.name, hue: c.hue, failed: !!c.failed, n: c.n, rarity: c.prints[0][1] }));
     }
     return src.map((r, i) => {
-      const base = CARDS.find(c => c.code === r.base) || { prints: [[r.key, r.rarity]] };
+      const base = this.cards().find(c => c.code === r.base) || { prints: [[r.key, r.rarity]] };
       const sel = s.variants[r.key] || (s.fromPulls ? r.key : base.prints[0][0]);
       const dis = !!s.discarded[r.key];
       const wide = this.isWide(sel);
@@ -1032,24 +1059,82 @@ class Component extends DCLogic {
     this.iq = setInterval(() => {
       this.setState(st => {
         const nb = st.imgBudget + 2;
-        if (nb >= CARDS.length + 2) clearInterval(this.iq);
+        if (nb >= this.cards().length + 2) clearInterval(this.iq);
         return { imgBudget: nb };
       });
     }, 260);
   };
 
-  startGen(kind) {
-    if (this.timer) clearInterval(this.timer);
-    this.setState({ genKind: kind, ready: false, gen: { pct: 0, failed: false } });
-    this.timer = setInterval(() => {
-      this.setState(s => {
-        if (!s.gen || s.gen.failed) return null;
-        const pct = s.gen.pct + 1.7;
-        if (s.failNext && pct > 40) return { gen: { pct: 40, failed: true } };
-        if (pct >= 100) { clearInterval(this.timer); return { gen: { pct: 100, failed: false }, ready: true }; }
-        return { gen: { pct, failed: false } };
-      });
-    }, 110);
+  // pct drives the bottom bar's four phases, which switch at 10 / 60 / 82 / 100.
+  pct(v) { this.setState(s => (s.gen && !s.gen.failed ? { gen: { pct: v, failed: false } } : null)); }
+
+  save(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  saveOut() { if (this.out) this.out.files.forEach(f => this.save(f.blob, f.name)); }
+
+  async startGen(kind) {
+    const st = this.state;
+    // second click on a finished export is the download, not another bake
+    if (st.ready && st.genKind === kind && this.out && this.out.kind === kind) return this.saveOut();
+
+    this.setState({ genKind: kind, ready: false, gen: { pct: 2, failed: false } });
+    this.out = null;
+    const slug = (st.deckLabel || 'deck').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'deck';
+
+    try {
+      const rows = this.rows(st).filter(r => !r.discarded);
+      const deck = rows.map(r => ({ code: this.sel(r.key), n: r.qtyN }));
+      if (!deck.length) throw new Error('This deck has no cards to export.');
+
+      const [{ bakeDeck, bakeSheetOnly }] = await Promise.all([import('./web/bake.bundle.js')]);
+      this.pct(6);
+
+      // landscape is decided from the art's real aspect ratio, never from metadata
+      const landscape = new Set(), bitmaps = new Map();
+      const loadArt = async code => {
+        if (bitmaps.has(code)) return bitmaps.get(code);
+        const res = await fetch(this.bakeArt(code));
+        if (!res.ok) throw new Error('No card image for ' + code + ' (HTTP ' + res.status + ')');
+        const bmp = await createImageBitmap(await res.blob());
+        if (bmp.width > bmp.height * 1.05) landscape.add(code);
+        bitmaps.set(code, bmp);
+        return bmp;
+      };
+      // decode up front so the aspect ratios are known before the atlas is laid out
+      const codes = [...new Set(deck.map(d => d.code))];
+      for (let i = 0; i < codes.length; i++) { await loadArt(codes[i]); this.pct(10 + 46 * (i + 1) / codes.length); }
+
+      const back = await createImageBitmap(await (await fetch(this.state.backSrc || 'assets/DefaultBack.png')).blob());
+      this.pct(60);
+
+      if (kind === 'sheet' || kind === 'back') {
+        const out = await bakeSheetOnly({ deck, loadArt, landscape, back });
+        this.pct(96);
+        this.out = { kind, files: kind === 'back'
+          ? [{ blob: out.back, name: slug + '-back.webp' }]
+          : [{ blob: out.front, name: slug + '-front.webp' }] };
+      } else {
+        const template = await (await fetch('data/template.resonitepackage')).arrayBuffer();
+        this.pct(66);
+        const out = await bakeDeck({
+          template, deck, loadArt, landscape, back, name: this.state.deckLabel,
+          onPhase: (ph, d, t) => { if (ph === 'art') this.pct(66 + 14 * d / Math.max(1, t)); else if (ph === 'pack') this.pct(88); },
+        });
+        this.out = { kind, files: [{ blob: out.blob, name: slug + '.resonitepackage' }] };
+      }
+
+      const bytes = this.out.files.reduce((t, f) => t + f.blob.size, 0);
+      this.setState({ gen: { pct: 100, failed: false }, ready: true, outSize: bytes });
+      this.saveOut();                              // first bake downloads straight away
+    } catch (e) {
+      this.setState({ gen: { pct: this.state.gen ? this.state.gen.pct : 40, failed: true }, genError: String((e && e.message) || e) });
+    }
   }
 
   renderVals() {
@@ -1251,7 +1336,7 @@ class Component extends DCLogic {
         label: st.label, set: st.set,
         dotA: 'width:8px;height:8px;border-radius:50%;background:' + st.a,
         dotB: 'width:8px;height:8px;border-radius:50%;background:' + st.b,
-        load: () => this.openDeck(st.name)
+        load: () => this.loadStarter(st.set, st.name)
       })),
       deckTotal: total,
       uniqueCount: kept.length,
@@ -1375,8 +1460,8 @@ class Component extends DCLogic {
       barBorder: failed ? 'rgba(216,162,171,.45)' : s.ready ? 'rgba(164,212,186,.4)' : 'rgba(160,162,220,.4)',
       barIconBg: failed ? 'rgba(216,162,171,.14)' : s.ready ? 'rgba(164,212,186,.14)' : 'rgba(160,162,220,.14)',
       barIcon: failed ? '429' : s.ready ? '\u2713' : Math.min(99, Math.round(pct)) + '',
-      barTitle: failed ? 'Palify is rate-limiting us' : s.ready ? (s.genKind === 'sheet' ? 'Card sheet ready' : s.genKind === 'back' ? 'Card back ready' : s.genKind === 'soul' ? 'Soul deck ready' : s.genKind === 'both' ? 'Both decks ready' : 'Deck ready') : ['Reading the deck', 'Fetching card images', 'Composing the sheet', 'Packing the deck'][phase],
-      barDetail: failed ? 'HTTP 429 after ' + imgDone + ' of ' + imgTotal + ' images' : s.ready ? (s.genKind === 'soul' ? slug + '-Soul.resonitepackage \u00b7 4.2 MB' : s.genKind === 'sheet' ? 'front.webp \u00b7 8192\u00b2' : s.genKind === 'back' ? 'back.webp \u00b7 1024\u00d71463' : s.genKind === 'both' ? 'main + soul \u00b7 22.6 MB' : slug + '.resonitepackage \u00b7 18.4 MB') : phase === 1 ? imgDone + ' of ' + imgTotal + ' card images' : phase === 2 ? '8192 \u00d7 8192 \u00b7 10 \u00d7 7 grid' : phase === 3 ? 'patching template, trimming to ' + total + ' cards' : 'palify.org',
+      barTitle: failed ? (s.genError || 'Palify is rate-limiting us') : s.ready ? (s.genKind === 'sheet' ? 'Card sheet ready' : s.genKind === 'back' ? 'Card back ready' : s.genKind === 'soul' ? 'Soul deck ready' : s.genKind === 'both' ? 'Both decks ready' : 'Deck ready') : ['Reading the deck', 'Fetching card images', 'Composing the sheet', 'Packing the deck'][phase],
+      barDetail: failed ? 'The export could not be built'  : s.ready ? (s.genKind === 'soul' ? slug + '-Soul.resonitepackage \u00b7 4.2 MB' : s.genKind === 'sheet' ? 'front.webp \u00b7 8192\u00b2' : s.genKind === 'back' ? 'back.webp \u00b7 1024\u00d71463' : s.genKind === 'both' ? 'main + soul \u00b7 22.6 MB' : slug + '.resonitepackage \u00b7 ' + (s.outSize ? (s.outSize / 1048576).toFixed(2) + ' MB' : '')) : phase === 1 ? imgDone + ' of ' + imgTotal + ' card images' : phase === 2 ? '8192 \u00d7 8192 \u00b7 10 \u00d7 7 grid' : phase === 3 ? 'patching template, trimming to ' + total + ' cards' : 'palify.org',
       barNote: failed ? 'We back off rather than hammer their servers. Wait a minute and retry \u2014 or skip the network entirely and drop your Palify export file in.' : s.ready ? 'Drag the file into Resonite. Both credits travel inside the deck object.' : cached ? 'Deliberately slow \u2014 we fetch a few at a time to be kind to Palify. ' + cached + ' already cached from today, so those are free.' : 'Deliberately slow \u2014 we fetch a few images at a time to be kind to Palify\u2019s servers.',
       barActions: failed
         ? [
