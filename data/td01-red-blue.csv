@@ -1,8 +1,8 @@
 # ResoPal starter deck - Trial Deck TD01 "Dawn of Palpagos Red / Blue"
-# 50-card main deck + 10 soul cards (soul is chosen in ResoPal, not shipped here).
-# Palify-compatible import format: quantity,code,name. Names resolve from the committed
-# /api/cards catalogue snapshot at load, so the code column is authoritative.
-# Per-card quantities are the even 2x split until the official decklist is confirmed.
+# INCOMPLETE. This list was a placeholder even 2x split; TD01-025 was in it and does
+# not exist on Palify, so it has been removed. The remaining 24 cards are 2x each = 48,
+# and the real deck is almost certainly 50 with two cards at 3x - as the TD02 export is.
+# Replace this file with a real Palify export of the deck to fix it.
 quantity,code,name
 2,TD01-001,
 2,TD01-002,
@@ -28,4 +28,3 @@ quantity,code,name
 2,TD01-022,
 2,TD01-023,
 2,TD01-024,
-2,TD01-025,

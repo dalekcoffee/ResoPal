@@ -881,7 +881,16 @@ class Component extends DCLogic {
       variants: {}, discarded: {}, fromPulls: false,
     }, () => this.openDeck(label));
   }
-  img(code, w) { return 'https://palify.org/cards/' + (w || 'w256') + '/' + code + '.webp'; }
+  // Thumbnails go through the proxy too when one is configured: it edge-caches them,
+  // so Palify is hit once per image globally instead of once per viewer. It also makes
+  // a missing card a clean JSON 404 rather than an HTML page, which Firefox blocks with
+  // OpaqueResponseBlocking when it arrives at an <img>.
+  img(code, w) {
+    const size = String(w || 'w256').replace(/^w/, '');
+    return ART_PROXY
+      ? ART_PROXY.replace(/\/$/, '') + '/img/' + code + '?w=' + size
+      : 'https://palify.org/cards/w' + size + '/' + code + '.webp';
+  }
 
   writeCache() {
     try {

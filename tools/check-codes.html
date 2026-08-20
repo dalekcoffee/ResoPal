@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ResoPal — card code check</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; padding:34px 22px 70px; background:#070b17; color:#e8ecfa;
+         font:400 15px/1.55 system-ui,sans-serif; }
+  .wrap { max-width:940px; margin:0 auto; }
+  h1 { font:400 27px/1.2 Georgia,serif; margin:0 0 6px; }
+  p  { color:#9aa6c8; margin:0 0 20px; max-width:64ch; }
+  code { font:400 12.5px ui-monospace,monospace; color:#a3cfd8; }
+  button { padding:11px 22px; border-radius:12px; border:0; cursor:pointer;
+           background:#a9abee; color:#1a2038; font:600 14px system-ui,sans-serif; }
+  button[disabled] { opacity:.5; cursor:default; }
+  .bar { position:sticky; top:0; background:#070b17; padding:12px 0 16px;
+         display:flex; gap:14px; align-items:center; flex-wrap:wrap; z-index:2; }
+  .sum { color:#9aa6c8; font:500 13.5px system-ui,sans-serif; }
+  h2 { font:600 12px/1 ui-monospace,monospace; letter-spacing:.13em;
+       text-transform:uppercase; color:#8e9ac0; margin:26px 0 11px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:7px; }
+  .c { display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px;
+       border:1px solid rgba(150,170,230,.16); background:rgba(255,255,255,.025); }
+  .d { width:8px; height:8px; border-radius:50%; background:#4f5c80; flex:none; }
+  .ok  .d { background:#a4d4ba; } .ok  { border-color:rgba(164,212,186,.32); }
+  .bad .d { background:#dfa2ab; } .bad { border-color:rgba(223,162,171,.5); background:rgba(223,162,171,.09); }
+  .st { margin-left:auto; font:500 11px ui-monospace,monospace; color:#69769c; }
+  .bad .st { color:#eed6da; }
+  .miss { margin-top:26px; padding:16px 18px; border-radius:14px;
+          border:1px solid rgba(223,162,171,.4); background:rgba(223,162,171,.08); display:none; }
+  .miss h3 { margin:0 0 8px; font:600 14px system-ui,sans-serif; color:#eed6da; }
+  textarea { width:100%; box-sizing:border-box; min-height:76px; margin-top:8px; padding:10px;
+             border-radius:9px; border:1px solid rgba(150,170,230,.2); background:#05080f;
+             color:#bcd9e0; font:400 12.5px ui-monospace,monospace; }
+</style>
+</head>
+<body><div class="wrap">
+<h1>Card code check</h1>
+<p>Checks every card code the site references against Palify, through the image proxy.
+Both <code>-025</code> entries in the starter decks turned out to be invented; this finds any
+others. Re-run it whenever a set drops or the demo data changes.</p>
+
+<div class="bar">
+  <button id="go">Check all codes</button>
+  <span class="sum" id="sum">80 codes to check</span>
+</div>
+<div id="out"></div>
+<div class="miss" id="miss"><h3>Codes with no art on Palify</h3>
+  <div class="sum">These need removing or correcting wherever they are referenced.</div>
+  <textarea id="missList" readonly></textarea></div>
+
+<script>
+const PROXY = 'https://resopal-proxy.dalek.workers.dev';
+const GROUPS = {
+ "Demo cards (pack ripper + fallback deck)": [
+  "BP01-001",
+  "BP01-002",
+  "BP01-003",
+  "BP01-004",
+  "BP01-005",
+  "BP01-006",
+  "BP01-007",
+  "BP01-008",
+  "BP01-009",
+  "BP01-010",
+  "BP01-011",
+  "BP01-012",
+  "BP01-013",
+  "TD02-005",
+  "BP01-081",
+  "BP01-085"
+ ],
+ "Alternate printings": [
+  "BP01-001OSR",
+  "BP01-001SSP",
+  "BP01-002OSR",
+  "BP01-002SP",
+  "BP01-003SR",
+  "BP01-006OSR",
+  "BP01-009R",
+  "BP01-010SR",
+  "BP01-012OSR"
+ ],
+ "Soul art": [
+  "SOUL-000",
+  "SOUL-001",
+  "SOUL-002",
+  "SOUL-003",
+  "SOUL-005",
+  "SOUL-006",
+  "SOUL-007",
+  "SOUL-008"
+ ],
+ "td01-red-blue.csv": [
+  "TD01-001",
+  "TD01-002",
+  "TD01-003",
+  "TD01-004",
+  "TD01-005",
+  "TD01-006",
+  "TD01-007",
+  "TD01-008",
+  "TD01-009",
+  "TD01-010",
+  "TD01-011",
+  "TD01-012",
+  "TD01-013",
+  "TD01-014",
+  "TD01-015",
+  "TD01-016",
+  "TD01-017",
+  "TD01-018",
+  "TD01-019",
+  "TD01-020",
+  "TD01-021",
+  "TD01-022",
+  "TD01-023",
+  "TD01-024"
+ ],
+ "td02-green-purple.csv": [
+  "TD02-001",
+  "TD02-002",
+  "TD02-003",
+  "TD02-004",
+  "TD02-005",
+  "TD02-006",
+  "TD02-007",
+  "TD02-008",
+  "TD02-009",
+  "TD02-010",
+  "TD02-011",
+  "TD02-012",
+  "TD02-013",
+  "TD02-014",
+  "TD02-015",
+  "TD02-016",
+  "TD02-017",
+  "TD02-018",
+  "TD02-019",
+  "TD02-020",
+  "TD02-021",
+  "TD02-022",
+  "TD02-023",
+  "TD02-024"
+ ]
+};
+const out = document.getElementById('out'), sum = document.getElementById('sum');
+const cells = new Map();
+
+for (const [name, codes] of Object.entries(GROUPS)) {
+  const h = document.createElement('h2'); h.textContent = name + ' — ' + codes.length; out.append(h);
+  const g = document.createElement('div'); g.className = 'grid';
+  for (const code of codes) {
+    const el = document.createElement('div'); el.className = 'c';
+    el.innerHTML = '<span class="d"></span><code>' + code + '</code><span class="st">…</span>';
+    g.append(el); (cells.get(code) || cells.set(code, []).get(code)).push(el);
+  }
+  out.append(g);
+}
+
+document.getElementById('go').onclick = async (e) => {
+  e.target.disabled = true;
+  const all = [...new Set(Object.values(GROUPS).flat())];
+  const missing = [];
+  let done = 0;
+  for (const code of all) {
+    let status;
+    try {
+      // HEAD would be cheaper but the proxy only answers GET
+      const r = await fetch(PROXY + '/img/' + code + '?w=256', { cache: 'force-cache' });
+      status = r.status;
+    } catch (err) { status = 'net'; }
+    const ok = status === 200;
+    if (!ok) missing.push(code);
+    for (const el of cells.get(code)) {
+      el.classList.add(ok ? 'ok' : 'bad');
+      el.querySelector('.st').textContent = ok ? 'ok' : String(status);
+    }
+    done++;
+    sum.textContent = done + ' / ' + all.length + ' checked · ' + missing.length + ' missing';
+    await new Promise(r => setTimeout(r, 90));   // gentle: this is someone else's server
+  }
+  if (missing.length) {
+    document.getElementById('miss').style.display = 'block';
+    document.getElementById('missList').value = missing.join('\n');
+  } else {
+    sum.textContent = 'all ' + all.length + ' codes exist';
+  }
+  e.target.disabled = false;
+};
+</script>
+</div></body></html>
