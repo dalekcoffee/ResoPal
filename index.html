@@ -815,6 +815,7 @@ class Component extends DCLogic {
     cardDX: 0, cardOut: 0, cardDrag: false, snap: false, hold: false, celId: null,
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
     gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null, deck: null,
+    sizeMain: null, sizeSoul: null, outSize: 0,
     vw: typeof window !== 'undefined' ? window.innerWidth : 1440, imgBudget: 6
   };
 
@@ -849,7 +850,7 @@ class Component extends DCLogic {
     if (el && el.tagName === 'IMG' && el.src !== BLANK_PX) el.src = BLANK_PX;
   };
   onResize = () => { if (Math.abs(window.innerWidth - this.state.vw) > 8) this.setState({ vw: window.innerWidth }); };
-  componentWillUnmount() { clearTimeout(this.celT); clearTimeout(this.holdT); clearTimeout(this.outT); clearTimeout(this.openT); clearTimeout(this.liftT); if (this.timer) clearInterval(this.timer); if (this.iq) clearInterval(this.iq); if (this.raf) cancelAnimationFrame(this.raf); clearTimeout(this.copyT); window.removeEventListener('resize', this.onResize); document.removeEventListener('dragstart', this.noDrag); document.removeEventListener('error', this.imgFail, true); }
+  componentWillUnmount() { clearTimeout(this.dlT); clearTimeout(this.celT); clearTimeout(this.holdT); clearTimeout(this.outT); clearTimeout(this.openT); clearTimeout(this.liftT); if (this.timer) clearInterval(this.timer); if (this.iq) clearInterval(this.iq); if (this.raf) cancelAnimationFrame(this.raf); clearTimeout(this.copyT); window.removeEventListener('resize', this.onResize); document.removeEventListener('dragstart', this.noDrag); document.removeEventListener('error', this.imgFail, true); }
 
   // CARDS is the demo catalogue the pack ripper pulls from; a real imported deck
   // replaces it for the deck-import path only.
@@ -1091,7 +1092,15 @@ class Component extends DCLogic {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  saveOut() { if (this.out) this.out.files.forEach(f => this.save(f.blob, f.name)); }
+  saveOut() {
+    if (!this.out) return;
+    // Two packages are two downloads, and browsers drop the second when both land in
+    // the same tick - so anything after the first is spaced out.
+    this.out.files.forEach((f, i) => {
+      if (i === 0) this.save(f.blob, f.name);
+      else this.dlT = setTimeout(() => this.save(f.blob, f.name), 600 * i);
+    });
+  }
 
   async startGen(kind) {
     const st = this.state;
@@ -1104,16 +1113,23 @@ class Component extends DCLogic {
 
     try {
       const rows = this.rows(st).filter(r => !r.discarded);
-      const deck = rows.map(r => ({ code: this.sel(r.key), n: r.qtyN }));
-      if (!deck.length) throw new Error('This deck has no cards to export.');
+      const main = rows.map(r => ({ code: this.sel(r.key), n: r.qtyN }));
+      // Every Soul printing is the same card with different art, and a Palify deck
+      // never carries one - so the soul deck is one chosen code times a count, baked
+      // into its own package. See docs/PALIFY-API.md.
+      const soul = [{ code: st.soulCode, n: st.soulCount }];
+      const wantsMain = kind !== 'soul';
+      const wantsSoul = (kind === 'soul' || kind === 'both') && !st.soulSkipped && !st.fromPulls;
+      if (kind === 'soul' && !wantsSoul) throw new Error('There is no soul deck to export \u2014 it was skipped.');
+      if (wantsMain && !main.length) throw new Error('This deck has no cards to export.');
 
       const [{ bakeDeck, bakeSheetOnly }] = await Promise.all([import('./web/bake.bundle.js')]);
       this.pct(6);
 
       // landscape is decided from the art's real aspect ratio, never from metadata
-      const landscape = new Set(), bitmaps = new Map();
-      const loadArt = async code => {
-        if (bitmaps.has(code)) return bitmaps.get(code);
+      const landscape = new Set(), blobs = new Map(), decoded = new Map();
+      const artBlob = async code => {
+        if (blobs.has(code)) return blobs.get(code);
         let res = await fetch(this.bakeArt(code));
         if (!res.ok) {
           const via = this.proxyArt(code);
@@ -1126,20 +1142,33 @@ class Component extends DCLogic {
           catch (e) { throw new Error('The image proxy did not answer for ' + code + ' (' + (e && e.message) + ')'); }
           if (!res.ok) throw new Error('The image proxy returned HTTP ' + res.status + ' for ' + code);
         }
-        const bmp = await createImageBitmap(await res.blob());
-        if (bmp.width > bmp.height * 1.05) landscape.add(code);
-        bitmaps.set(code, bmp);
-        return bmp;
+        const blob = await res.blob();
+        blobs.set(code, blob);
+        return blob;
+      };
+      // composeAtlas closes every bitmap it draws, so one bitmap serves exactly one
+      // bake. The measuring pass below parks its decode here for the first bake to
+      // consume; a second bake decodes afresh from the cached blob rather than being
+      // handed a detached one.
+      const loadArt = async code => {
+        const parked = decoded.get(code);
+        if (parked) { decoded.delete(code); return parked; }
+        return createImageBitmap(await artBlob(code));
       };
       // decode up front so the aspect ratios are known before the atlas is laid out
-      const codes = [...new Set(deck.map(d => d.code))];
-      for (let i = 0; i < codes.length; i++) { await loadArt(codes[i]); this.pct(10 + 46 * (i + 1) / codes.length); }
+      const codes = [...new Set([...(wantsMain ? main : []), ...(wantsSoul ? soul : [])].map(d => d.code))];
+      for (let i = 0; i < codes.length; i++) {
+        const bmp = await createImageBitmap(await artBlob(codes[i]));
+        if (bmp.width > bmp.height * 1.05) landscape.add(codes[i]);
+        decoded.set(codes[i], bmp);
+        this.pct(10 + 46 * (i + 1) / codes.length);
+      }
 
       const back = await createImageBitmap(await (await fetch(this.state.backSrc || 'assets/DefaultBack.png')).blob());
       this.pct(60);
 
       if (kind === 'sheet' || kind === 'back') {
-        const out = await bakeSheetOnly({ deck, loadArt, landscape, back });
+        const out = await bakeSheetOnly({ deck: main, loadArt, landscape, back });
         this.pct(96);
         this.out = { kind, files: kind === 'back'
           ? [{ blob: out.back, name: slug + '-back.webp' }]
@@ -1147,15 +1176,37 @@ class Component extends DCLogic {
       } else {
         const template = await (await fetch('data/template.resonitepackage')).arrayBuffer();
         this.pct(66);
-        const out = await bakeDeck({
-          template, deck, loadArt, landscape, back, name: this.state.deckLabel,
-          onPhase: (ph, d, t) => { if (ph === 'art') this.pct(66 + 14 * d / Math.max(1, t)); else if (ph === 'pack') this.pct(88); },
-        });
-        this.out = { kind, files: [{ blob: out.blob, name: slug + '.resonitepackage' }] };
+        // one job per package: 'package' bakes the deck, 'soul' the soul deck, 'both' both
+        const jobs = [];
+        if (wantsMain) jobs.push({ deck: main, name: st.deckLabel, file: slug + '.resonitepackage' });
+        if (wantsSoul) jobs.push({ deck: soul, name: (st.deckLabel || 'Deck') + ' — Soul', file: slug + '-Soul.resonitepackage' });
+        const files = [];
+        for (let j = 0; j < jobs.length; j++) {
+          const job = jobs[j], lo = 66 + 30 * j / jobs.length, hi = 66 + 30 * (j + 1) / jobs.length;
+          const out = await bakeDeck({
+            template, deck: job.deck, loadArt, landscape, back, name: job.name,
+            onPhase: (ph, d, t) => {
+              if (ph === 'art') this.pct(lo + (hi - lo) * 0.6 * d / Math.max(1, t));
+              else if (ph === 'pack') this.pct(lo + (hi - lo) * 0.85);
+            },
+          });
+          files.push({ blob: out.blob, name: job.file });
+        }
+        this.out = { kind, files };
       }
 
       const bytes = this.out.files.reduce((t, f) => t + f.blob.size, 0);
-      this.setState({ gen: { pct: 100, failed: false }, ready: true, outSize: bytes });
+      const mb = b => (b / 1048576).toFixed(2) + ' MB';
+      const sizeOf = suffix => {
+        const f = this.out.files.find(x => x.name.endsWith(suffix));
+        return f ? mb(f.blob.size) : null;
+      };
+      const soulMB = sizeOf('-Soul.resonitepackage');
+      const mainMB = kind === 'soul' ? null : sizeOf('.resonitepackage');
+      this.setState({
+        gen: { pct: 100, failed: false }, ready: true, outSize: bytes,
+        sizeMain: mainMB || st.sizeMain, sizeSoul: soulMB || st.sizeSoul,
+      });
       this.saveOut();                              // first bake downloads straight away
     } catch (e) {
       this.setState({ gen: { pct: this.state.gen ? this.state.gen.pct : 40, failed: true }, genError: String((e && e.message) || e) });
@@ -1426,18 +1477,18 @@ class Component extends DCLogic {
 
       hasSoul: hasSoul && !s.fromPulls,
       mainFileName: slug + '.resonitepackage',
-      mainSize: '18.4 MB',
+      mainSize: s.sizeMain || '18.4 MB',
       soulFileName: slug + '-Soul.resonitepackage',
-      soulSize: '4.2 MB',
+      soulSize: s.sizeSoul || '4.2 MB',
       soulThumb: this.img(s.soulCode),
       mainBtnLabel: s.ready && s.genKind === 'package' ? 'Download \u2193' : s.gen && !s.gen.failed && s.genKind === 'package' ? 'Building\u2026' : 'Generate',
       mainBtnStyle: btn('#a9abee', '#1a2038', 'transparent') + '',
       generateMain: () => this.startGen('package'),
-      soulBtnLabel: s.ready && s.genKind === 'soul' ? 'Download \u2193' : 'Generate',
+      soulBtnLabel: s.ready && s.genKind === 'soul' ? 'Download \u2193' : s.gen && !s.gen.failed && s.genKind === 'soul' ? 'Building\u2026' : 'Generate',
       soulBtnStyle: btn('rgba(194,163,226,.18)', '#e2d4f5', 'rgba(194,163,226,.5)'),
       generateSoul: () => this.startGen('soul'),
       generateBoth: () => this.startGen('both'),
-      bothBtnLabel: s.ready && s.genKind === 'both' ? 'Download both \u2193' : 'Generate and download both',
+      bothBtnLabel: s.ready && s.genKind === 'both' ? 'Download both \u2193' : s.gen && !s.gen.failed && s.genKind === 'both' ? 'Building\u2026' : 'Generate and download both',
       bothBtnStyle: 'width:100%;margin-top:11px;padding:15px;border-radius:16px;border:0;cursor:pointer;transition:all .15s;white-space:nowrap;' + (s.ready && s.genKind === 'both'
         ? "background:#a9dcc2;color:#08251a;font:600 14.5px/1 'Figtree',sans-serif"
         : "background:#a9abee;color:#1a2038;font:600 14.5px/1 'Figtree',sans-serif"),
@@ -1486,7 +1537,7 @@ class Component extends DCLogic {
       barIconBg: failed ? 'rgba(216,162,171,.14)' : s.ready ? 'rgba(164,212,186,.14)' : 'rgba(160,162,220,.14)',
       barIcon: failed ? '429' : s.ready ? '\u2713' : Math.min(99, Math.round(pct)) + '',
       barTitle: failed ? (s.genError || 'Palify is rate-limiting us') : s.ready ? (s.genKind === 'sheet' ? 'Card sheet ready' : s.genKind === 'back' ? 'Card back ready' : s.genKind === 'soul' ? 'Soul deck ready' : s.genKind === 'both' ? 'Both decks ready' : 'Deck ready') : ['Reading the deck', 'Fetching card images', 'Composing the sheet', 'Packing the deck'][phase],
-      barDetail: failed ? 'The export could not be built'  : s.ready ? (s.genKind === 'soul' ? slug + '-Soul.resonitepackage \u00b7 4.2 MB' : s.genKind === 'sheet' ? 'front.webp \u00b7 8192\u00b2' : s.genKind === 'back' ? 'back.webp \u00b7 1024\u00d71463' : s.genKind === 'both' ? 'main + soul \u00b7 22.6 MB' : slug + '.resonitepackage \u00b7 ' + (s.outSize ? (s.outSize / 1048576).toFixed(2) + ' MB' : '')) : phase === 1 ? imgDone + ' of ' + imgTotal + ' card images' : phase === 2 ? '8192 \u00d7 8192 \u00b7 10 \u00d7 7 grid' : phase === 3 ? 'patching template, trimming to ' + total + ' cards' : 'palify.org',
+      barDetail: failed ? 'The export could not be built'  : s.ready ? (s.genKind === 'soul' ? slug + '-Soul.resonitepackage' + (s.sizeSoul ? ' \u00b7 ' + s.sizeSoul : '') : s.genKind === 'sheet' ? 'front.webp \u00b7 8192\u00b2' : s.genKind === 'back' ? 'back.webp \u00b7 1024\u00d71463' : s.genKind === 'both' ? 'main + soul \u00b7 ' + (s.outSize ? (s.outSize / 1048576).toFixed(2) + ' MB' : '') : slug + '.resonitepackage \u00b7 ' + (s.outSize ? (s.outSize / 1048576).toFixed(2) + ' MB' : '')) : phase === 1 ? imgDone + ' of ' + imgTotal + ' card images' : phase === 2 ? '8192 \u00d7 8192 \u00b7 10 \u00d7 7 grid' : phase === 3 ? 'patching template, trimming to ' + total + ' cards' : 'palify.org',
       barNote: failed ? 'We back off rather than hammer their servers. Wait a minute and retry \u2014 or skip the network entirely and drop your Palify export file in.' : s.ready ? 'Drag the file into Resonite. Both credits travel inside the deck object.' : cached ? 'Deliberately slow \u2014 we fetch a few at a time to be kind to Palify. ' + cached + ' already cached from today, so those are free.' : 'Deliberately slow \u2014 we fetch a few images at a time to be kind to Palify\u2019s servers.',
       barActions: failed
         ? [
@@ -1513,7 +1564,7 @@ class Component extends DCLogic {
       pips: Array.from({ length: s.pack.length || 7 }).map((x, i) => ({
         style: 'width:' + (i === s.revealIdx ? '22px' : '7px') + ';height:7px;border-radius:99px;transition:all .2s;background:' + (i < s.revealIdx ? '#a4d4ba' : i === s.revealIdx ? '#a9abee' : 'rgba(150,170,230,.22)')
       })),
-      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
+      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
     };
     const cur = s.pack[s.revealIdx];
     if (cur) {
