@@ -6,6 +6,8 @@ game.
 
 Site: **resopal.dalek.coffee**
 
+**Version 1.0** — the site imports a deck and produces a working `.resonitepackage`, end to end.
+
 ## Status
 
 The **generator works end to end.** It produces a verified, importable deck from a real Palify
@@ -16,10 +18,13 @@ back, credits, and any card count.
 deck and card back, press Generate, and the browser downloads a `.resonitepackage` that is
 structurally identical to the hand-built v7 package. No server involved.
 
-The limit is card art, not code. The bake has to *read* image pixels, and a cross-origin image
-taints the canvas — so out of the box only cards whose art is committed under `data/art/` can be
-baked (currently the TD02 trial deck). Deploy `worker/` and set `ART_PROXY` in `index.html` and
-every deck bakes. `docs/WORKER.md` explains why it is needed; `worker/README.md` is the setup.
+Card art reaches the bake through a Cloudflare Worker (`worker/`), because the bake has to *read*
+image pixels and a cross-origin image taints the canvas. `docs/WORKER.md` explains why it is
+needed; `worker/README.md` is the setup. `data/art/` holds the TD02 trial deck as a same-origin
+fallback, so that deck still builds if the Worker is unreachable.
+
+Not built yet: pasting a Palify deck or profile URL. The Worker's `/deck` and `/profile` routes
+return the raw RSC payload; the parser has to be written against a real response.
 
 ## How it works
 
@@ -42,7 +47,7 @@ data/
   art/            card art the bake can read same-origin
   *.csv           the two trial decks; pack-weights.json
 web/            the browser build of the generator - bakes the package client-side
-tools/          the same pipeline as a command line tool (see below)
+tools/          the same pipeline as a command line tool, plus check-codes.html
 worker/         the Cloudflare Worker that makes Palify art readable - README has the setup
 docs/
   PIPELINE.md      how a deck is built; package format; the fixes and why
