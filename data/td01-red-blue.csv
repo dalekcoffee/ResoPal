@@ -1,30 +1,42 @@
 # ResoPal starter deck - Trial Deck TD01 "Dawn of Palpagos Red / Blue"
-# INCOMPLETE. This list was a placeholder even 2x split; TD01-025 was in it and does
-# not exist on Palify, so it has been removed. The remaining 24 cards are 2x each = 48,
-# and the real deck is almost certainly 50 with two cards at 3x - as the TD02 export is.
-# Replace this file with a real Palify export of the deck to fix it.
+#
+# The 24 card codes and names are confirmed against Palify's catalogue: the set
+# contains TD01-001 to TD01-024 and nothing else. An earlier version of this file
+# listed a TD01-025, which does not exist.
+#
+# QUANTITIES ARE NOT CONFIRMED. Every card is listed at 2x here, giving 48 cards;
+# the real deck is 50. The official breakdown is 34 Pals / 8 Structures / 4 Gear /
+# 4 Events, and this set has 16 unique Pals, 4 Structures, 2 Gear and 2 Events - so
+# Structures, Gear and Events are exactly 2x each, and the two missing cards are
+# extra copies of Pals. Which Pals is the open question, and sources disagree
+# (one lists the Blazamut finisher at 1x, which would change the whole spread).
+#
+# To fix: export this deck from Palify and replace the lines below. Guessing is how
+# the phantom TD01-025 got here in the first place.
+#
+# Palify-compatible import format: quantity,code,name
 quantity,code,name
-2,TD01-001,
-2,TD01-002,
-2,TD01-003,
-2,TD01-004,
-2,TD01-005,
-2,TD01-006,
-2,TD01-007,
-2,TD01-008,
-2,TD01-009,
-2,TD01-010,
-2,TD01-011,
-2,TD01-012,
-2,TD01-013,
-2,TD01-014,
-2,TD01-015,
-2,TD01-016,
-2,TD01-017,
-2,TD01-018,
-2,TD01-019,
-2,TD01-020,
-2,TD01-021,
-2,TD01-022,
-2,TD01-023,
-2,TD01-024,
+2,TD01-001,Grizzbolt – Rumbling Tank
+2,TD01-002,Jolthog – Shocking Yet Innocent
+2,TD01-003,Kelpsea Ignis – Balmy Magma
+2,TD01-004,Foxparks – A Toasty Hug
+2,TD01-005,Arsox – Burning Spoils
+2,TD01-006,Mossanda Lux – Vanguard Captain
+2,TD01-007,Blazamut – Molten Sovereign
+2,TD01-008,Stone Pit
+2,TD01-009,Weapon Workbench
+2,TD01-010,Single-Shot Rifle
+2,TD01-011,Ignis Breath
+2,TD01-012,Elphidran Aqua – Gentle Ripples
+2,TD01-013,Jolthog Cryst – Stoic Yet Innocent
+2,TD01-014,Pengullet – Frequent Flyer
+2,TD01-015,Hangyu Cryst – Frigid Wanderer
+2,TD01-016,Reindrix – Icy Gaze
+2,TD01-017,Suzaku Aqua – Way of the Current
+2,TD01-018,Mammorest Cryst – Roar of the Tundra
+2,TD01-019,Antique Wooden Chair
+2,TD01-020,Primitive Workbench
+2,TD01-021,Single-Shot Sphere Launcher
+2,TD01-022,Crystal Breath
+2,TD01-023,Lamball – My First Pal
+2,TD01-024,Ribbuny – Little Princess

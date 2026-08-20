@@ -1,6 +1,11 @@
 # ResoPal starter deck - Trial Deck TD02 "Dawn of Palpagos Green / Purple"
-# Transcribed from a real Palify export of this deck: 24 unique cards, 50 total.
-# Palify-compatible import format: quantity,code,name. The code column is authoritative.
+#
+# Codes and names confirmed against Palify's catalogue; the set is TD02-001 to
+# TD02-024. Quantities are from a real Palify export of this deck: 24 unique,
+# 50 cards, with TD02-005 and TD02-013 at 3x. Both are Pals, which matches the
+# 34 Pals / 6 Structures / 4 Gear / 6 Events breakdown.
+#
+# Palify-compatible import format: quantity,code,name
 quantity,code,name
 2,TD02-001,Mossanda – Guard Captain
 2,TD02-002,Gumoss – Dreamy Seedling
