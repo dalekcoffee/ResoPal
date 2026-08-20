@@ -197,9 +197,8 @@ difference 1.31/255. Compare structure, never bytes.
 
 ### Rotation direction is inverted between PIL and canvas
 
-PIL's `Image.ROTATE_270` and a canvas `rotate(270°)` are **not** the same direction. `compose.py`
-uses `ROTATE_270` and `compose.js` uses `ROT = 270`; they only agree because the canvas convention
-is the opposite way round. Getting this wrong is silent — the cards still tile correctly, they are
+PIL's `Image.ROTATE_270` and a canvas `rotate(90°)` are **not** the same direction. `compose.py`
+uses `ROTATE_270` and `compose.js` uses `ROT = 90`; they agree, and the constants don't. Getting this wrong is silent — the cards still tile correctly, they are
 just upside down, which is exactly the bug the first port shipped.
 
 Verify by rendering a landscape card (any Structure, e.g. `TD02-008`) and diffing it against a

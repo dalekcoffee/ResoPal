@@ -45,23 +45,38 @@ assets/         DefaultBack.png (default card back), pack-bp01.png (booster art)
 data/
   template.resonitepackage  the stripped Deck Maker template the site patches
   art/            card art the bake can read same-origin
+  pool-bp01.json  the BP01 catalogue snapshot the pack roll draws from
   *.csv           the two trial decks; pack-weights.json
 web/            the browser build of the generator - bakes the package client-side
 tools/          the same pipeline as a command line tool, plus check-codes.html
-worker/         the Cloudflare Worker that makes Palify art readable - README has the setup
+booster/        the in-world booster spawner - builds a .resonitepackage that pulls at runtime
+worker/         the Cloudflare Worker: Palify art, and the pack roll - README has the setup
 docs/
   PIPELINE.md      how a deck is built; package format; the fixes and why
   PALIFY-API.md    what Palify actually offers, CORS, catalogue shape, soul cards
   WORKER.md        the Cloudflare Worker the front end needs, and why
   DESIGN-SPEC.md   the front end: screens, tokens, state, interactions
   DESIGN-PROMPT.md brief the design was built from
-  PULL-API.md      draft /api/pull contract for the in-game pack ripper
-  BOOSTER.md       in-world booster packs: feasibility and build order
+  PULL-API.md      the /api/pull contract for the in-game pack ripper
+  BOOSTER.md       in-world booster packs: feasibility, build order, stack order
   SITE-REVIEW.md   defects found in the front end, and how they were fixed
 ```
 
-The front end still runs on demo data: a 16-card array, simulated generation, client-side pack
-rolls. Replacing those is the current work.
+The front end no longer rolls its own packs: `/api/pull` in the Worker does, against the committed
+BP01 catalogue, and the site keeps a local roll only for when the Worker is unreachable. Generation
+is still simulated in the demo deck path.
+
+## Booster packs
+
+Two ways to hold a pack, both rolled by the same endpoint:
+
+- **In-world** — drag in `booster/out/ResoPal_Booster_BP01.resonitepackage`. It asks for host
+  access, pulls seven cards, and points seven textures at the image proxy. No download, no bake.
+- **On the site** — rip a pack, export it as a real deck object with Ukilop's beveled geometry.
+
+`?seed=` reproduces one from the other. Cards come back rarest-first, which is stack order: flip
+the pile over and you swipe through commons to reach the hit. `booster/README.md` covers what is
+mechanically verified and what only a VR drag-test can settle.
 
 ## Running the generator
 

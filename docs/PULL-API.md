@@ -1,7 +1,8 @@
-# ResoPal pull API — draft, not live
+# ResoPal pull API
 
-For the in-game random-pack tool. Nothing here is deployed yet; this file pins the
-contract so the Resonite side can be written against it.
+For the in-game random-pack tool and the website's ripper. **Implemented** in
+`worker/src/index.js` + `worker/src/roll.js`; `worker/test/routing.mjs` asserts the
+contract below. Deploy the Worker to make it live.
 
 ## GET /api/pull
 
@@ -36,14 +37,42 @@ One card per line, `code,rarity` — trivial to split in Resonite with no JSON p
 Then hand the same codes to the existing importer to bake a deck of exactly what
 was pulled.
 
+With `packs=N` you get `N x packSize` lines in pack order, each pack internally
+sorted. `text/plain; charset=utf-8`, trailing newline.
+
+### Ordering
+
+Within a pack, cards are **rarest first** — that is stack order for the deck bake.
+See `BOOSTER.md` "Stack order" for why, and for the one thing about it only a VR
+check can settle.
+
 ## Weights
 
 Server rolls against `data/pack-weights.json` — the same file the web ripper reads,
 so in-game and on-site odds can never drift. `perPackBonus` and `globalBonus` in
 that file raise rates for events; no code change needed.
 
+## Caching
+
+A pinned `seed` makes the response a pure function of its inputs, so it is served
+`immutable`. An unpinned pull is `no-store` — cache it and two players would share
+a "random" pack.
+
+## Errors
+
+    400   bad packs / format / seed
+    404   no pool for that set
+    429   throttled (with retry-after)
+    500   the weights ask for a rarity the pool cannot supply
+
+A rarity the weights want but the pool lacks is dropped from the hit table and
+named in `unavailable` on the JSON response, never silently swapped for another
+rarity — quietly changing the odds is worse than visibly refusing to.
+
 ## Notes / open
 
-- Rate limit per IP, since this is cheap to spam.
-- `seed` is not implemented yet; the ripper currently uses `Math.random()`.
+- **Rate limiting is per-isolate**, so it slows one client's loop and nothing more.
+  See `BOOSTER.md` "Open questions".
+- `seed` is implemented (xmur3 + mulberry32). Same seed, same pull, forever — which
+  is also how a pack opened in-world is reproduced as a baked deck on the site.
 - No auth planned. If abuse shows up, a short-lived token issued by the site.

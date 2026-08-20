@@ -1,0 +1,15 @@
+{
+  "name": "resopal-booster",
+  "private": true,
+  "type": "module",
+  "description": "In-world booster pack spawner: builds a .resonitepackage that pulls seven cards from /api/pull at runtime.",
+  "scripts": {
+    "build": "node build-spawner.mjs",
+    "test": "node test-parse.mjs"
+  },
+  "dependencies": {
+    "bson": "^7.2.0",
+    "brotli-wasm": "^3.0.1",
+    "jszip": "^3.10.1"
+  }
+}

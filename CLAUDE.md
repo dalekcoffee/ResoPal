@@ -39,8 +39,19 @@ and broke every button on the deck.
 expected is a silent no-op. `AlphaCutoff` was never applied twice for this reason.
 
 **Never invent card data.** Two phantom cards (`TD01-025`, `TD02-025`) reached production from
-placeholder decklists. Verify against `palify.org/api/cards?set=<SET>`, or run
-`tools/check-codes.html`.
+placeholder decklists, and a later hand-written demo array shipped three wrong names and two Pals
+labelled as Structures. Verify against `palify.org/api/cards?set=<SET>`, or run
+`tools/check-codes.html`. `data/pool-*.json` is the committed snapshot everything else reads;
+regenerate it with `tools/fetch-pool.mjs`, never hand-edit a card code into it.
+
+**There is one pack roll, and it is in the Worker.** `worker/src/roll.js`, over
+`data/pack-weights.json` + `data/pool-<set>.json`. The site's local roll is an offline fallback
+over the same two files, not a second implementation. A browser roll is one devtools breakpoint
+from being whatever the player wants, and the in-world spawner cannot roll at all.
+
+**A pull is ordered rarest-first, and that is stack order.** The atlas is laid out in deck-list
+order and the deck's flux drives each card's offset from `IndexOfChild`, so list index is stack
+position. Reveal order on the site is the reverse. See `docs/BOOSTER.md` "Stack order".
 
 ## Generated files that are committed
 
