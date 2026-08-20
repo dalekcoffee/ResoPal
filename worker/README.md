@@ -27,7 +27,57 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 has to be written against a real response — fetch one, look at it, then build from what's actually
 there. Not needed for baking; only for URL paste later.
 
-## Setup
+## Setup A — the Cloudflare dashboard (no CLI)
+
+Everything here happens in the browser. `wrangler.toml` is **not** used on this path; the same
+settings live in the dashboard UI instead.
+
+### 1. Create the Worker
+
+**Workers & Pages → Create → Start with Hello World!**
+
+Not "Continue with GitHub" — that path wants a build configuration and a root directory, which is
+more setup than this needs. You can switch to it later without losing anything.
+
+Name it **`resopal-proxy`** and click **Deploy**. It deploys a placeholder; that's expected.
+
+### 2. Paste the real code
+
+**Edit code** (top right) → select everything in the editor → replace it with the contents of
+[`worker/src/index.js`](src/index.js) → **Deploy**.
+
+On GitHub, the raw view has a copy button:
+`https://github.com/dalekcoffee/ResoPal/blob/main/worker/src/index.js`
+
+The dashboard editor and this file are both ES-module format (`export default { fetch }`), so it
+drops in as-is.
+
+### 3. Test before touching DNS
+
+The Worker's URL is on the overview page, like
+`https://resopal-proxy.<account>.workers.dev`. In a browser:
+
+- `…/health` → `{"ok":true,"service":"resopal-proxy"}`
+- `…/img/TD01-001` → a card image
+
+If `/health` works and `/img` doesn't, the problem is the card code or upstream — not your setup.
+**Don't move on until both work**, or you'll be debugging DNS and the Worker at the same time.
+
+### 4. Custom domain
+
+**Settings → Domains & Routes → Add → Custom Domain**, enter `resopalworker.dalek.coffee`, save.
+
+Requires `dalek.coffee` to be a zone in the same Cloudflare account. **Cloudflare creates the DNS
+record itself — do not add a CNAME by hand**, it shadows the route and the Worker silently stops
+answering.
+
+### 5. Point the site at it
+
+In `index.html`, set `ART_PROXY` to the Worker's URL, commit, push. Covered again below.
+
+---
+
+## Setup B — the CLI
 
 **Prerequisites:** Node 18+ and a Cloudflare account (free tier is fine).
 
@@ -92,6 +142,12 @@ const ART_PROXY = 'https://resopalworker.dalek.coffee';
 ```
 
 Commit and push. Every deck now bakes, not just ones with art committed under `data/art/`.
+
+## Editing the Worker later
+
+Dashboard: **Workers & Pages → resopal-proxy → Edit code**. Changes there are not reflected back
+into this repo, so if you edit in the browser, paste the result into `worker/src/index.js` and
+commit it — otherwise the repo copy silently becomes wrong.
 
 ## Changing the allowed origins
 
