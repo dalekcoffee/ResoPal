@@ -228,7 +228,7 @@
                   <sc-for list="{{ d.faces }}" as="f" hint-placeholder-count="4">
                     <div style="width:40px;height:56px;border-radius:6px;margin-left:-10px;border:1px solid rgba(255,255,255,.12);overflow:hidden;position:relative;background:linear-gradient(150deg,#2b1830,#141a3a)">
                       <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, rgba(180,182,230,.2) 0 6px, rgba(180,182,230,0) 6px 12px)"></div>
-                      <img src="{{ f.src }}" alt="" data-code="{{ f.code }}" onLoad="{{ gauge }}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+                      <img src="{{ f.src }}" alt="" data-code="{{ f.code }}" onLoad="{{ gauge }}" style="{{ f.style }}">
                     </div>
                   </sc-for>
                 </div>
@@ -978,6 +978,22 @@ class Component extends DCLogic {
   };
   isWide(code) { return !!(this.wide && this.wide[code]); }
 
+  // Landscape art is turned clockwise into its portrait box - the same turn the atlas
+  // bake makes (ROT = 90 in web/compose.js), so a card looks on the site the way it
+  // will look in the deck. The turn has to happen on a landscape-shaped element:
+  // object-fit runs at layout, before the transform, so an <img> stretched over the
+  // portrait box has already been cropped to a half-width centre strip by the time
+  // rotate() spins it - which is what `rotate(90deg) scale(1.4)` used to show, a
+  // zoomed sliver rather than a card. Lay the image out at the box's own dimensions
+  // swapped instead (every card box here is 1:1.4) and rotate about the centre.
+  // 141/72 rather than 140/71.4 is overscan: the boxes are not all exactly 1:1.4, and
+  // a percent of slack is cheaper than a transparent hairline down one edge.
+  face(code) {
+    return this.isWide(code)
+      ? 'position:absolute;left:50%;top:50%;width:141%;height:72%;object-fit:cover;transform:translate(-50%,-50%) rotate(90deg)'
+      : 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+  }
+
   w() { return this.weights || WEIGHTS; }
 
   // Hand out a server-rolled pack if one is queued, else roll here. Either way the
@@ -1104,7 +1120,7 @@ class Component extends DCLogic {
         rowStyle: 'display:flex;gap:15px;padding:12px;border-radius:16px;transition:all .15s;border:1px ' + (dis ? 'dashed rgba(150,170,230,.16)' : 'solid rgba(150,170,230,.11)') + ';background:' + (dis ? 'rgba(255,255,255,.008)' : 'rgba(255,255,255,.022)') + (dis ? ';opacity:.45' : ''),
         thumbWrap: 'position:relative;width:82px;height:115px;flex:none;border-radius:9px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,rgba(30,26,52,.9),#141a3a)',
         thumbStripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + r.hue + '33 0 7px, transparent 7px 14px)',
-        imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (wide ? ';transform:rotate(90deg) scale(1.4)' : ''),
+        imgStyle: this.face(sel),
         dot: 'width:7px;height:7px;border-radius:50%;background:' + r.hue,
         showKeep: s.fromPulls,
         keepLabel: dis ? 'Discarded' : 'Keep',
@@ -1389,7 +1405,7 @@ class Component extends DCLogic {
               + ');box-shadow:' + sh + ';transition:' + tr + ';z-index:' + (3 - i) + ';opacity:' + op + ';transform:' + tf;
           })(),
           stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + ((back ? '#9aa6c8' : p.hue || '#9aa6c8') + (back ? '1a' : '33')) + ' 0 7px, transparent 7px 14px)',
-          imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (!back && p.code && this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+          imgStyle: this.face(back ? '' : p.code),
           shade: 'position:absolute;inset:0;pointer-events:none;background:' + (back ? 'rgba(4,7,18,.55)' : 'linear-gradient(rgba(4,7,18,0) 55%, rgba(4,7,18,.5))')
         };
       }),
@@ -1494,7 +1510,7 @@ class Component extends DCLogic {
         { name: 'Kindling Rush', count: 50, meta: 'f2dd143c \u00b7 updated 2 days ago', faces: ['BP01-001', 'BP01-002', 'BP01-006', 'BP01-011'] },
         { name: 'Terra Wall (TD02 base)', count: 50, meta: '9a71ce02 \u00b7 updated last week', faces: ['TD02-005', 'BP01-081', 'BP01-004', 'BP01-007'] },
         { name: 'Sparkit Tempo \u2014 draft', count: 44, meta: '4bb0f19d \u00b7 updated 3 weeks ago', faces: ['BP01-008', 'BP01-009', 'BP01-010', 'BP01-012'] }
-      ].map(d => ({ ...d, faces: d.faces.map(c => ({ src: this.img(c), code: c })), pick: this.openDeck })),
+      ].map(d => ({ ...d, faces: d.faces.map(c => ({ src: this.img(c), code: c, style: this.face(c) })), pick: this.openDeck })),
 
       showReview: s.stage === 'deck',
       reviewStepNo: '02',
@@ -1669,7 +1685,7 @@ class Component extends DCLogic {
         revealFace: this.img(cur.code, 'w512'),
         revealStripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + cur.hue + '38 0 9px, transparent 9px 18px)',
         revealCode: cur.code,
-        revealFaceStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(cur.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+        revealFaceStyle: this.face(cur.code),
         revealCardStyle: (() => {
           const out = s.cardOut, dx = out ? out * 520 : s.cardDX, rot = out ? out * 26 : s.cardDX / 20;
           return 'position:relative;width:288px;height:402px;cursor:grab;touch-action:none;user-select:none;border-radius:16px;z-index:2'
@@ -1688,7 +1704,7 @@ class Component extends DCLogic {
           code: p.code, img: this.img(p.code, i === 0 ? 'w512' : 'w256'),
           style: 'position:absolute;width:288px;height:402px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,#1d2340,#141a3a);z-index:' + (1 - i) + ';pointer-events:none;transform:translate(' + (i + 1) * 6 + 'px,' + (i + 1) * 8 + 'px) scale(' + (1 - (i + 1) * 0.018).toFixed(3) + ');box-shadow:0 14px 30px rgba(4,7,18,.5)',
           stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 9px, transparent 9px 18px)',
-          imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+          imgStyle: this.face(p.code),
           shade: 'position:absolute;inset:0;background:rgba(4,7,18,' + (0.3 + i * 0.22).toFixed(2) + ')'
         })),
         haloStyle: (() => {
@@ -1718,7 +1734,7 @@ class Component extends DCLogic {
       outer: 'position:relative;width:112px;height:157px',
       wrap: 'position:absolute;inset:0;border-radius:11px;overflow:hidden;border:1px solid ' + ((this.w().glow.indexOf(p.rarity) >= 0) ? (RARITY_HUE[p.rarity] || '#9aa6c8') : 'rgba(255,255,255,.12)') + ';background:linear-gradient(150deg,#2a2340,#141a3a);box-shadow:' + (s.celebrate && s.celId && p.id === s.celId ? '0 0 0 2px ' + (RARITY_HUE[p.rarity] || '#9aa6c8') + ',0 12px 30px rgba(4,7,18,.6)' : 'none'),
       stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 8px, transparent 8px 16px)',
-      imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+      imgStyle: this.face(p.code),
       badge: 'position:absolute;top:4px;right:4px;padding:3px 7px;border-radius:6px;background:rgba(7,11,23,.88);font:700 9px/1.3 \'JetBrains Mono\',monospace;color:' + (RARITY_HUE[p.rarity] || '#9aa6c8')
     }));
     const bg = {};
@@ -1730,7 +1746,7 @@ class Component extends DCLogic {
         wrap: 'position:relative;width:60px;height:84px;border-radius:7px;overflow:hidden;border:1px solid ' + ((this.w().glow.indexOf(p.rarity) >= 0) ? (RARITY_HUE[p.rarity] || '#9aa6c8') : 'rgba(255,255,255,.1)') + ';background:linear-gradient(150deg,#2a2340,#141a3a)',
         stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 6px, transparent 6px 12px)',
         code: p.code,
-        imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : '')
+        imgStyle: this.face(p.code)
       };
     });
     const tally = {};
