@@ -62,6 +62,69 @@ Deck contents come from the committed CSVs via `data/decks.json`
 (`tools/build-decks.mjs`); rarities are looked up in the pool snapshots, so nothing
 here invents card data.
 
+## `GET | POST /api/resolve` — "here is what I pasted"
+
+    GET  /api/resolve?deck=<uuid>&format=fixed
+    GET  /api/resolve?url=https%3A%2F%2Fpalify.org%2Fdecks%2F<uuid>
+    POST /api/resolve?format=fixed          body: the pasted text, text/plain
+
+One route for three inputs, because the caller should not have to say which it
+has: a **palify.org deck link**, a **bare deck id**, or a **pasted decklist**.
+`worker/src/resolve.js` sniffs it. Output is the same records `/api/pull` and
+`/api/deck` already serve, so a booster, a committed deck and someone's own brew
+all arrive in-world looking identical and the ProtoFlux side keeps one parser.
+
+POST exists for exactly one reason: ProtoFlux has `POST_String` and no way to put
+a 2 KB decklist in a query string. Nothing else on this Worker accepts POST.
+
+### The decklist grammar
+
+Palify's own copy-as-text export is what this was written against:
+
+    # Green/Purple Trial (50 cards)
+    2x Mossanda – Guard Captain [TD02-001]
+    3x Eikthyrdeer Terra – Guardian of Nature [TD02-005]
+
+but these all work, because people paste from everywhere:
+
+    2 Mossanda [TD02-001]      TD02-001 x2      TD02-001,2
+    2x TD02-001                TD02-001         - 4x td02-006
+
+**A line counts only if it carries a card code.** A line without one is skipped
+and reported under `unrecognised`; a comment line with no code becomes the deck
+name. Matching names to cards would mean inventing card data on a typo, and two
+phantom cards have already reached production here that way.
+
+Every code is then checked against **Palify's own catalogue** (`/api/cards?set=`,
+fetched per set and edge-cached for a day). Codes it does not know come back
+under `unknown` and are not served. That is the "never invent card data"
+invariant, enforced at request time rather than by hand.
+
+### Response
+
+`format=json` adds the provenance, so a caller can see what was thrown away:
+
+    { source: {kind:"palify", id, url} | {kind:"list"},
+      name, total, cards: [{code, base, rarity, name}],
+      unknown?: ["ZZ99-001"], unrecognised?: ["Some line with no code"],
+      truncated?: 200 }
+
+`flat` and `fixed` are byte-identical in shape to `/api/pull`'s, plus an
+`x-card-count` header.
+
+### Errors
+
+    400   nothing to resolve, or a bad format
+    404   palify does not have that deck
+    422   no code in the paste, or none of the codes exist
+    429   throttled
+    502   palify answered with a deck page this parser could not read
+
+That 502 is deliberate and specific. The deck page is a Next.js route with no
+public API, so the only machine-readable form is the RSC flight payload, which is
+undocumented and will change without warning. When it does, the failure is loud
+and names the parser — rather than a deck that quietly comes back empty.
+
 ## Weights
 
 Server rolls against `data/pack-weights.json` — the same file the web ripper reads,

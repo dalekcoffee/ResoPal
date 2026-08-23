@@ -1,211 +1,218 @@
 # Reading the graph
 
-The object carries **two Moduprint canvases**, not one. That split is the whole
-answer to "there is too much happening to investigate":
-
-| Slot | Nodes | What it is |
-|---|---|---|
-| `Flux - control` | ~64 | Everything a human needs. Unpack this one. |
-| `Flux - card decoders` | ~514 | Seventy copies of the same five-node slice. Generated. Don't read it. |
-
-**If you are debugging, unpack `Flux - control` and ignore the other canvas entirely.**
-Nothing in the decoder canvas is card-specific except one integer per card.
+**One canvas, about 112 nodes, four zones.** Unpack `Flux - control` and you have the
+whole thing. There is no second canvas any more: the 514-node decoder canvas is gone,
+because cards are no longer pre-baked. See "How the cards work" below.
 
 ## Before you unpack anything
 
-The panel tells you where it broke without opening the flux at all. **Three** driven
-lines under the title:
+The panel tells you where it broke without opening the flux at all. Three driven lines
+under the title:
 
-- **The URL line** (small, dim) shows the request the panel will make. It is driven
-  from the same relay that feeds the request, so pressing a button **must** change
-  it. If it changes → the button, the impulse, the variable write and the driver all
-  work, and any failure is downstream in the network. If it does not change → the
-  problem is in zone 1 or 2 of the control canvas.
-- **The status line** (larger, cyan) shows the first card of the response — or, when
-  the request fails, the error text, because `GET_String` writes the exception
-  message into the same `Content` field the status reads.
-
-- **The event line** (smallest, dim) starts at `idle - no request yet` and names the
-  branch the graph actually took. It is written from the graph's own terminal
-  impulses, so it does not depend on the response having a body — it answers the
-  one question the other two cannot: *what happened?*
+- **The URL line** (small, dim) shows the request the panel will make. It is driven from
+  the same relay that feeds the request, so pressing one of the five preset buttons
+  **must** change it. If it changes → the button, the impulse, the variable write and the
+  driver all work. If it does not → the problem is in zone 1.
+- **The status line** (larger, cyan) shows the first card of the response — or, when the
+  request fails at the transport level, the error text, because `GET_String` writes the
+  exception message into the same `Content` the status reads.
+- **The event line** (smallest, dim) names the branch the graph actually took:
 
   | It says | Written by |
   |---|---|
   | `idle - no request yet` | nothing yet — the default on the variable |
-  | `could not set ResoPal/url` | the URL write's `OnNotFound` / `OnFailed` |
-  | `host access refused` | the prompt's `OnDenied` / `OnIgnored`, or the request's `OnDenied` |
-  | `network error - no answer from the host` | the request's `OnError` |
-  | `response received - HTTP 200` | the request's `OnResponse`, with its real status code |
+  | `could not set ResoPal/url` | the URL write's `OnNotFound` / `OnFailed` (zone 1) |
+  | `host access refused` | either request's `OnDenied` (zone 2) |
+  | `network error - no answer from the host` | either request's `OnError` (zone 2) |
+  | `response received - HTTP 200` | either request's `OnResponse`, with the real code (zone 2) |
+  | `all cards placed` | the loop running out of records (zone 3) |
 
-  The HTTP code is there because `GET_String` writes an exception message into
-  `Content` **only on a transport failure**. A 404 is a perfectly successful
-  request whose body is not cards, so without the code the status line quietly
-  shows the first 64 characters of an error page and the panel looks like it half
-  worked.
+  The HTTP code is there because `GET_String` writes an exception into `Content` **only
+  on a transport failure**. A 404 is a perfectly successful request whose body is not
+  cards, so without the code the status line quietly shows the first 64 characters of an
+  error page and the panel looks like it half worked.
+
+  `all cards placed` matters for the opposite reason: cards appear one frame at a time,
+  so "it finished" and "it never started" look identical without it.
 
 Read them together:
 
 | URL line | Event line | Status line | Means |
 |---|---|---|---|
 | unchanged | idle | unchanged | the button never reached the graph |
-| changed | `could not set ResoPal/url` | unchanged | the variable space is wrong — see zone 1 |
+| changed | `could not set ResoPal/url` | unchanged | the variable space is wrong — zone 1 |
 | changed | idle | unchanged | the request never ran — the async wrapper |
-| changed | `host access refused` | unchanged | the prompt was denied or dismissed |
+| changed | `host access refused` | unchanged | the prompt was denied |
 | changed | `HTTP 404` / `HTTP 502` | an error page | the endpoint is not deployed, or is broken |
 | changed | `network error` | the exception text | the host did not answer at all |
-| changed | `HTTP 200` | a card URL | working |
+| changed | `HTTP 200` then `all cards placed` | a card URL | working |
+| changed | `HTTP 200`, no `all cards placed` | a card URL | the response came back but the loop never ran |
 
-## `Flux - control`, zone by zone
+## Zone by zone
 
-The three comment zones run left to right in the order things happen.
-
-### 1 · a button picks the URL
+### 1 · a button picks what to ask for
 
 ```
 ButtonDynamicImpulseTrigger  ──"ResoPal/pack/3"──▶  DynamicImpulseReceiver
                                                             │ OnTriggered
                             ValueObjectInput ──Value──▶ WriteDynamicObjectVariable<string>
-                          ("…packs=3&format=fixed")          │ OnSuccess
-                                                             ▼
-                                              ContinuationRelay "any button -> fetch"
+                          ("…packs=3&format=fixed")     │ OnSuccess      │ OnNotFound/OnFailed
+                                                        ▼                ▼
+                                        ContinuationRelay          "could not set ResoPal/url"
 ```
 
-Five identical rows, one per button. Each holds its URL as a constant and writes it
-to `ResoPal/url`. All five join **one trunk relay** so the gate downstream takes a
-single incoming wire rather than five.
+Five identical rows, one per preset button, joining **one trunk relay** so the request
+takes a single incoming wire. A sixth receiver, `ResoPal/import`, skips all of this — it
+goes straight to the POST in zone 2, because the paste field is the request body, not a
+URL.
 
 Buttons and graph never reference each other — the tag string is the only coupling.
 
 Two traps live here, both of which have bitten this build:
 
 - The write node is **`WriteDynamicObjectVariable<string>`**, not
-  `WriteDynamicValueVariable<string>`. The latter is declared `where T : unmanaged`
-  and cannot exist for a string. Emitting it is why every button did nothing: the
-  component never resolved and the chain dead-ended at a type that was not there.
-- The trigger's `Target` is the **`Flux - control` slot**, never the object root.
-  The encoder reserves id `00000000-…-000000000000` for the root, which is
-  byte-identical to the null GUID, so a reference to the root deserializes as null.
-  A null `Target` silently broadcasts at the whole world root instead.
+  `WriteDynamicValueVariable<string>`. The latter is declared `where T : unmanaged` and
+  cannot exist for a string. Emitting it is why every button did nothing.
+- The trigger's `Target` is the **`Flux - control` slot**, never the object root. The
+  encoder reserves id `00000000-…-000000000000` for the root, which is byte-identical to
+  the null GUID, so a reference to the root deserializes as null — and a null `Target`
+  silently broadcasts at the whole world root.
 
-`verify-classpaths.mjs` now catches the first, and `test-panel.mjs` catches the second.
-
-### 2 · gate host access, then GET
+### 2 · ask resopal, and say what came back
 
 ```
-ContinuationRelay ─▶ StartAsyncTask ─TaskStart─▶ If(allowed) ─┬─ true ──▶ GET_String
-                                                              └─ false ─▶ RequestHostAccessUrl
-                                                                              │ OnGranted
-                                                                              ▼
-                                                                         GET_String
-
-ValueObjectInput ──driven by DynamicValueVariableDriver("ResoPal/url")
-        └─▶ relay ─┬─▶ StringToAbsoluteURI ─▶ GET_String.URL
-                   └─▶ (the URL readout)
-
-ValueObjectInput("https://…") ─▶ StringToAbsoluteURI ─▶ relay ─┬─▶ IsHostAccessAllowedUrl
-ValueInput<HostAccessScope>(HTTP) ─────────────────────────────┴─▶ RequestHostAccessUrl
+trunk relay ─▶ StartAsyncTask ─TaskStart─▶ GET_String ──▶ Content
+                                                         │ OnResponse / OnError / OnDenied
+"ResoPal/import" ─▶ StartAsyncTask ─▶ POST_String ───────┤
+                       (body: the paste field's Text)    ▼
+                                              three relay stubs, one per outcome,
+                                              each into its own -> ResoPal/event write
 ```
 
-**The `StartAsyncTask` is not optional.** `GET_String` and `RequestHostAccessUrl`
-both derive from `AsyncActionNode`; an ordinary impulse cannot run one. Without it
-the chain reaches the gate and stops, with no error anywhere — the buttons appear to
-do nothing. `verify-classpaths.mjs` walks every impulse edge from the synchronous
-entry points and fails if any async node is reachable without crossing one.
+**There is no host-access gate, on purpose.** `WebRequestBase.RunAsync` calls
+`Engine.Security.RequestAccessPermission(host, port, HostAccessScope.HTTP, "Web Request
+Node")` itself, before it sends — so a pre-gate is only a second way to fail for a prompt
+the user gets anyway, and it cannot be shared between two request nodes without a
+multiplexer. The cost is the prompt saying "Web Request Node" rather than naming ResoPal.
+See `PRIOR-ART.md` §1.
 
-**`Scope` is spelled out on both host-access nodes.** Left unwired it defaults to
-`HostAccessScope.Everything`, which asks "is *every* kind of access allowed for this
-host?" — a stricter question than the prompt grants. The check can then stay false
-forever and re-prompt on every press. We only ever speak HTTP, so both nodes say so.
+**Both request nodes are `AsyncActionNode`, so each is entered through its own
+`StartAsyncTask`.** An ordinary impulse cannot run one: the chain reaches it and stops,
+with no error anywhere. `verify-classpaths.mjs` walks every impulse edge from the
+synchronous entry points and fails if any async node is reachable without crossing one.
 
-**The gate is optional, and that is worth knowing.** `WebRequestBase.RunAsync` calls
-`Engine.Security.RequestAccessPermission(host, port, HostAccessScope.HTTP, "Web
-Request Node")` itself, so a bare `GET_String` prompts on its own — Sharkmare's
-DeckReader has no host-access node anywhere (`PRIOR-ART.md`). We keep ours only for
-the `Reason` string, which names ResoPal instead of "Web Request Node". Because the
-scope matches, the grant it records satisfies the request node's own check and no
-second prompt appears.
+Three things inside that same method return `null` — a null URI, a non-`http` scheme, and
+a permission that resolves to neither Allowed nor Denied. `return null` runs no
+continuation at all. That is what the event line is for.
 
-Three things in that same method return `null` — a null URI, a non-http scheme, and
-a permission that is neither Allowed nor Denied. `return null` runs no continuation
-at all: no error, no branch, nothing. That is why the event line exists.
+The chosen URL reaches the graph through a **driver on a plain input's `Value` field**, so
+there is no Read node — the variable drives the constant. Its default is the 1-booster
+URL, so the request is well-formed even before any press.
 
-The chosen URL reaches the graph through a **driver on a plain input's `Value`
-field**, so there is no Read node — the variable drives the constant. The default
-value is the 1-booster URL, so the request is well-formed even before any press.
-
-### 3 · what the panel shows you
+### 3 · unpack the response into cards
 
 ```
-GET_String.Content ─▶ relay ─┬─▶ StringLength ─▶ relay ─┬─▶ (decoders)
-                             │                          └─▶ ValueGreaterThan(0)
-                             ├─▶ Substring(0, 64) ─▶ TrimString ──┐
-                             └──────────────────────────────────┐ │
-                                          ObjectConditional ◀───┴─┘
-                                                  │
-                                     ObjectFieldDrive<string> ─▶ Text.Content
+OnResponse ─▶ write  body := Content ─▶ write rest := Content ─▶ DestroySlotChildren(Cards)
+                                                                         │
+                                                          StartAsyncTask ─┘
+                                                                 │ TaskStart
+   ┌─────────────────────────────────────────────────────────────▼──────────┐
+   │  relay ─▶ DelayUpdates(1) ─▶ If( IndexOfString(rest,"\n") > 8 )         │
+   │                                 │ true                     │ false      │
+   │                        DuplicateSlot(template → Cards)     "all cards placed"
+   │                                 │ Next                                  │
+   │            WriteDynamicObjectVariable(dup, "CARD/url", trim(record))     │
+   │                                 │ OnSuccess                             │
+   │                        SetLocalPosition(dup, grid(ChildrenCount))        │
+   │                                 │ Next                                  │
+   │                    write rest := Substring(rest, newline + 1)  ──────────┘
+   └────────────────────────────────────────────  relay ─▶ relay ─▶ back to the top
 ```
 
-`Content` is an **output sentinel**: downstream nodes address it by *field* id, not
-by the node's component id. Wiring the component id instead reads the node's own
-value output, which for an action node is not the response body — a silent failure.
+Three properties are worth stating, because each was a bug in an earlier build:
 
-## `Flux - card decoders`
+**The remainder is written back over itself, minus the record just taken.** There is no
+cursor, so there is no cursor arithmetic, so there is nothing to walk off the end of — the
+defect that once lit 62 cards for a 7-card pull, all showing the first card's art.
 
-One `bus` zone on the left, then seven row zones of ten cards. Each row taps the
-response, the record width and the response length through **its own relay bank**,
-so no producer carries seventy wires.
+**The loop provably terminates.** `IndexOfString` returns −1 when there is no newline
+left, so the single guard `newline > 8` covers both "no more records" and "what is left is
+too short to be a URL". Every pass removes at least ten characters, and the string only
+ever gets shorter. `test-panel.mjs` asserts against the *built graph* that the guard reads
+the same `IndexOfString` the remainder does — not that the builder meant to.
 
-Every card is the same five nodes:
+**Order is the whole correctness argument.** Every read above takes the *current*
+remainder, so eating the record before writing the card would give each card the next
+card's art. The test walks the impulse chain and asserts
+`DuplicateSlot → write CARD/url → SetLocalPosition → write rest`, in that order.
+
+`DelayUpdates(1)` makes each card cost one frame instead of stalling the world for the
+length of the deck.
+
+## How the cards work
+
+There is **one card** in the package, inactive, under `Card template`. Everything in-world
+is a duplicate of it.
 
 ```
-ValueInput(i × 64) ─┬─▶ Substring(response, i×64, 64) ─▶ TrimString ─▶ StringToAbsoluteURI ─▶ drive StaticTexture2D.URL
-                    └─▶ ValueGreaterThan(length, i×64) ─────────────────────────────────────▶ drive Slot.Active
+card  (inactive)
+├── DynamicVariableSpace "CARD"  +  DynamicValueVariable<string> "CARD/url"
+├── StaticTexture2D + UnlitMaterial + QuadMesh + MeshRenderer      ← components, not assets
+├── TextureSizeDriver   texture size ─▶ QuadMesh.Size
+└── three nodes:  ObjectValueSource ─▶ StringToAbsoluteURI ─▶ drive StaticTexture2D.URL
 ```
 
-**The only thing that differs between card 01 and card 70 is that integer.** Read
-one row zone and you have read all seventy.
+`DuplicateSlot` copies the ProtoFlux **inside** the slot and rewires the copy's references
+to the copy's own components, so those three nodes exist once in the package and once per
+card in-world.
 
-One honest exception to the house style lives here: the row bus wires cross the card
-clusters they run past. Routing seventy identical clusters to standard needs a relay
-chain per bus line — roughly 140 extra relays on a canvas nobody is meant to read.
-The test reports the count rather than failing on it, so it cannot quietly grow.
+Two things about this are easy to get wrong:
 
-**The real fix is to delete this canvas.** Pre-baking seventy decoders is not the
-only way to get seventy cards: `DuplicateSlot` copies a template slot *including its
-own ProtoFlux*, so the whole per-card decode can be six nodes that exist once and are
-duplicated per record. That also removes the 70-card ceiling and the fixed-width
-record format. See `PRIOR-ART.md` §5.
+- **The texture and material are components on the slot, not entries in `doc.Assets`.**
+  `doc.Assets` is shared; a card duplicated from a template whose texture lived there
+  would point at the template's one texture and every card would show the same art.
+- **The space is `CARD`, not `ResoPal`.** `DynamicVariableAction` walks *up* from its
+  target looking for a space of that name, so a write aimed at a card would otherwise be
+  able to land on the panel.
 
-This shape is possible because `format=fixed` returns records of exactly 64
-characters — the URL padded and newline-terminated. With variable-length lines,
-card *i* could only be found by walking *i* newlines, which chains every card to the
-one before it: three more nodes each, a seventy-deep dependency, and a graph that
-genuinely cannot be read. The record width is a contract with
-`worker/src/roll.js`; both sides hold the same 64.
+**Landscape cards render landscape with no ProtoFlux at all.** `TextureSizeDriver` reads
+the loaded texture's own pixel size; `UnitHeight` normalises it to `(aspect, 1)`, `Ratio`
+scales that to the card height and `MaxSize` caps the width at one grid cell. The gap this
+closes was recorded as needing "a node that exposes a loaded texture's aspect" — there is
+none, and none is needed.
 
-A card is visible exactly when the response reaches its offset. Seven records light
-seven cards and leave sixty-three dark. **Nothing counts anything.**
+**Nothing counts the cards.** A card exists because a record existed. `ChildrenCount` on
+the spawn parent gives the index the grid position is computed from, so seven records make
+seven cards and fifty make fifty, with no ceiling anywhere in the graph. The only cap is
+the Worker's, at 200.
 
 ## What the tests hold to
 
 `npm test` runs two files. Between them they gate:
 
-- **Every emitted type exists and satisfies its generic constraint**, checked against
-  the decompiled engine source (`verify-classpaths.mjs`). This is the check that would
-  have caught the dead buttons.
-- **Nothing references the null GUID.**
-- **The control canvas stays under 70 nodes** — the inspectability budget.
-- **Every way the request can end reports on the event line.** A terminal impulse left
-  null is a dead end with nothing anywhere to say it happened.
-- **The HTTP status code reaches the event line**, so a 404 cannot masquerade as cards.
-- **No two nodes overlap a node visual**, on either canvas.
-- **Comment zones are disjoint and every one is titled.**
-- **No producer fans past a dozen consumers**, so the relay banks cannot silently rot.
-- **No wire runs through a node box** in the control canvas. This is the defect that
-  made the URL constants read as unconnected: each sat in the lane between the
-  receiver and the write it fed, so the impulse wire crossed its box (pretty-flux §2).
-  The gate is a segment/box intersection test over every wire on the canvas.
+- **Every emitted type exists and satisfies its generic constraint**, checked against the
+  decompiled engine source (`verify-classpaths.mjs`). This is the check that would have
+  caught the dead buttons.
 - **Every async node runs in an async context.**
-- **The parse graph, evaluated out of the built package** against live Worker
-  responses for all five buttons, modelling the decompiled nodes' own clamping.
+- **Nothing references the null GUID.**
+- **The card template is self-contained** — its own texture, its own material, its own
+  variable, its own three nodes, in its own space.
+- **The loop, simulated out of the built package** against live Worker responses for all
+  five buttons and a 98-card double deck: the right number of cards, each with its own
+  record's art, in order, on the right grid square — modelling the decompiled nodes' own
+  clamping rather than JavaScript's.
+- **The loop terminates**, asserted structurally rather than assumed.
+- **Order of operations inside one pass.**
+- **The graph stays under 120 nodes** — the inspectability budget.
+- **Every way a request can end reports on the event line.**
+- **The HTTP status code reaches that line.**
+- **Comment zones are disjoint and every one is titled.**
+- **No two nodes overlap a node visual.**
+- **No wire runs through a constant.** This is the defect that made the URL constants read
+  as unconnected: each sat in the lane between the receiver and the write it fed. A
+  constant is a leaf — nothing wires into it — so a wire touching one can only be an
+  accident of position. Wires crossing a node that *has* inputs read as what they are, two
+  wires crossing; those are counted and capped rather than failed, because the response has
+  to travel from the request zone to the unpack zone somehow. The count is 22 against a
+  budget of 30; taking it to zero means running the library's own `router.mjs` over the
+  canvas instead of hand-placing it.

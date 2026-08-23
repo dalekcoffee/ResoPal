@@ -2,10 +2,20 @@
 globalThis.caches = { default: { match: async () => null, put: async () => {} } };
 const realFetch = globalThis.fetch;
 let lastUpstream = null;
+// Shaped like the real thing, trimmed to what the code reads. The parsers get
+// their own fixtures in resolve.mjs; these exist so the ROUTE can be exercised.
+const FLIGHT = '1b:{"deckId":"f2dd143c-8e6f-4142-87d2-051195185f96","deckName":"Green/Purple Trial",'
+  + '"list":[{"n":2,"name":"Mossanda","code":"TD02-001"},{"n":3,"name":"Eikthyrdeer Terra","code":"TD02-005"}]}';
+const CARDS = JSON.stringify({ count: 2, cards: [
+  { code: 'TD02-001', name: 'Mossanda – Guard Captain', rarity: 'TD', landscape: false },
+  { code: 'TD02-005', name: 'Eikthyrdeer Terra – Guardian of Nature', rarity: 'TD', landscape: false },
+] });
 globalThis.fetch = async (u, init) => {
   lastUpstream = { url: String(u), headers: (init && init.headers) || {} };
   if (String(u).includes('/cards/w')) return new Response(new Uint8Array([1,2,3]), { status: 200 });
-  if (String(u).includes('/decks/') || String(u).includes('/u/')) return new Response('flight-payload', { status: 200 });
+  if (String(u).includes('/api/cards?set=TD02')) return new Response(CARDS, { status: 200 });
+  if (String(u).includes('/api/cards?set=')) return new Response(JSON.stringify({ count: 0, cards: [] }), { status: 200 });
+  if (String(u).includes('/decks/') || String(u).includes('/u/')) return new Response(FLIGHT, { status: 200 });
   return new Response('nope', { status: 404 });
 };
 const { default: worker } = await import('../src/index.js');
@@ -39,6 +49,15 @@ const cases = [
   ['/deck/not-a-uuid', 400, null],
   ['/profile/dalek', 200, 'https://palify.org/u/dalek'],
   ['/profile/../../etc', 404, null],   // URL() normalises the traversal away before routing
+  ['/api/resolve', 400, null],                                   // nothing to resolve
+  ['/api/resolve?list=2x%20TD02-001', 200, null],
+  ['/api/resolve?list=2x%20TD02-001&format=fixed', 200, null],
+  ['/api/resolve?list=2x%20TD02-001&format=xml', 400, null],
+  ['/api/resolve?list=Mossanda%0AGumoss', 422, null],            // names, no codes
+  ['/api/resolve?list=2x%20ZZ99-001', 422, null],                // code palify does not know
+  ['/api/resolve?deck=f2dd143c-8e6f-4142-87d2-051195185f96', 200,
+    'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96'],
+  ['/api/resolve?url=https%3A%2F%2Fpalify.org%2Fdecks%2Ff2dd143c-8e6f-4142-87d2-051195185f96', 200, null],
   ['/nope', 404, null],
 ];
 let bad = 0;
@@ -146,6 +165,35 @@ check('fixed and flat agree card for card, in order',
 const deckFixed = await (await get('/api/deck?deck=td02&format=fixed')).text();
 check('a deck uses the same record width', deckFixed.length === 50 * W, `${deckFixed.length / W} records`);
 check('no record is truncated', recs.every((r) => r.trim().length <= W - 1));
+
+// ── /api/resolve: a pasted link or list, in the same records ─────────────────
+console.log('\n/api/resolve:');
+const post = (body, qs = '') => worker.fetch(new Request('https://w.example/api/resolve' + qs,
+  { method: 'POST', body, headers: { Origin: ORIGIN, 'content-type': 'text/plain' } }), {}, ctx);
+
+const byLink = await (await get('/api/resolve?deck=f2dd143c-8e6f-4142-87d2-051195185f96')).json();
+check('a deck link resolves to its cards', byLink.total === 5, JSON.stringify(byLink).slice(0, 120));
+check('and carries the deck name', byLink.name === 'Green/Purple Trial');
+check('names come from palify, not from the paste', byLink.cards[0].name === 'Mossanda – Guard Captain');
+check('so does rarity', byLink.cards.every((c) => c.rarity === 'TD'));
+
+const pasted = await (await post('# Mine (5 cards)\n2x Mossanda [TD02-001]\n3x Eikthyrdeer [TD02-005]')).json();
+check('a POSTed decklist resolves the same way', pasted.total === 5);
+check('a link and a list agree card for card',
+  pasted.cards.map((c) => c.code).join() === byLink.cards.map((c) => c.code).join());
+check('the pasted title is kept', pasted.name === 'Mine');
+
+const partial = await (await post('2x Mossanda [TD02-001]\n1x Ghost [ZZ99-001]\nSome line with no code')).json();
+check('a code palify does not know is reported, not served', JSON.stringify(partial.unknown) === '["ZZ99-001"]');
+check('a line with no code is reported too', JSON.stringify(partial.unrecognised) === '["Some line with no code"]');
+check('and the cards it could verify still come back', partial.total === 2);
+
+const rFixed = await post('2x Mossanda [TD02-001]', '?format=fixed');
+const rBody = await rFixed.text();
+check('fixed records are the same width as a pull', rBody.length === 2 * W, `${rBody.length}`);
+check('and count themselves in a header', rFixed.headers.get('x-card-count') === '2');
+check('POST is refused anywhere else', (await worker.fetch(
+  new Request('https://w.example/api/pull', { method: 'POST', body: 'x', headers: { Origin: ORIGIN } }), {}, ctx)).status === 405);
 
 // Runs last: it deliberately empties the token bucket for this IP.
 let sawThrottle = false;

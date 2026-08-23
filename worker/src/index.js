@@ -15,6 +15,7 @@
  */
 import { weights, poolBP01, decks } from './data.js';
 import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
+import { sniff, parseFlight, parseDeckList, expand, MAX_CARDS } from './resolve.js';
 
 // Sets that can be rolled. Adding BP02 is: snapshot its pool with
 // tools/fetch-pool.mjs, add its weights to data/pack-weights.json, add a line here.
@@ -43,7 +44,8 @@ function cors(request) {
   const origin = request.headers.get('Origin');
   return {
     'access-control-allow-origin': ALLOWED.includes(origin) ? origin : ALLOWED[0],
-    'access-control-allow-methods': 'GET,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-headers': 'content-type',
     'access-control-max-age': '86400',
     'vary': 'Origin',
   };
@@ -218,6 +220,129 @@ function deck(request, url, h) {
 }
 
 /**
+ * Palify's card catalogue for one set, code -> { name, rarity, landscape }.
+ *
+ * Fetched rather than committed, because `data/pool-*.json` only covers the sets
+ * ResoPal rolls and a pasted deck can name any of them. Cached at the edge for a
+ * day and memoised per isolate, so a 50-card deck costs one upstream request.
+ *
+ * This is what makes "never invent card data" enforceable at runtime: a code the
+ * catalogue does not know is reported, not served.
+ */
+const CATALOGUE = new Map();
+async function catalogue(setCode, ctx) {
+  if (CATALOGUE.has(setCode)) return CATALOGUE.get(setCode);
+  const cache = caches.default;
+  const key = new Request(`https://resopal-cache.invalid/cards/${setCode}`);
+  let hit = await cache.match(key);
+  if (!hit) {
+    const upstream = await fetch(`${UPSTREAM}/api/cards?set=${encodeURIComponent(setCode)}`, {
+      cf: { cacheEverything: true, cacheTtl: 86400 },
+      headers: { 'user-agent': 'ResoPal/1.0 (+https://resopal.dalek.coffee)' },
+    });
+    if (!upstream.ok) return null;
+    hit = new Response(await upstream.text(), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' },
+    });
+    ctx.waitUntil(cache.put(key, hit.clone()));
+  }
+  let json;
+  try { json = await hit.json(); } catch { return null; }
+  const map = new Map();
+  for (const c of json?.cards || [])
+    if (typeof c?.code === 'string')
+      map.set(c.code, { name: c.name ?? null, rarity: c.rarity ?? null, landscape: !!c.landscape });
+  CATALOGUE.set(setCode, map);
+  return map;
+}
+
+/**
+ * GET|POST /api/resolve - "here is what I pasted, give me a deck".
+ *
+ * The input is a Palify deck link, a bare deck id, or a pasted decklist, and the
+ * caller does not have to say which - `sniff()` decides. Output is the same
+ * records `/api/pull` and `/api/deck` already serve, so the in-world side keeps
+ * one parser and a booster, a committed deck and someone's own brew all arrive
+ * looking identical.
+ *
+ * POST exists because ProtoFlux cannot put a 2 KB decklist in a query string.
+ * GET exists because the site can, and because `?deck=<uuid>` is cacheable.
+ *
+ * Every code is checked against Palify's catalogue before it is served. Codes it
+ * does not recognise come back under `unknown` and lines with no code at all
+ * under `unrecognised`; neither is guessed at. Two phantom cards have already
+ * reached production here from a decklist nobody verified.
+ */
+async function resolve(request, url, h, ctx, input) {
+  const format = url.searchParams.get('format') || 'json';
+  if (!['json', 'flat', 'fixed'].includes(format)) return fail(400, 'format must be json, flat or fixed', h);
+  const text = String(input || '').slice(0, 64 * 1024);
+  if (!text.trim()) return fail(400, 'nothing to resolve: pass a palify deck link, a deck id, or a decklist', h);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'anon';
+  if (throttled(ip)) return fail(429, 'slow down', { ...h, 'retry-after': '60' });
+
+  const what = sniff(text);
+  let parsed, source;
+  if (what.kind === 'palify') {
+    const upstream = await fetch(`${UPSTREAM}/decks/${what.id}`, {
+      headers: { 'RSC': '1', 'accept': 'text/x-component', 'user-agent': 'ResoPal/1.0 (+https://resopal.dalek.coffee)' },
+    });
+    if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `palify returned ${upstream.status} for deck ${what.id}`, h);
+    parsed = parseFlight(await upstream.text());
+    source = { kind: 'palify', id: what.id, url: `${UPSTREAM}/decks/${what.id}` };
+    // An empty list here means Palify changed its payload, not that the deck is
+    // empty. Say which, because the fix is a one-line change in resolve.js.
+    if (!parsed.entries.length)
+      return fail(502, 'palify returned a deck page this parser could not read - the page format has changed', h);
+  } else {
+    parsed = parseDeckList(text);
+    source = { kind: 'list' };
+  }
+
+  // Validate against the real catalogue, one fetch per set named in the list.
+  const sets = [...new Set(parsed.entries.map((e) => e.code.split('-')[0]))].filter((x) => SET.test(x));
+  if (sets.length > 6) return fail(400, 'that list names too many sets to be a deck', h);
+  const found = new Map();
+  for (const set of sets) {
+    const cat = await catalogue(set, ctx);
+    if (cat) for (const [code, card] of cat) found.set(code, card);
+  }
+
+  const unknown = [];
+  const good = [];
+  for (const e of parsed.entries) {
+    const card = found.get(e.code);
+    if (!card) { unknown.push(e.code); continue; }
+    good.push({ ...e, name: card.name ?? e.name, rarity: card.rarity, landscape: card.landscape });
+  }
+  if (!good.length)
+    return fail(422, unknown.length
+      ? `none of those ${unknown.length} card codes exist in palify's catalogue`
+      : 'no card codes found - a line only counts if it carries one, like [TD02-001]', h);
+
+  const { cards, truncated } = expand(good);
+  for (const c of cards) c.rarity = good.find((g) => g.code === c.code)?.rarity ?? 'C';
+
+  const headers = { ...h, 'cache-control': what.kind === 'palify' ? 'public, max-age=300' : 'no-store' };
+  if (format === 'flat' || format === 'fixed') {
+    let body;
+    try { body = format === 'flat' ? toFlat(cards) : toFixed(cards, artBase(url)); }
+    catch (e) { return fail(500, String(e.message || e), h); }
+    return new Response(body, {
+      headers: { ...headers, 'content-type': 'text/plain; charset=utf-8',
+        'x-record-width': String(RECORD_WIDTH), 'x-card-count': String(cards.length) },
+    });
+  }
+
+  const body = { source, name: parsed.name, total: cards.length, cards };
+  if (unknown.length) body.unknown = unknown;
+  if (parsed.unrecognised.length) body.unrecognised = parsed.unrecognised;
+  if (truncated) body.truncated = MAX_CARDS;
+  return new Response(JSON.stringify(body), { headers: { ...headers, 'content-type': 'application/json' } });
+}
+
+/**
  * Palify deck and profile pages are Next.js routes, not an API. The only
  * machine-readable form is the RSC flight payload, requested with `RSC: 1`.
  *
@@ -241,7 +366,14 @@ export default {
   async fetch(request, env, ctx) {
     const h = cors(request);
     if (request.method === 'OPTIONS') return new Response(null, { headers: h });
-    if (request.method !== 'GET') return fail(405, 'GET only', h);
+    // POST exists for exactly one route. ProtoFlux has POST_String and no way to
+    // put a 2 KB decklist in a query string, so a pasted list arrives as a body.
+    if (request.method === 'POST') {
+      const path = new URL(request.url).pathname.replace(/\/+$/, '');
+      if (path !== '/api/resolve') return fail(405, 'POST is only accepted at /api/resolve', h);
+      return resolve(request, new URL(request.url), h, ctx, await request.text());
+    }
+    if (request.method !== 'GET') return fail(405, 'GET or POST', h);
 
     const url = new URL(request.url);
     const p = url.pathname.replace(/\/+$/, '') || '/';
@@ -253,6 +385,7 @@ export default {
 
     if (p === '/api/pull') return pull(request, url, h);
     if (p === '/api/deck') return deck(request, url, h);
+    if (p === '/api/resolve') return resolve(request, url, h, ctx, url.searchParams.get('deck') || url.searchParams.get('url') || url.searchParams.get('list') || '');
 
     let m;
     if ((m = p.match(/^\/img\/([^/]+)$/)))

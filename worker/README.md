@@ -20,12 +20,19 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 |---|---|
 | `/health` | returns `{ok:true}` — use it to confirm the deploy |
 | `/img/<CODE>?w=256\|512\|1024` | card art, CORS-enabled, edge-cached for a year |
+| `/api/pull` | roll booster packs — see `../docs/PULL-API.md` |
+| `/api/deck` | a committed deck list, in the same records |
+| `/api/resolve` | **a pasted palify deck link or decklist**, in the same records |
 | `/deck/<uuid>` | raw RSC flight payload for a deck page |
 | `/profile/<handle>` | raw RSC flight payload for a profile page |
 
-`/deck` and `/profile` return the payload **unparsed**. The format is undocumented, so the parser
-has to be written against a real response — fetch one, look at it, then build from what's actually
-there. Not needed for baking; only for URL paste later.
+`/api/resolve` is the one route that also accepts **POST**, because ProtoFlux cannot put a 2 KB
+decklist in a query string. The body is whatever the user pasted; `src/resolve.js` works out
+whether that was a deck link, a bare deck id or a list, and every code is checked against Palify's
+own catalogue before it is served. See `../docs/PULL-API.md`.
+
+`/deck` and `/profile` return the payload **unparsed**. `/api/resolve` is the parsed form of the
+first of those; these two stay for looking at what Palify actually returns when the format changes.
 
 ## Setup A — the Cloudflare dashboard (no CLI)
 

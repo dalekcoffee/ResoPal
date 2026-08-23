@@ -2,10 +2,15 @@
 
 **Verdict: feasible with stock ProtoFlux. No mods, no plugin, no VPS.**
 
-**Status: P0–P2 built, as a UIX panel.** `/api/pull` and `/api/deck` are in the Worker, the site
-rolls through the former, and `booster/out/ResoPal_Panel.resonitepackage` is a grabbable panel with
-five buttons — two trial decks and 1/3/10 boosters. See `booster/README.md`. P3 (cloud spawn) and
-P4 (the tear wrapper) are not started.
+**Status: P0–P2 built, as a UIX panel, and it now imports arbitrary decks.** `/api/pull`,
+`/api/deck` and `/api/resolve` are in the Worker, the site rolls through the first, and
+`booster/out/ResoPal_Panel.resonitepackage` is a grabbable panel with five preset buttons — two
+trial decks and 1/3/10 boosters — plus **a paste field that takes a palify.org deck link, a bare
+deck id, or a decklist**. See `booster/README.md`. P3 (cloud spawn) and P4 (the tear wrapper) are
+not started.
+
+Cards are no longer pre-baked. One inactive card template is duplicated per record, so the count is
+whatever came back and the graph is one canvas of ~112 nodes instead of 51 + 514.
 
 Five builds' worth of lessons, all now gated by tests:
 
@@ -34,9 +39,8 @@ decompiled engine source, generic constraints included, and runs as part of `npm
 The fourth and fifth came out of the first real in-world test, and both are now gates: an
 async-context reachability walk, and `every way the request can end reports on the event line`.
 
-The graph is now split across two Moduprint canvases — a ~64-node control canvas that is the only
-one worth unpacking, and a generated decoder canvas — with comment zones, relay banks and the
-pretty-flux layout gates. `booster/GRAPH.md` is the map.
+The graph is one Moduprint canvas of ~112 nodes in four zones, with comment zones, relay banks and
+the pretty-flux layout gates. `booster/GRAPH.md` is the map.
 
 **`booster/PRIOR-ART.md` is the most useful document here.** Sharkmare's `DeckReader` already
 does in-world deck import for four other card games, and its author let us read it. It settles
@@ -183,11 +187,13 @@ P0–P2 is the honest milestone: a real randomized pack you can hold. P3 and P4 
   isolate, and Cloudflare runs many. It stops a lazy loop from one client and nothing more. Said
   plainly at the call site too. The real fix, if abuse ever appears, is Cloudflare's Rate Limiting
   binding or a Durable Object — both need account config the Worker currently avoids.
-- **The 70-card ceiling and the decoder canvas.** Both exist only because the card slots and their
-  decoders are pre-baked. `DuplicateSlot` copies a template slot including its own ProtoFlux, so
-  the per-card decode can be six nodes that exist once — which also drops `format=fixed`'s
-  63-character URL limit, because a consume-the-string parser needs no fixed-width records.
-  This is the next structural change; `booster/PRIOR-ART.md` §3 and §5.
+- **Cards are a flat grid, not a deck.** They spawn, they show the right art, they do not stack,
+  flip or snap. Stack position in Ukilop's deck object is `OrderOffset`, so a rarest-first pack is
+  written by setting offsets in pull order; the flip is a `BooleanValueDriver<Uri>` pair and needs
+  no ProtoFlux. Both are `booster/PRIOR-ART.md` §5 and §7.
+- **`DuplicateSlot` is untested in-world.** Everything about it is asserted against the built
+  package and simulated against live responses, but whether Resonite rewires a duplicated slot's
+  ProtoFlux the way this design assumes is the one thing only a drag-test settles.
 - **Who pays for a re-roll?** Still open. The spawner fires on `OnStart`, so re-triggering it means
   re-spawning the object — cheap. If a pull is ever meant to be scarce, the roll has to be bound to
   something: a short-lived token issued per spawn, or per-user limiting.

@@ -1,9 +1,9 @@
 # In-world panel
 
-`out/ResoPal_Panel.resonitepackage` (319 KB) is a grabbable UIX panel. Drag it into
+`out/ResoPal_Panel.resonitepackage` (263 KB) is a grabbable UIX panel. Drag it into
 Resonite and you get a working UI immediately — no network call needed to see something.
 
-Five buttons:
+Five preset buttons, a paste field and an import button:
 
 | Button | Asks resopal for | Cards |
 |---|---|---|
@@ -12,9 +12,21 @@ Five buttons:
 | Open 1 Booster · BP01 | `/api/pull?set=BP01&packs=1&format=fixed` | 7 |
 | Open 3 Boosters · BP01 | `/api/pull?set=BP01&packs=3&format=fixed` | 21 |
 | Open 10 Boosters · BP01 | `/api/pull?set=BP01&packs=10&format=fixed` | 70 |
+| **Import what I pasted** | `POST /api/resolve?format=fixed` | whatever it is |
 
-Press one and the cards appear in a 10×7 grid below the panel, art streaming in from
-the image proxy.
+**The paste field takes a palify.org deck link, a bare deck id, or a decklist** — the
+Worker works out which (`worker/src/resolve.js`), so the panel never has to parse a
+decklist in ProtoFlux. Palify's own copy-as-text export works verbatim:
+
+```
+# Green/Purple Trial (50 cards)
+2x Mossanda – Guard Captain [TD02-001]
+3x Eikthyrdeer Terra – Guardian of Nature [TD02-005]
+```
+
+Press one and the cards appear in a grid below the panel, one per frame, art streaming in
+from the image proxy. **Nothing caps the count in the graph** — cards are duplicated from a
+template as records arrive. The only cap is the Worker's, at 200.
 
 Three driven lines under the title tell you where things stand without opening the flux:
 
@@ -22,20 +34,19 @@ Three driven lines under the title tell you where things stand without opening t
   the whole button chain works;
 - the **status line** shows the first card parsed — or the error text, because `GET_String`
   writes the exception message into the same field;
-- the **event line** names the branch the graph actually took: `could not set ResoPal/url`,
-  `host access refused`, `network error`, or `response received - HTTP 200` with the real
-  status code. Every terminal impulse in the graph writes it, so "nothing happened" is not
-  one of the things it can say.
+- the **event line** names the branch the graph took: `could not set ResoPal/url`,
+  `host access refused`, `network error`, `response received - HTTP 200`, `all cards
+  placed`. Every terminal impulse in the graph writes it, so "nothing happened" is not one
+  of the things it can say.
 
-**Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** The logic lives in two
-Moduprint canvases; `Flux - control` is ~64 nodes and is the only one worth unpacking.
-[PRIOR-ART.md](PRIOR-ART.md) is what an existing, working in-world deck importer does
-differently, and which of those we took.
+**Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** One canvas, ~112 nodes, four
+zones. [PRIOR-ART.md](PRIOR-ART.md) is what an existing, working in-world deck importer
+does differently, and which of those we took.
 
-**Nothing about a deck is baked in.** The panel knows five URLs. Card codes, how many
-there are, and what order they come in all arrive over the wire. Adding a set or a deck
-is a line in `BUTTONS` at the top of `build-panel.mjs`; the graph never learns what is
-inside one.
+**Nothing about a deck is baked in.** The panel knows five URLs and one endpoint to POST to.
+Card codes, how many there are, and what order they come in all arrive over the wire.
+Adding a set or a deck is a line in `BUTTONS` at the top of `build-panel.mjs`; the graph
+never learns what is inside one.
 
 ## How it hangs together
 
@@ -48,24 +59,28 @@ Button ──ButtonDynamicImpulseTrigger──▶ "ResoPal/pack/3"
                                              │ OnSuccess
                                   ContinuationRelay (one trunk for all five)
                                              ▼
-      IsHostAccessAllowedUrl ─┬─ yes ─▶ GET_String ──▶ Content
-                              └─ no ──▶ RequestHostAccessUrl ─ OnGranted ─┘
-                                                                 │
-       70 × ( Substring(response, i×64, 64) · TrimString · StringToAbsoluteURI )
-                                                                 │
-                    ObjectFieldDrive<Uri>  ──▶ StaticTexture2D.URL
-                    ValueFieldDrive<bool>  ──▶ Slot.Active
+                       StartAsyncTask ──▶ GET_String ──▶ Content
+                                                            │
+  paste field ──▶ StartAsyncTask ──▶ POST_String ───────────┤
+                                                            ▼
+                   rest := the response,  then per record, one frame each:
+                     DuplicateSlot(card template) ─▶ set CARD/url ─▶ place it
+                     ─▶ rest := everything past the newline ─▶ round again
 ```
 
 Buttons and graph never reference each other — the impulse tag is the only coupling.
 
-Past the GET there are **no impulses**. The drives pull their inputs every frame, so
-cards fill in the moment the response lands.
+There is **one card** in the package, inactive, and every card in-world is a duplicate of
+it. `DuplicateSlot` copies the ProtoFlux inside the slot too, so the three nodes that turn
+`CARD/url` into a texture exist once here and once per card in-world.
 
-**The count is dynamic without anything counting.** A card is `Active` exactly when
-the response reaches its offset. Seven records light seven cards and leave sixty-three
-dark; a 50-card deck lights fifty. One decoder handles both, because `/api/deck` and
-`/api/pull` return the same fixed-width records.
+**The count is dynamic without anything counting it.** A card exists because a record
+existed. `ChildrenCount` on the spawn parent gives the index its grid position is computed
+from. Seven records make seven cards; a 50-card deck makes fifty; two decks pasted together
+make 98.
+
+**Landscape cards render landscape**, with no ProtoFlux at all: a `TextureSizeDriver`
+reads the loaded texture's own pixel size and drives the quad from it.
 
 ## Build
 
@@ -97,32 +112,43 @@ proves very little.
 `test-panel.mjs` checks:
 
 - **The UI exists**: one Canvas with a real size, its root rect and collider wired to
-  components on its own slot, five buttons that each tint an Image on their own slot and
-  carry a caption, and every `Text` pointing at a font that actually ships in the package.
-- **Buttons reach the graph**: every tag a button sends is heard by a receiver, every
-  receiver writes a distinct URL, all five join one trunk into a single shared GET — and
-  **nothing references the null GUID**, the general form of the bug where a trigger
-  aimed at the object root silently became a null reference.
-- **The parse graph, evaluated** against live responses from the Worker for all five
-  buttons — 7, 21, 70, 50 and 48 cards — asserting the right number light up, that they
-  are the first N, and that each points at its own record's art. Plus an empty response
-  and a network error.
-- **All three readouts are driven**, the status shows the error text on failure, and
-  **every way the request can end reports on the event line** — the request's `OnResponse`,
-  `OnError` and `OnDenied`, the permission prompt's `OnDenied` and `OnIgnored`, and both
-  failure paths of every URL write. A terminal impulse left null is a dead end with nothing
-  anywhere to say it happened.
+  components on its own slot, six buttons that each tint an Image on their own slot and
+  carry a caption, a paste field whose Text / TextEditor / TextField actually reference
+  each other, and every `Text` pointing at a font that ships in the package.
+- **Buttons reach the graph**: every tag a button sends is heard, five receivers write five
+  distinct URLs into one trunk into one GET, the sixth POSTs the paste field's own text to
+  `/api/resolve` — and **nothing references the null GUID**, the general form of the bug
+  where a trigger aimed at the object root silently became a null reference.
+- **The card template is self-contained**: its own texture and material as components
+  rather than shared assets, its own `CARD/url` in its own `CARD` space, and its own three
+  nodes turning that string into the texture URL.
+- **The spawn loop, simulated out of the built package** against live Worker responses for
+  all five buttons — 7, 21, 70, 50 and 48 cards, plus a 98-card double deck past the old
+  ceiling — asserting each card gets its own record's art, in order, on the right grid
+  square. Plus an empty response, an error string, a truncated last record, and a body with
+  no newline at all.
+- **The loop terminates**, argued from the built graph rather than assumed: the guard reads
+  the same `IndexOfString` the remainder does, and the remainder starts one past it, so the
+  string strictly shrinks.
+- **Order of operations inside one pass** — eating the record before writing the card would
+  give every card the *next* card's art, and nothing else would notice.
+- **All three readouts are driven**, and **every way a request can end reports on the event
+  line**: `OnResponse`, `OnError` and `OnDenied` on both request nodes, both failure paths
+  of every URL write, and the loop running out of records.
 - **Encoding**: zero dangling references, zero unbound hooks, BSON round-trips
   byte-identical.
-- **Layout and pretty-flux**: two Moduprint canvases with the control one under 70
-  nodes, comment zones present, titled and disjoint, no two nodes overlapping a node
-  visual, no producer fanning past a dozen consumers, and relays actually feeding
-  something.
+- **Layout and pretty-flux**: one Moduprint canvas under 120 nodes, four comment zones,
+  titled and disjoint, no two nodes overlapping a node visual, no producer fanning past a
+  dozen consumers, relays actually feeding something, and **no wire running through a
+  constant** — a constant is a leaf, so a wire touching one can only be an accident of
+  position. Wires crossing a node that has inputs of its own are counted and capped
+  instead, because the response has to cross the canvas somehow.
 
-The evaluator models the decompiled nodes' own clamping — `Substring` returning `""`
-when the start runs past the end rather than throwing — not JavaScript's. That is what
-caught an earlier decoder walking its cursor off the end and wrapping back to zero,
-which lit 62 cards for a 7-card pull, all showing the first card's art.
+The evaluator models the decompiled nodes' own clamping — `Substring` returning `""` when
+the start runs past the end rather than throwing, `IndexOfString` returning −1 — not
+JavaScript's. That is what caught an earlier decoder walking its cursor off the end and
+wrapping back to zero, which lit 62 cards for a 7-card pull, all showing the first card's
+art.
 
 **None of that proves Resonite accepts the file.** Only a drag-test does.
 
@@ -131,27 +157,34 @@ which lit 62 cards for a 7-card pull, all showing the first card's art.
 1. **Read the event line first.** It names the branch that ran, so it tells you which
    half of the chain to look at before you open anything. The table in
    [GRAPH.md](GRAPH.md) maps all three lines to a diagnosis.
-2. **Host access.** The panel asks once, naming ResoPal. Denying or dismissing it puts
-   `host access refused` on the event line. (The request node would prompt on its own even
-   without our gate — we keep the gate only for the reason string.)
-3. **`/api/pull` and `/api/deck` must be deployed.** Until the Worker ships them, every
-   button ends with `HTTP 404` on the event line. That is the intended failure — visible
-   rather than silent — but it is still a failure.
-4. **Panel scale.** 620×660 canvas units at 0.00058 ≈ 36×38 cm. Grab and scale it if
-   that reads wrong in your session.
-5. **Card orientation.** Quads are `DualSided`, so they are never invisible, but from
+2. **Host access.** The request node asks for it itself, so the prompt says "Web Request
+   Node" rather than naming ResoPal. Denying it puts `host access refused` on the event
+   line.
+3. **The endpoints must be deployed.** Until the Worker ships `/api/pull`, `/api/deck` and
+   `/api/resolve`, every button ends with `HTTP 404` on the event line. That is the
+   intended failure — visible rather than silent — but it is still a failure.
+4. **The paste field.** Click it and type or paste; the import button sends whatever is in
+   it. An empty field comes back as a message from the Worker, not silence.
+5. **Panel scale.** 620×660 canvas units at 0.00058 ≈ 36×38 cm. Grab and scale it if that
+   reads wrong in your session.
+6. **Card orientation.** Quads are `DualSided`, so they are never invisible, but from
    behind you see a mirrored front rather than a card back.
 
 ## Known gaps
 
 - **The white corner rim.** Materials are `Cutout` at `AlphaCutoff 0.72`, the values the
-  deck bake settled on, but this path skips `solidify()` — expect a fainter version of
-  the rim `docs/PIPELINE.md` describes.
-- **70 cards is the ceiling**, matching the deck template's 10×7 atlas grid. A deck
-  larger than that would be truncated rather than refused. The ceiling exists only because
-  the decoders are pre-baked; `DuplicateSlot` would remove it — see [PRIOR-ART.md](PRIOR-ART.md).
-- **No retry.** One request per press; nothing re-fires if the permission prompt is
-  still open.
+  deck bake settled on, but this path skips `solidify()` — expect a fainter version of the
+  rim `docs/PIPELINE.md` describes.
+- **No card backs, and no flip.** Every card is one quad showing its front. The shape for
+  it is known and needs no ProtoFlux — a second URL and a `BooleanValueDriver<Uri>` driven
+  by a `TouchToggle`, per `PRIOR-ART.md` §7 — but the records carry one URL per card today.
+- **Cards are not grabbable, and do not stack.** They are a flat grid. Turning them into a
+  real deck object is the next step, and `OrderOffset` is how stack position is expressed.
+- **No retry.** One request per press; nothing re-fires if the permission prompt is still
+  open.
+- **`DuplicateSlot` has not been drag-tested.** Everything about it is asserted structurally
+  and simulated against real responses, but whether Resonite rewires a duplicated slot's
+  ProtoFlux the way this design assumes is the one thing only a drag-test settles.
 
 ## Why this is not the deck object
 
