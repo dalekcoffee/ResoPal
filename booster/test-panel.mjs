@@ -127,19 +127,30 @@ check('every trigger targets a slot that holds the receivers', triggers.every((t
   return n === 5;
 }));
 
-const writes = compsOfType('WriteDynamicObjectVariable<string>');
+let check_async_seen = false;
+const allWrites = compsOfType('WriteDynamicObjectVariable<string>');
+// A receiver fires a URL write; the request's own impulse outputs fire the
+// event writes that report which branch ran. Only the first kind is a button.
+const writes = allWrites.filter((w) => receivers.some((r) => arg(r, 'OnTriggered') === w.id));
 check('every receiver triggers a URL write', receivers.every((r) =>
   short(byComp.get(arg(r, 'OnTriggered'))?.type) === 'WriteDynamicObjectVariable<string>'));
 check('five distinct URLs, one per button',
-  new Set(writes.map((w) => arg(byComp.get(arg(w, 'Value')), 'Value'))).size === 5);
+  new Set(writes.map((w) => arg(byComp.get(arg(w, 'Value')), 'Value'))).size === 5, String(writes.length));
 check('exactly one GET, shared by every button', compsOfType('GET_String').length === 1);
 check('every write continues into the request', writes.every((w) => {
   const nxt = byComp.get(arg(w, 'OnSuccess'));
   if (!nxt) return false;
   // Writes join one trunk relay so the gate takes a single incoming wire.
-  const after = short(nxt.type) === 'ContinuationRelay' ? byComp.get(arg(nxt, 'Next')) : nxt;
+  let after = nxt;
+  // write -> trunk relay -> StartAsyncTask -> the gate. The async wrapper is not
+  // optional: GET_String and RequestHostAccessUrl are both AsyncActionNode and an
+  // ordinary impulse cannot run one.
+  if (short(after.type) === 'ContinuationRelay') after = byComp.get(arg(after, 'Next'));
+  check_async_seen = check_async_seen || short(after?.type) === 'StartAsyncTask';
+  if (short(after?.type) === 'StartAsyncTask') after = byComp.get(arg(after, 'TaskStart'));
   return after && (short(after.type) === 'If' || short(after.type) === 'GET_String');
 }));
+check('the request runs inside a StartAsyncTask', check_async_seen);
 const driver = compsOfType('DynamicValueVariableDriver<string>')[0];
 const target = driver && byField.get(arg(driver, 'Target'));
 check('the chosen URL is driven into the request',
@@ -272,27 +283,66 @@ check('a short error string lights at most the first card', onErr.slice(1).every
 
 // ── 4. the status line says something useful ─────────────────────────────────
 console.log(`${NEWLINE}status line:`);
-const statusProxy = [...byComp.values()].find((c) => short(c.type) === 'FieldDriveBase<string>+Proxy');
+const strProxies = [...byComp.values()].filter((c) => short(c.type) === 'FieldDriveBase<string>+Proxy');
+check('three Texts are driven: status, URL and last event', strProxies.length === 3, String(strProxies.length));
+const evalProxy = (p, body) => { memo.clear(); try { return String(evalRef(arg(byComp.get(arg(p, 'Node')), 'Value'), body)); } catch { return null; } };
+
+// Identify each by what it produces, not by emit order.
+const statusProxy = strProxies.find((p) => evalProxy(p, pull1) === pull1.slice(0, 64).trim());
+const urlProxy = strProxies.find((p) => p !== statusProxy && (evalProxy(p, '') || '').startsWith('http'));
+const evtProxy = strProxies.find((p) => p !== statusProxy && p !== urlProxy);
+
 check('the status text is driven', !!statusProxy);
 const statusTarget = statusProxy && byField.get(arg(statusProxy, 'Drive'));
 check('it drives a Text.Content', statusTarget?.name === 'Content' && short(statusTarget.comp.type) === 'Text');
-const statusNode = byComp.get(arg(statusProxy, 'Node'));
-memo.clear();
-check('shows the first card on success', evalRef(arg(statusNode, 'Value'), pull1) === pull1.slice(0, 64).trim());
-memo.clear();
-check('shows the error text on failure', evalRef(arg(statusNode, 'Value'), errBody) === errBody);
+check('shows the first card on success', evalProxy(statusProxy, pull1) === pull1.slice(0, 64).trim());
+check('shows the error text on failure', evalProxy(statusProxy, errBody) === errBody);
 
-// The second readout proves the button half of the chain on its own: it shows
-// the URL the request will use, so a press that changes it but returns nothing
-// is visibly a network problem rather than a dead button.
-const strProxies = [...byComp.values()].filter((c) => short(c.type) === 'FieldDriveBase<string>+Proxy');
-check('a second Text is driven with the request URL', strProxies.length === 2, String(strProxies.length));
-const urlProxy = strProxies.find((p) => p !== statusProxy);
-const urlNodeDriven = byComp.get(arg(urlProxy, 'Node'));
-memo.clear();
-check('the URL readout shows the URL that will be fetched',
-  String(evalRef(arg(urlNodeDriven, 'Value'), '')).startsWith('http'),
-  String(evalRef(arg(urlNodeDriven, 'Value'), '')));
+// The URL echo proves the button half of the chain on its own: it shows the URL
+// the request will use, so a press that changes it but returns nothing is
+// visibly a network problem rather than a dead button.
+check('a second Text shows the request URL', !!urlProxy, 'none of the drives resolve to an http URL');
+
+// And the event line answers the one question neither of the others can: did the
+// request run at all?
+check('a third Text reports whether the request ran', !!evtProxy);
+const evtDrivers = compsOfType('DynamicValueVariableDriver<string>');
+check('the event line is driven from a dynamic variable written by the request',
+  evtDrivers.some((d) => String(arg(d, 'VariableName')) === 'ResoPal/event'));
+const evtWrites = allWrites.filter((w) => !writes.includes(w));
+check('every event write targets ResoPal/event', evtWrites.length >= 1 &&
+  evtWrites.every((w) => String(arg(byComp.get(arg(w, 'Path')), 'Value')) === 'ResoPal/event'));
+
+// Every way this graph can stop has to end up on that line. A terminal impulse
+// left null is a dead end with nothing anywhere to say it happened - which is
+// exactly what "I approved host access and then nothing happened" looks like
+// from inside the world.
+const evtIds = new Set(evtWrites.map((w) => w.id));
+const terminals = [
+  ...compsOfType('GET_String').flatMap((g) => ['OnResponse', 'OnError', 'OnDenied'].map((f) => [`GET ${f}`, arg(g, f)])),
+  ...compsOfType('RequestHostAccessUrl').flatMap((a) => ['OnDenied', 'OnIgnored'].map((f) => [`prompt ${f}`, arg(a, f)])),
+  ...writes.flatMap((w) => ['OnNotFound', 'OnFailed'].map((f) => [`URL write ${f}`, arg(w, f)])),
+];
+// A terminal may pass through one ContinuationRelay stub on the way - that is
+// the house style for a branch, and it is what keeps the column routable.
+const hop = (id) => {
+  const c = byComp.get(id);
+  return c && short(c.type) === 'ContinuationRelay' ? arg(c, 'Next') : id;
+};
+const unreported = terminals.filter(([, id]) => !evtIds.has(hop(id)));
+check('every way the request can end reports on the event line', unreported.length === 0,
+  [...new Set(unreported.map(([n]) => n))].join(', '));
+
+// A 404 is a SUCCESSFUL request whose body is not cards: GET_String only writes
+// an exception into Content on a transport failure. Without the code on the
+// event line the status line shows the first 64 characters of an error page.
+const statusCode = compsOfType('GET_String').map((g) => byField.get(arg(g, 'OnResponse')) && g)[0];
+const casts = compsOfType('ValueToObjectCast<HttpStatusCode>');
+const codeField = compsOfType('GET_String').map((g) => g.data.StatusCode?.ID).filter(Boolean);
+check('the HTTP status code reaches the event line',
+  casts.length >= 1 && casts.some((c) => codeField.includes(arg(c, 'Input'))) &&
+  compsOfType('FormatString').some((f) => casts.some((c) => (arg(f, 'Parameters') || []).some((e) => e.Data === c.id)) &&
+    evtWrites.some((w) => arg(w, 'Value') === f.id)));
 
 // ── 5. encoding and layout gates ─────────────────────────────────────────────
 console.log(`${NEWLINE}encoding and layout:`);
@@ -311,7 +361,7 @@ const decoders = canvasSlots.find((s) => nm(s).includes('decoder'));
 check('one is named for the control logic, one for the decoders', !!control && !!decoders);
 
 const nodesOf = (c) => (c.Children || []).filter((s) => nm(s) !== 'Meta: Comments');
-check('the control canvas is small enough to read', nodesOf(control).length <= 60, `${nodesOf(control).length} nodes`);
+check('the control canvas is small enough to read', nodesOf(control).length <= 70, `${nodesOf(control).length} nodes`);
 check('the decoders are the bulk, and are elsewhere', nodesOf(decoders).length > nodesOf(control).length * 4);
 
 // Comment zones: present on both canvases, every one titled.
@@ -335,6 +385,60 @@ for (const c of [control, decoders]) {
       if (Math.abs(p[i][0] - p[j][0]) < 0.30 && Math.abs(p[i][1] - p[j][1]) < 0.22) clashes++;
   check(`${nm(c)}: no two nodes overlap a node visual`, clashes === 0, `${clashes} pairs`);
 }
+
+// No wire may run THROUGH a third node's box. This is the defect that made the
+// URL constants look unconnected in-world: each one sat on the lane between the
+// receiver and the write it fed, so the impulse wire crossed its box. Pretty-flux
+// section 2 - never let a const sit in the slot between two adjacent nodes.
+function throughNodes(canvasSlot) {
+  const placed = nodesOf(canvasSlot).map((sl) => {
+    const ids = (sl.Components?.Data || []).map((c) => c.Data.ID);
+    const p = (sl.Position.Data || []).map(num);
+    return { ids, x: p[0], y: p[1], name: nm(sl) };
+  });
+  const boxOf = new Map();
+  for (const b of placed) for (const id of b.ids) boxOf.set(id, b);
+  const HW = 0.15, HH = 0.075, EPS = 0.004;
+  // Segment/box intersection by slab clipping.
+  const hits = (a, b, box) => {
+    let t0 = 0, t1 = 1;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    for (const [p, q] of [[-dx, a.x - (box.x - HW - EPS)], [dx, (box.x + HW + EPS) - a.x],
+                          [-dy, a.y - (box.y - HH - EPS)], [dy, (box.y + HH + EPS) - a.y]]) {
+      if (p === 0) { if (q < 0) return false; continue; }
+      const r = q / p;
+      if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+      else { if (r < t0) return false; if (r < t1) t1 = r; }
+    }
+    return t0 <= t1;
+  };
+  const offenders = [];
+  for (const from of placed)
+    for (const id of from.ids) {
+      const c = byComp.get(id);
+      if (!c) continue;
+      for (const [, v] of Object.entries(c.data)) {
+        const d = v && typeof v === 'object' ? v.Data : null;
+        if (typeof d !== 'string' || !boxOf.has(d)) continue;
+        const to = boxOf.get(d);
+        if (to === from) continue;
+        for (const mid of placed)
+          if (mid !== from && mid !== to && hits(from, to, mid))
+            offenders.push(`${from.name} -> ${to.name} crosses ${mid.name}`);
+      }
+    }
+  return offenders;
+}
+// HARD on the canvas humans read.
+const controlThrough = throughNodes(control);
+check('Flux - control: no wire runs through a node box', controlThrough.length === 0,
+  `${controlThrough.length}: ${controlThrough.slice(0, 3).join(' | ')}`);
+// SOFT on the generated one. Routing 70 identical clusters to standard needs a
+// relay chain per bus line - about 140 extra relays for a canvas nobody is meant
+// to read. Reported so the number cannot quietly grow; the real fix is to run the
+// library's own router.mjs over it rather than hand-placing.
+const decoderThrough = throughNodes(decoders);
+console.log(`  note ${nm(decoders)}: ${decoderThrough.length} bus wires cross a cluster (generated, not hand-routed)`);
 
 // Relays: no producer should carry a huge fan. Before the relay banks the
 // response and the record width were wired to seventy consumers each.

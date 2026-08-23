@@ -16,13 +16,21 @@ Five buttons:
 Press one and the cards appear in a 10×7 grid below the panel, art streaming in from
 the image proxy.
 
-Two driven lines under the title tell you where things stand without opening the flux:
-the **URL line** shows the request the panel will make (so a press that changes it proves
-the whole button chain works), and the **status line** shows the first card parsed — or
-the error text, because `GET_String` writes the exception message into the same field.
+Three driven lines under the title tell you where things stand without opening the flux:
+
+- the **URL line** shows the request the panel will make, so a press that changes it proves
+  the whole button chain works;
+- the **status line** shows the first card parsed — or the error text, because `GET_String`
+  writes the exception message into the same field;
+- the **event line** names the branch the graph actually took: `could not set ResoPal/url`,
+  `host access refused`, `network error`, or `response received - HTTP 200` with the real
+  status code. Every terminal impulse in the graph writes it, so "nothing happened" is not
+  one of the things it can say.
 
 **Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** The logic lives in two
-Moduprint canvases; `Flux - control` is ~42 nodes and is the only one worth unpacking.
+Moduprint canvases; `Flux - control` is ~64 nodes and is the only one worth unpacking.
+[PRIOR-ART.md](PRIOR-ART.md) is what an existing, working in-world deck importer does
+differently, and which of those we took.
 
 **Nothing about a deck is baked in.** The panel knows five URLs. Card codes, how many
 there are, and what order they come in all arrive over the wire. Adding a set or a deck
@@ -78,7 +86,8 @@ RKL=/path/to/Resonite-Knowledge-Library npm test
 intentions, so a node wired to the wrong id fails there exactly as it would in-world.
 
 `verify-classpaths.mjs` checks every emitted type against the decompiled engine source,
-**generic constraints included**. This is the check that would have caught the build
+**generic constraints included**, and walks every impulse edge to prove no `AsyncActionNode`
+is reachable from a synchronous entry point without a `StartAsyncTask` in between. This is the check that would have caught the build
 where every button was dead: it emitted `WriteDynamicValueVariable<string>`, and that
 node is declared `where T : unmanaged`, so the string form cannot exist. The package
 encoded perfectly and validated with zero dangling references; the component simply
@@ -98,10 +107,14 @@ proves very little.
   buttons — 7, 21, 70, 50 and 48 cards — asserting the right number light up, that they
   are the first N, and that each points at its own record's art. Plus an empty response
   and a network error.
-- **Both readouts are driven**, and the status shows the error text on failure.
+- **All three readouts are driven**, the status shows the error text on failure, and
+  **every way the request can end reports on the event line** — the request's `OnResponse`,
+  `OnError` and `OnDenied`, the permission prompt's `OnDenied` and `OnIgnored`, and both
+  failure paths of every URL write. A terminal impulse left null is a dead end with nothing
+  anywhere to say it happened.
 - **Encoding**: zero dangling references, zero unbound hooks, BSON round-trips
   byte-identical.
-- **Layout and pretty-flux**: two Moduprint canvases with the control one under 60
+- **Layout and pretty-flux**: two Moduprint canvases with the control one under 70
   nodes, comment zones present, titled and disjoint, no two nodes overlapping a node
   visual, no producer fanning past a dozen consumers, and relays actually feeding
   something.
@@ -115,14 +128,15 @@ which lit 62 cards for a 7-card pull, all showing the first card's art.
 
 ### If something is wrong, check these first
 
-1. **Watch the URL line first.** If pressing a button changes it, everything up to and
-   including the network call is wired; the failure is the endpoint. If it does not
-   change, the problem is in the control canvas — see [GRAPH.md](GRAPH.md).
-2. **Host access.** The panel asks once, naming ResoPal. Denying it leaves the status
-   line showing the error and no cards.
+1. **Read the event line first.** It names the branch that ran, so it tells you which
+   half of the chain to look at before you open anything. The table in
+   [GRAPH.md](GRAPH.md) maps all three lines to a diagnosis.
+2. **Host access.** The panel asks once, naming ResoPal. Denying or dismissing it puts
+   `host access refused` on the event line. (The request node would prompt on its own even
+   without our gate — we keep the gate only for the reason string.)
 3. **`/api/pull` and `/api/deck` must be deployed.** Until the Worker ships them, every
-   button ends at the status line with a network error. That is the intended failure —
-   visible rather than silent — but it is still a failure.
+   button ends with `HTTP 404` on the event line. That is the intended failure — visible
+   rather than silent — but it is still a failure.
 4. **Panel scale.** 620×660 canvas units at 0.00058 ≈ 36×38 cm. Grab and scale it if
    that reads wrong in your session.
 5. **Card orientation.** Quads are `DualSided`, so they are never invisible, but from
@@ -130,15 +144,12 @@ which lit 62 cards for a 7-card pull, all showing the first card's art.
 
 ## Known gaps
 
-- **Landscape cards render sideways.** 19 of BP01's 101 cards are printed landscape
-  (`data/pool-bp01.json` lists them) and nothing here rotates them. The fix needs a node
-  that exposes a loaded texture's aspect; worth confirming one exists before designing
-  around it.
 - **The white corner rim.** Materials are `Cutout` at `AlphaCutoff 0.72`, the values the
   deck bake settled on, but this path skips `solidify()` — expect a fainter version of
   the rim `docs/PIPELINE.md` describes.
 - **70 cards is the ceiling**, matching the deck template's 10×7 atlas grid. A deck
-  larger than that would be truncated rather than refused.
+  larger than that would be truncated rather than refused. The ceiling exists only because
+  the decoders are pre-baked; `DuplicateSlot` would remove it — see [PRIOR-ART.md](PRIOR-ART.md).
 - **No retry.** One request per press; nothing re-fires if the permission prompt is
   still open.
 

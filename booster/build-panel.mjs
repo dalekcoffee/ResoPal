@@ -10,8 +10,16 @@
 //  3. A classpath that reads plausibly is not a classpath that exists. The second
 //     build emitted `WriteDynamicValueVariable<string>`, which cannot exist -
 //     that node is declared `where T : unmanaged` - so every button did nothing.
-//     `verify-classpaths.mjs` now checks every emitted type against the
-//     decompiled source, constraints included, and is part of `npm test`.
+//  4. GET_String and RequestHostAccessUrl are both `AsyncActionNode`. An ordinary
+//     impulse cannot run one: the chain has to pass through a StartAsyncTask
+//     first, or they simply never execute. There is exactly one, right after the
+//     buttons join, so everything downstream of it is async-capable.
+//  5. A constant must not sit in the lane between two nodes that wire to each
+//     other. The URL constants used to sit between the receiver and the write,
+//     so the impulse wire ran straight through a node box and read as
+//     unconnected (pretty-flux section 2).
+//
+// `verify-classpaths.mjs` gates 3 and 4; `test-panel.mjs` gates 5.
 //
 // The graph is split across TWO Moduprint canvases on purpose. Everything a human
 // needs in order to read or debug this lives in `Flux - control`, which is about
@@ -85,6 +93,14 @@ const T = {
   RequestHost: PB + 'FrooxEngine.Network.RequestHostAccessUrl',
   Get:         PB + 'FrooxEngine.Network.GET_String',
   If:          PB + 'If',
+  StartAsync:  PB + 'StartAsyncTask',
+  ScopeIn:     PB + 'ValueInput<[FrooxEngine]FrooxEngine.HostAccessScope>',
+  // The response's HTTP code, for the event line. GET_String only writes the
+  // exception message into Content on a TRANSPORT error; a 404 or a 500 is a
+  // perfectly successful request with a body that is not cards, and without
+  // this the panel shows you the first 64 characters of an error page.
+  StatusCast:  PB + 'Casts.ValueToObjectCast<HttpStatusCode>',
+  Format:      PB + 'Strings.FormatString',
   StrIn:       PB + 'ValueObjectInput<string>',
   IntIn:       PB + 'ValueInput<int>',
   Substr:      PB + 'Strings.Substring',
@@ -126,6 +142,7 @@ const T = {
   UIText: FE + 'UI_TextUnlitMaterial',
   BtnTrigger: FE + 'ButtonDynamicImpulseTrigger',
   SpriteProvider: FE + 'SpriteProvider',
+  SizeDriver: FE + 'TextureSizeDriver',
   Canvas: UIX + 'Canvas',
   Rect: UIX + 'RectTransform',
   Image: UIX + 'Image',
@@ -364,8 +381,18 @@ for (let i = 0; i < MAX_CARDS; i++) {
     Mesh: mesh.id, Materials: pf.list([mat.id]), MaterialPropertyBlocks: [],
     ShadowCastMode: 'On', SortingOrder: I(0),
   });
+  // 19 of BP01's 101 cards are printed landscape. Nothing here needs to know
+  // which: TextureSizeDriver reads the loaded texture's own pixel size and
+  // drives the quad from it. UnitHeight normalises to (aspect, 1), Ratio scales
+  // that to CARD_H, and MaxSize caps the width so a landscape card shrinks to
+  // fit its cell instead of overlapping its neighbour. No ProtoFlux, and no
+  // node that exposes a texture's aspect - which is why this gap stayed open.
+  const sizeDriver = comp(T.SizeDriver, {
+    Texture: tex.id, Target: mesh.f.Size, DriveMode: 'UnitHeight',
+    Premultiply: V2(1, 1), Ratio: V2(CARD_H, CARD_H), MaxSize: V2(CARD_W, CARD_H),
+  });
   const col = i % COLS, row = Math.floor(i / COLS);
-  const s = slot(`card ${String(i + 1).padStart(2, '0')}`, [mesh.comp, rend.comp],
+  const s = slot(`card ${String(i + 1).padStart(2, '0')}`, [mesh.comp, rend.comp, sizeDriver.comp],
     [(col - (COLS - 1) / 2) * (CARD_W + GAP), ((ROWS - 1) / 2 - row) * (CARD_H + GAP), 0]);
   assets.push(tex.entry, mat.entry);
   textures.push(tex); cardSlots.push(s); activeFields.push(s._slot.activeFieldId);
@@ -380,49 +407,97 @@ const controlNodes = [], controlZones = [];
 // Zone 1: the buttons. One receiver per tag, each writing its URL into the
 // shared variable, all joining one trunk relay so the request node takes a
 // single incoming wire (pretty-flux section 2, the owner's own fan rule).
-const varPath = strIn('name: ResoPal/url', 'ResoPal/url', [COL * 1.2, ROW, 0]);
-const pathTrunk = strRelay('name -> all writes', varPath.id, [COL * 1.7, ROW, 0]);
-const joinTrunk = node('any button -> fetch', T.FlowRelay, { Next: null }, [COL * 3.4, -ROW * 2, 0]);
-const buttonNodes = [varPath, pathTrunk, joinTrunk];
+const joinTrunk = node('any button -> fetch', T.FlowRelay, { Next: null }, [COL * 4.2, -ROW * 4.8, 0]);
+const buttonNodes = [joinTrunk];
+const urlWrites = [];
 BUTTONS.forEach((b, i) => {
-  const y = -i * ROW;
+  const y = -i * ROW * 2.4;
   const tagValue = comp(T.GlobalStr, { Value: `ResoPal/${b.tag}` });
-  const url = strIn(`url: ${b.tag}`, b.url, [0, y, 0]);
+  // The URL constant sits HALF A ROW BELOW the receiver-to-write line. Placed on
+  // that line - which is where it used to be - the impulse wire runs straight
+  // through its box and the pair reads as unconnected. Pretty-flux section 2:
+  // never let a const sit in the lane between two nodes that wire to each other.
+  const url = strIn(`url: ${b.tag}`, b.url, [COL * 1.5, y - ROW * 0.75, 0]);
+  // The variable NAME is duplicated per row rather than shared through a trunk.
+  // One shared const above a column of five writes sends its wires straight down
+  // THROUGH the writes above each target; a local copy has no wire to route.
+  const pathConst = strIn(`name: ResoPal/url`, 'ResoPal/url', [COL * 1.5, y + ROW * 0.75, 0]);
   const write = node(`set ResoPal/url := ${b.tag}`, T.WriteVar, {
-    Target: null, Path: pathTrunk.id, OnNotFound: null, OnSuccess: joinTrunk.id, OnFailed: null, Value: url.id,
+    Target: null, Path: pathConst.id, OnNotFound: null, OnSuccess: joinTrunk.id, OnFailed: null, Value: url.id,
   }, [COL * 2.4, y, 0]);
   const recv = proxyNode(`on press: ${b.tag}`, T.Receiver, T.ReceiverProxy,
-    { Tag: tagValue.id, OnTriggered: write.id }, [COL * 1.2, y, 0], [tagValue.comp]);
-  buttonNodes.push(url, recv, write);
+    { Tag: tagValue.id, OnTriggered: write.id }, [0, y, 0], [tagValue.comp]);
+  buttonNodes.push(url, pathConst, recv, write);
+  urlWrites.push(write);
 });
+// Both failure paths of every URL write. DynamicVariableAction returns
+// OnNotFound when the space or the variable is missing, OnFailed when the value
+// will not take; both are otherwise dead ends that stop the chain before the
+// request node ever runs, with nothing anywhere to say so. This write lives
+// here rather than in the event column because a wire from the write column all
+// the way across to that column would run straight through zone 2.
+const failText = strIn('text: could not set ResoPal/url', 'could not set ResoPal/url', [COL * 3.0, -ROW * 12, 0]);
+const failPath = strIn('name: ResoPal/event', 'ResoPal/event', [COL * 3.0, -ROW * 13, 0]);
+const failSay = node('a write failed -> say so', T.WriteVar, {
+  Target: null, Path: failPath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: failText.id,
+}, [COL * 4.2, -ROW * 12, 0]);
+for (const w of urlWrites) {
+  w.slot.Components.Data[0].Data.OnNotFound.Data = failSay.id;
+  w.slot.Components.Data[0].Data.OnFailed.Data = failSay.id;
+}
+buttonNodes.push(failText, failPath, failSay);
+
 controlNodes.push(...buttonNodes);
 controlZones.push(around('1 · a button picks the URL', buttonNodes));
 
 // Zone 2: the request. The chosen URL is driven into a plain input by a
 // DynamicValueVariableDriver, so the graph reads it without a Read node.
 const ZX = COL * 5.2;
-const urlNode = strIn('the URL to fetch', BUTTONS[2].url, [ZX, 0, 0]);
+const urlNode = strIn('the URL to fetch', BUTTONS[2].url, [ZX + COL * 1.5, ROW * 2, 0]);
 const urlDriver = comp(T.VarDriver, { VariableName: 'ResoPal/url', Target: urlNode.f.Value, DefaultValue: BUTTONS[2].url });
 urlNode.slot.Components.Data.push(urlDriver.comp);
-const urlTrunk = strRelay('URL -> request + readout', urlNode.id, [ZX + COL * 0.6, 0, 0]);
-const apiUri = node('URL -> Uri', T.ToUri, { Input: urlTrunk.id }, [ZX + COL * 1.2, 0, 0]);
+const urlTrunk = strRelay('URL -> request + readout', urlNode.id, [ZX + COL * 2.5, ROW * 2, 0]);
+const apiUri = node('URL -> Uri', T.ToUri, { Input: urlTrunk.id }, [ZX + COL * 3.5, ROW * 2, 0]);
 
-const hostStr = strIn('host', PROXY, [ZX, -ROW * 3, 0]);
-const hostUri = node('host -> Uri', T.ToUri, { Input: hostStr.id }, [ZX + COL * 0.6, -ROW * 3, 0]);
-const hostTrunk = strRelay('host -> gate + prompt', hostUri.id, [ZX + COL * 1.2, -ROW * 3, 0]);
-const allowed = node('host access granted?', T.IsAllowed, { Host: hostTrunk.id, Scope: null }, [ZX + COL * 1.8, -ROW * 3, 0]);
-const reason = strIn('permission reason', 'Fetch Palworld TCG cards from ResoPal', [ZX, -ROW * 4, 0]);
+const hostStr = strIn('host', PROXY, [ZX, -ROW * 4, 0]);
+const hostUri = node('host -> Uri', T.ToUri, { Input: hostStr.id }, [ZX + COL * 1, -ROW * 4, 0]);
+const hostTrunk = strRelay('host -> gate + prompt', hostUri.id, [ZX + COL * 2, -ROW * 4, 0]);
+// Scope is spelled out on BOTH nodes. Left unwired it defaults to `Everything`,
+// which asks "is EVERY kind of access allowed for this host?" - a stricter
+// question than the prompt actually grants, so the check can stay false forever
+// and re-prompt on every press. We only ever speak HTTP, so say so.
+const httpScope = node('scope: HTTP', T.ScopeIn, { Value: 'HTTP' }, [ZX + COL * 1, -ROW * 6, 0]);
+const allowed = node('host access granted?', T.IsAllowed, { Host: hostTrunk.id, Scope: httpScope.id }, [ZX + COL * 3, -ROW * 4, 0]);
+const reason = strIn('permission reason', 'Fetch Palworld TCG cards from ResoPal', [ZX + COL * 2, -ROW * 8, 0]);
 const ask = node('ask for host access', T.RequestHost, {
-  Host: hostTrunk.id, Reason: reason.id, Scope: null, OnGranted: null, OnDenied: null, OnIgnored: null,
-}, [ZX + COL * 1.8, -ROW * 4, 0]);
+  Host: hostTrunk.id, Reason: reason.id, Scope: httpScope.id, OnGranted: null, OnDenied: null, OnIgnored: null,
+}, [ZX + COL * 3, -ROW * 6, 0]);
 const get = node('GET the card list', T.Get, {
   URL: apiUri.id, Content: null, StatusCode: null, OnSent: null, OnResponse: null, OnError: null, OnDenied: null,
-}, [ZX + COL * 3.0, -ROW * 1, 0]);
-const gate = node('allowed ? GET : ask', T.If, { Condition: allowed.id, OnTrue: get.id, OnFalse: ask.id }, [ZX + COL * 2.4, -ROW * 2, 0]);
+}, [ZX + COL * 4, 0, 0]);
+const gate = node('allowed ? GET : ask', T.If, { Condition: allowed.id, OnTrue: get.id, OnFalse: ask.id }, [ZX + COL * 1.5, 0, 0]);
+// GET_String and RequestHostAccessUrl are both AsyncActionNode. An ordinary
+// impulse cannot run one - it needs an async context, and without this the
+// chain reaches the gate and then silently stops. One StartAsyncTask here puts
+// everything downstream of it, gate included, in that context.
+const asyncTask = node('run the rest asynchronously', T.StartAsync,
+  { TaskStart: gate.id, OnStarted: null, OnFailed: null }, [ZX, 0, 0]);
 ask.slot.Components.Data[0].Data.OnGranted.Data = get.id;
-joinTrunk.slot.Components.Data[0].Data.Next.Data = gate.id;
+joinTrunk.slot.Components.Data[0].Data.Next.Data = asyncTask.id;
 
-const requestNodes = [urlNode, urlTrunk, apiUri, hostStr, hostUri, hostTrunk, allowed, reason, ask, gate, get];
+// A refusal is reported here rather than in the event column, for the same
+// reason the URL-write failure is reported in zone 1: a wire from the prompt all
+// the way across to that column would cut diagonally through everything between.
+const refuseText = strIn('text: host access refused', 'host access refused', [ZX + COL * 2, -ROW * 10, 0]);
+const refusePath = strIn('name: ResoPal/event', 'ResoPal/event', [ZX + COL * 2, -ROW * 11, 0]);
+const refuseSay = node('refused -> say so', T.WriteVar, {
+  Target: null, Path: refusePath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: refuseText.id,
+}, [ZX + COL * 3.6, -ROW * 10, 0]);
+ask.slot.Components.Data[0].Data.OnDenied.Data = refuseSay.id;
+ask.slot.Components.Data[0].Data.OnIgnored.Data = refuseSay.id;
+get.slot.Components.Data[0].Data.OnDenied.Data = refuseSay.id;
+
+const requestNodes = [urlNode, urlTrunk, apiUri, hostStr, hostUri, hostTrunk, httpScope, allowed, reason, ask, gate, get, asyncTask, refuseText, refusePath, refuseSay];
 controlNodes.push(...requestNodes);
 controlZones.push(around('2 · gate host access, then GET', requestNodes));
 
@@ -431,35 +506,101 @@ controlZones.push(around('2 · gate host access, then GET', requestNodes));
 // proves the button and the variable worked, and the status line carries either
 // the first record or - because GET_String writes the exception message into
 // Content - the network error itself.
-const RX = ZX + COL * 4.4;
+const RX = ZX + COL * 9;
 const BODY = get.f.Content;
 const bodyTrunk = strRelay('response -> readout + decoders', BODY, [RX, 0, 0]);
-const NL = strIn('needle: newline', '\n', [RX, -ROW * 2, 0]);
 const firstEnd = node('end of the first record', T.Substr, { Str: bodyTrunk.id, StartIndex: null, Length: null }, [RX + COL * 0.6, -ROW, 0]);
 const firstTrim = node('first record, trimmed', T.Trim, { A: firstEnd.id }, [RX + COL * 1.2, -ROW, 0]);
-const bodyLen = node('response length', T.StrLen, { A: bodyTrunk.id }, [RX + COL * 0.6, -ROW * 2, 0]);
-const lenTrunk = intRelay('length -> decoders + status', bodyLen.id, [RX + COL * 1.2, -ROW * 2, 0]);
-const zeroLen = intIn('0', 0, [RX + COL * 0.6, -ROW * 3, 0]);
+const bodyLen = node('response length', T.StrLen, { A: bodyTrunk.id }, [RX + COL * 0.6, ROW, 0]);
+const lenTrunk = intRelay('length -> decoders + status', bodyLen.id, [RX + COL * 1.2, ROW, 0]);
+const zeroLen = intIn('0', 0, [RX + COL * 0.6, -ROW * 2.6, 0]);
 const gotAny = node('did anything come back?', T.IntGt, { A: lenTrunk.id, B: zeroLen.id }, [RX + COL * 1.8, -ROW * 2.5, 0]);
 const statusMsg = node('status: first card, else the error', T.StrPick,
-  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: bodyTrunk.id }, [RX + COL * 2.4, -ROW * 1.5, 0]);
+  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: bodyTrunk.id }, [RX + COL * 2.4, 0, 0]);
 
 const statusLabel = label('status text', 'Ready — pick a deck or a booster', 19, CYAN);
 const statusFieldId = statusLabel.Components.Data[1].Data.Content.ID;
 const urlLabel = label('url text', PROXY, 14, DIM);
 const urlFieldId = urlLabel.Components.Data[1].Data.Content.ID;
 
-const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [RX + COL * 3.0, -ROW * 1.5, 0]);
-const dUrl = drive('drive the URL readout', 'str', urlTrunk.id, urlFieldId, [RX + COL * 3.0, -ROW * 3.5, 0]);
+const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [RX + COL * 3.0, 0, 0]);
+const dUrl = drive('drive the URL readout', 'str', urlTrunk.id, urlFieldId, [ZX + COL * 3.5, ROW * 3.2, 0]);
 
-const readoutNodes = [bodyTrunk, NL, firstEnd, firstTrim, bodyLen, lenTrunk, zeroLen, gotAny, statusMsg, dStatus, dUrl];
-controlNodes.push(...readoutNodes);
+// ── which branch actually fired ──────────────────────────────────────────────
+// The status line reads GET_String.Content, so it can only describe a request
+// that produced a body. These four writes hang off the graph's own terminal
+// impulses, so the panel names the branch that ran even when there is no body:
+//
+//   GET OnResponse            "response received - HTTP {code}"
+//   GET OnError               "network error - no answer from the host"
+//   GET/prompt OnDenied       "host access refused"
+//   the URL write's failures  "could not set ResoPal/url"
+//
+// The HTTP code is the one that matters most. GET_String writes an exception
+// message into Content only on a TRANSPORT failure - a 404 or a 502 is a
+// perfectly successful request whose body is not cards, so without the code the
+// status line quietly shows the first 64 characters of an error page and the
+// panel looks like it half worked.
+const EX = ZX + COL * 5;
+const eventNodes = [];
+
+// Each outcome gets a relay stub right beside the request node before it travels
+// anywhere. That is the house style for a branch, and it is also what keeps this
+// column routable: a wire drawn straight from the request to a write four
+// columns away sweeps diagonally through everything in between, which is the
+// defect that made the URL constants look unconnected in the first build.
+const okStub = node('the request answered', T.FlowRelay, { Next: null }, [EX - COL * 0.5, ROW, 0]);
+const errStub = node('the request did not answer', T.FlowRelay, { Next: null }, [EX - COL * 0.5, -ROW * 5, 0]);
+get.slot.Components.Data[0].Data.OnResponse.Data = okStub.id;
+get.slot.Components.Data[0].Data.OnError.Data = errStub.id;
+
+// Row 1: the response, with its HTTP code. StatusCode is a named OUTPUT of the
+// request node, so it is addressed by its FIELD id - wiring the node's component
+// id would read the action node's own value output, which is not the code.
+const okPath = strIn('name: ResoPal/event', 'ResoPal/event', [EX, -ROW * 2, 0]);
+const okTmpl = strIn('text: response received - HTTP {0}', 'response received - HTTP {0}', [EX + COL, -ROW * 3, 0]);
+const okCast = node('the HTTP code as text', T.StatusCast, { Input: get.f.StatusCode }, [EX, -ROW * 4, 0]);
+const okFmt = node('fill in the code', T.Format, { Format: okTmpl.id, Parameters: pf.list([okCast.id]) }, [EX + COL, -ROW * 4, 0]);
+const okSay = node('-> ResoPal/event', T.WriteVar, {
+  Target: null, Path: okPath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: okFmt.id,
+}, [EX + COL * 2, -ROW * 2, 0]);
+okStub.slot.Components.Data[0].Data.Next.Data = okSay.id;
+
+// Row 2: no answer at all. GET_String writes the exception into Content, so the
+// status line carries the detail; this line just names the branch.
+const errText = strIn('text: network error - no answer from the host', 'network error - no answer from the host', [EX, -ROW * 6, 0]);
+const errPath = strIn('name: ResoPal/event', 'ResoPal/event', [EX, -ROW * 7, 0]);
+const errSay = node('-> ResoPal/event', T.WriteVar, {
+  Target: null, Path: errPath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: errText.id,
+}, [EX + COL * 2, -ROW * 6, 0]);
+errStub.slot.Components.Data[0].Data.Next.Data = errSay.id;
+
+eventNodes.push(okStub, errStub, okPath, okTmpl, okCast, okFmt, okSay, errText, errPath, errSay);
+
+const evtInput = strIn('the last event', '-', [EX, -ROW * 10, 0]);
+evtInput.slot.Components.Data.push(comp(T.VarDriver, {
+  VariableName: 'ResoPal/event', Target: evtInput.f.Value, DefaultValue: 'idle - no request yet',
+}).comp);
+const evtLabel = label('event text', 'idle - no request yet', 14, DIM);
+const evtFieldId = evtLabel.Components.Data[1].Data.Content.ID;
+const dEvent = drive('drive the event readout', 'str', evtInput.id, evtFieldId, [EX + COL * 2, -ROW * 10, 0]);
+eventNodes.push(evtInput, dEvent);
+
+// The URL echo sits beside the relay it reads, which puts it in zone 2's
+// footprint - so it counts toward zone 2's rect, not zone 3's.
+requestNodes.push(dUrl);
+controlNodes.push(dUrl);
+controlZones[1] = around('2 · gate host access, then GET', requestNodes);
+
+const readoutNodes = [bodyTrunk, firstEnd, firstTrim, bodyLen, lenTrunk, zeroLen, gotAny, statusMsg, dStatus];
+controlNodes.push(...readoutNodes, ...eventNodes);
 controlZones.push(around('3 · what the panel shows you', readoutNodes));
+controlZones.push(around('4 · which branch fired', eventNodes));
 
 // The first record is a fixed-width slice like every other one; reuse the same
 // constants the decoders use rather than a second pair.
-const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX, -ROW * 3, 0]);
-const zeroStart = intIn('first record starts at 0', 0, [RX, -ROW * 4, 0]);
+const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX - COL, -ROW * 0.6, 0]);
+const zeroStart = intIn('first record starts at 0', 0, [RX - COL, -ROW * 1.6, 0]);
 firstEnd.slot.Components.Data[0].Data.StartIndex.Data = zeroStart.id;
 firstEnd.slot.Components.Data[0].Data.Length.Data = recWidth.id;
 controlNodes.push(recWidth, zeroStart);
@@ -519,7 +660,8 @@ const decoderFlux = slot('Flux - card decoders', [], [0, -1.6, 0],
 
 // ── assemble ─────────────────────────────────────────────────────────────────
 const urlVar = comp(T.StrVar, { VariableName: 'ResoPal/url', Value: BUTTONS[2].url, OverrideOnLink: false });
-const varsSlot = slot('Vars', [urlVar.comp], [0, 0, 0]);
+const evtVar = comp(T.StrVar, { VariableName: 'ResoPal/event', Value: 'idle — no request yet', OverrideOnLink: false });
+const varsSlot = slot('Vars', [urlVar.comp, evtVar.comp], [0, 0, 0]);
 
 const bg = slot('BG', [
   rect().comp,
@@ -532,7 +674,8 @@ const bg = slot('BG', [
 ], [0, 0, 0], [
   bar('Header', 76, GOLD, '<b>RESOPAL</b>', 40, INK, [logoMark()]),
   slot('Status', [rect().comp, layoutElement(50).comp, image(PANEL).comp], [0, 0, 0], [statusLabel]),
-  slot('URL', [rect().comp, layoutElement(28).comp, image(INK).comp], [0, 0, 0], [urlLabel]),
+  slot('URL', [rect().comp, layoutElement(26).comp, image(INK).comp], [0, 0, 0], [urlLabel]),
+  slot('Event', [rect().comp, layoutElement(26).comp, image(INK).comp], [0, 0, 0], [evtLabel]),
   ...BUTTONS.map((b) => button(controlId, b)),
   label('Footer', 'Cards & data by Palify · palify.org', 15, DIM),
 ]);

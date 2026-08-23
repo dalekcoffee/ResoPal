@@ -7,7 +7,7 @@ rolls through the former, and `booster/out/ResoPal_Panel.resonitepackage` is a g
 five buttons — two trial decks and 1/3/10 boosters. See `booster/README.md`. P3 (cloud spawn) and
 P4 (the tear wrapper) are not started.
 
-Three builds' worth of lessons, all now gated by tests:
+Five builds' worth of lessons, all now gated by tests:
 
 1. The first shipped logic-only ProtoFlux with no UI — nothing to look at unless the network call
    already worked.
@@ -16,14 +16,36 @@ Three builds' worth of lessons, all now gated by tests:
 3. The second emitted `WriteDynamicValueVariable<string>`, a type that **cannot exist** — that node
    is declared `where T : unmanaged`. The package encoded perfectly, validated with zero dangling
    references, and in-world every button did nothing, because the component never resolved.
+4. Every network node in it was called from an ordinary impulse. `GET_String` and
+   `RequestHostAccessUrl` both derive from `AsyncActionNode`; an ordinary impulse cannot run
+   one, and the chain reaches the node and stops with no error anywhere. One `StartAsyncTask`
+   fixes it, and `verify-classpaths.mjs` now walks every impulse edge from the synchronous
+   entry points and fails if an async node is reachable without crossing one.
+5. Nothing reported the outcome. Every terminal impulse that was left null — `OnError`,
+   `OnDenied`, the permission prompt's `OnIgnored`, both failure paths of a variable write —
+   is a dead end that runs nothing and says nothing. So is `WebRequestBase`'s own
+   `return null` on a null URI or an unresolved permission. That is what "I approved host
+   access and then nothing happened" is made of.
 
 That third one is the important lesson: **a wrong classpath fails silently, so "it encoded cleanly"
 proves very little.** `booster/verify-classpaths.mjs` now checks every emitted type against the
 decompiled engine source, generic constraints included, and runs as part of `npm test`.
 
-The graph is now split across two Moduprint canvases — a ~42-node control canvas that is the only
+The fourth and fifth came out of the first real in-world test, and both are now gates: an
+async-context reachability walk, and `every way the request can end reports on the event line`.
+
+The graph is now split across two Moduprint canvases — a ~64-node control canvas that is the only
 one worth unpacking, and a generated decoder canvas — with comment zones, relay banks and the
 pretty-flux layout gates. `booster/GRAPH.md` is the map.
+
+**`booster/PRIOR-ART.md` is the most useful document here.** Sharkmare's `DeckReader` already
+does in-world deck import for four other card games, and its author let us read it. It settles
+three things this plan had guessed at: the request node prompts for host access by itself, so a
+pre-gate is optional; a card's aspect ratio is a `TextureSizeDriver` component and needs no node
+at all, which closes the landscape-card gap; and `DuplicateSlot` copies a template slot
+*including its own ProtoFlux*, so per-card decoding is six nodes that exist once rather than 350
+pre-baked ones. The first two are applied. The third is the next structural change, and it
+removes the 70-card ceiling and the fixed-width record format together.
 
 Every capability it needs is confirmed first-party. The design below is shaped around three hard
 constraints that are easy to design past by accident.
@@ -123,13 +145,13 @@ Practical consequences:
 - Card art comes from the site at full size; budget ~150 KB × 7.
 - The card **back** and the geometry (rounded corners, thickness) are authored once into the rig,
   not fetched.
-- Landscape cards need the same 90° clockwise turn the atlas does. Decide it from the loaded
-  texture's aspect ratio, exactly as the front end does — do not hardcode a list.
-  **Not done in the prototype.** 19 of BP01's 101 cards are landscape (`data/pool-bp01.json`
-  lists them), and they will currently show sideways on the quad. The fix is per-card: rotate
-  the card slot, or set the `QuadMesh.Rotation`, driven off the loaded texture's aspect.
-  There is no aspect-ratio read in the graph yet, so this needs a node that exposes the loaded
-  texture's size — worth confirming exists before designing around it.
+- Landscape cards come out landscape on their own. **Done**, and it needed no node: a
+  `TextureSizeDriver` component reads the loaded texture's own pixel size and drives
+  `QuadMesh.Size` from it. `UnitHeight` with `Ratio = (h, h)` gives every card the same height
+  and its own true width; `MaxSize` caps the width so one of BP01's 19 landscape cards shrinks
+  to fit its cell instead of overlapping its neighbour. The earlier note here asked for "a node
+  that exposes a loaded texture's aspect" — there is none, and none is needed.
+  See `booster/PRIOR-ART.md` §6.
 
 ## Build order
 
@@ -161,8 +183,11 @@ P0–P2 is the honest milestone: a real randomized pack you can hold. P3 and P4 
   isolate, and Cloudflare runs many. It stops a lazy loop from one client and nothing more. Said
   plainly at the call site too. The real fix, if abuse ever appears, is Cloudflare's Rate Limiting
   binding or a Durable Object — both need account config the Worker currently avoids.
-- **Landscape cards.** See above; 19 BP01 cards will render sideways in-world until the graph can
-  read a loaded texture's aspect.
+- **The 70-card ceiling and the decoder canvas.** Both exist only because the card slots and their
+  decoders are pre-baked. `DuplicateSlot` copies a template slot including its own ProtoFlux, so
+  the per-card decode can be six nodes that exist once — which also drops `format=fixed`'s
+  63-character URL limit, because a consume-the-string parser needs no fixed-width records.
+  This is the next structural change; `booster/PRIOR-ART.md` §3 and §5.
 - **Who pays for a re-roll?** Still open. The spawner fires on `OnStart`, so re-triggering it means
   re-spawning the object — cheap. If a pull is ever meant to be scarce, the roll has to be bound to
   something: a short-lived token issued per spawn, or per-user limiting.
