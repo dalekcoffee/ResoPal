@@ -60,6 +60,20 @@ A deck payload carries a ready-made list — no lookup needed:
 plus a slug->quantity map and a `stats.total`. A profile page yields each public deck's UUID, name
 and card count.
 
+Two measured quirks, both of which will bite whoever rewrites the parser:
+
+- **A missing page is HTTP 200.** A nonexistent deck UUID returns 200 and ~19 KB whose only marker
+  is the RSC error digest `NEXT_HTTP_ERROR_FALLBACK;404`. The string
+  `404: This page could not be found.` is *not* a marker — it ships inside the unrendered
+  `notFound` slot of every page, valid decks included.
+- **The page `<title>` is nav chrome.** A profile's display name is in its own island
+  (`{"kind":"profile","title":"DalekCoffee","handle":"dalek"}`), not the first `"title"` in the
+  payload, which is the card index's.
+
+A profile payload gives each public deck a UUID, a name, a card count and the colour split behind
+Palify's own colour bar — but no card codes. Showing four card faces per row in a deck picker would
+cost one full deck fetch each, which is why ResoPal's picker shows the colour bar instead.
+
 This is scraping, and it is version-fragile. Worth noting for a courtesy note to Palify:
 `robots.txt` **disallows `/api/`** for generic agents while `/decks/` and `/u/` are allowed — the
 invited API is the disallowed path and the pages we must read are the permitted ones. Asking them
