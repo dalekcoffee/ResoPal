@@ -40,6 +40,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
+import { memberOrder, isFluxNode, haveSource } from './members.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -202,19 +203,49 @@ const V3 = (x, y, z) => [D(x), D(y), D(z)];
 // Components on slots serialize `persistent-ID` as a bare id; entries in
 // doc.Assets serialize `persistent` as a wrapped bool. Both are verbatim from
 // real packages, and mixing them up is a silent load failure.
-function comp(classpath, fields = {}) {
+//
+// MEMBERS ARE EMITTED IN THE ORDER THE CLASS DECLARES THEM, always. This is not
+// cosmetic. Written in the order the builder happened to list them, the panel
+// encoded cleanly, validated with zero dangling references, and in-world every
+// node was red with wires on the wrong ports: `If` went out as
+// {Condition, OnTrue, OnFalse} where the class declares {OnTrue, OnFalse,
+// Condition}, and `GET_String` declares `Content` LAST - it comes from a
+// subclass, after the base's impulses - so emitting it fifth shifted every
+// impulse output by one. `members.mjs` reads the real order out of each class's
+// own GetSyncMember switch; passing a name the class does not have is a build
+// error rather than a field that silently goes nowhere.
+function build(classpath, fields, kind) {
   const id = pf.nextId();
-  const data = { ID: id, 'persistent-ID': pf.nextId(), UpdateOrder: pf.fi(0), Enabled: pf.fd(true) };
+  const head = kind === 'asset'
+    ? { ID: id, persistent: pf.fd(true), UpdateOrder: pf.fi(0), Enabled: pf.fd(true) }
+    : { ID: id, 'persistent-ID': pf.nextId(), UpdateOrder: pf.fi(0), Enabled: pf.fd(true) };
+  const data = head;
   const f = {};
-  for (const [k, v] of Object.entries(fields)) { const w = pf.fd(v); data[k] = w; f[k] = w.ID; }
-  return { comp: { Type: pf.typeIndex(classpath), Data: data }, id, f };
+  const put = (k, v) => { const w = pf.fd(v); data[k] = w; f[k] = w.ID; };
+  const order = memberOrder(classpath, kind);
+  if (order) {
+    const body = order.slice(3);          // past persistent / UpdateOrder / Enabled
+    for (const k of Object.keys(fields))
+      if (!body.includes(k)) throw new Error(`${classpath} has no member "${k}" (has ${body.join(', ')})`);
+    // A ProtoFlux node's members are all ports, so every one is declared even
+    // when nothing is wired to it - an absent port is a port the graph cannot
+    // resolve. A plain component keeps only what is set, because a value-typed
+    // member written as null is worse than one left to its own default.
+    for (const k of body)
+      if (k in fields) put(k, fields[k]);
+      else if (isFluxNode(classpath)) put(k, null);
+  } else {
+    for (const [k, v] of Object.entries(fields)) put(k, v);
+  }
+  return { Type: pf.typeIndex(classpath), Data: data, id, f };
+}
+function comp(classpath, fields = {}) {
+  const b = build(classpath, fields, 'component');
+  return { comp: { Type: b.Type, Data: b.Data }, id: b.id, f: b.f };
 }
 function asset(classpath, fields = {}) {
-  const id = pf.nextId();
-  const data = { ID: id, persistent: pf.fd(true), UpdateOrder: pf.fi(0), Enabled: pf.fd(true) };
-  const f = {};
-  for (const [k, v] of Object.entries(fields)) { const w = pf.fd(v); data[k] = w; f[k] = w.ID; }
-  return { entry: { Type: pf.typeIndex(classpath), Data: data }, id, f };
+  const b = build(classpath, fields, 'asset');
+  return { entry: { Type: b.Type, Data: b.Data }, id: b.id, f: b.f };
 }
 function slot(name, components = [], pos = [0, 0, 0], children = [], tag = null, id = pf.nextId(), scale = [1, 1, 1]) {
   const position = pf.fd(V3(...pos));
@@ -574,22 +605,27 @@ importRecv.slot.Components.Data[0].Data.OnTriggered.Data = postAsync.id;
 // everything in between. Each outcome gets a stub beside the request, then its
 // own three-column band: the write on the right, its inputs combed into the
 // column beside it, one per row.
-const EVX = ZX + COL * 4.5;
+// The three stubs share one COLUMN, one row apart, right of both requests. A
+// fan to three targets stacked in a column dives fast enough to clear the
+// nearer ones; a fan to three targets on the same ROW passes straight through
+// them. Each stub then runs level into its own band, and every band keeps its
+// inputs on the two rows below its stub, so no other stub's run crosses one.
+const EVX = ZX + COL * 5;
 const eventNodes = [];
 function outcome(name, band, extra) {
-  const x = EVX + band * COL * 3;
-  const stub = node(name, T.FlowRelay, { Next: null }, [x, -ROW * 2, 0]);
-  const path = strIn('name: ResoPal/event', 'ResoPal/event', [x + COL, -ROW * 5, 0]);
-  const value = extra(x, -ROW * 8);
+  const y = -ROW * (4 + band * 4);
+  const stub = node(name, T.FlowRelay, { Next: null }, [EVX, y, 0]);
+  const path = strIn('name: ResoPal/event', 'ResoPal/event', [EVX + COL * 1.5, y - ROW, 0]);
+  const value = extra(EVX + COL * 1.5, y);
   const say = node('-> ResoPal/event', T.WriteVar, {
     Target: null, Path: path.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: value.id,
-  }, [x + COL * 2, -ROW * 4, 0]);
+  }, [EVX + COL * 3.5, y, 0]);
   stub.slot.Components.Data[0].Data.Next.Data = say.id;
   eventNodes.push(stub, path, say);
   return stub;
 }
 const says = (text) => (x, y) => {
-  const c = strIn(`text: ${text}`, text, [x + COL, y, 0]);
+  const c = strIn(`text: ${text}`, text, [x + COL, y - ROW * 2, 0]);
   eventNodes.push(c);
   return c;
 };
@@ -600,9 +636,9 @@ const says = (text) => (x, y) => {
 const okStub = outcome('a request answered', 0, (x, y) => {
   // StatusCode is a named OUTPUT, addressed by its FIELD id. The node's own
   // component id is a different thing entirely and would read as nothing.
-  const cast = node('the HTTP code as text', T.StatusCast, { Input: get.f.StatusCode }, [x, y - ROW, 0]);
-  const tmpl = strIn('text: response received - HTTP {0}', 'response received - HTTP {0}', [x, y, 0]);
-  const fmt = node('fill in the code', T.Format, { Format: tmpl.id, Parameters: pf.list([cast.id]) }, [x + COL, y, 0]);
+  const cast = node('the HTTP code as text', T.StatusCast, { Input: get.f.StatusCode }, [x, y - ROW * 3, 0]);
+  const tmpl = strIn('text: response received - HTTP {0}', 'response received - HTTP {0}', [x, y - ROW * 2, 0]);
+  const fmt = node('fill in the code', T.Format, { Format: tmpl.id, Parameters: pf.list([cast.id]) }, [x + COL, y - ROW * 2, 0]);
   eventNodes.push(cast, tmpl, fmt);
   return fmt;
 });
@@ -635,14 +671,14 @@ controlZones.push(around('2 · ask resopal, and say what came back', requestNode
 const SX = COL * 20;
 const at = (col, row) => [SX + col * COL, -row * ROW * 1.6, 0];
 
-const restStore = proxyNode('rest of the response', T.Store, T.StoreProxy, {}, at(0, 3));
-const bodyStore = proxyNode('the whole response', T.Store, T.StoreProxy, {}, at(-0.6, 1));
+const restStore = proxyNode('rest of the response', T.Store, T.StoreProxy, {}, at(-1.2, 3));
+const bodyStore = proxyNode('the whole response', T.Store, T.StoreProxy, {}, at(-0.6, -1));
 const cardsRef = comp(T.SlotRef, { Reference: cardsSlot._slot.id });
 const cardsIn = comp(T.SlotIn, { Source: cardsRef.id });
-const cardsNode = { slot: slot('the Cards slot', [cardsIn.comp, cardsRef.comp], at(1, 6)), id: cardsIn.id, pos: at(1, 6) };
+const cardsNode = { slot: slot('the Cards slot', [cardsIn.comp, cardsRef.comp], at(3, 6)), id: cardsIn.id, pos: at(3, 6) };
 const tmplRef = comp(T.SlotRef, { Reference: cardTemplate._slot.id });
 const tmplIn = comp(T.SlotIn, { Source: tmplRef.id });
-const tmplNode = { slot: slot('the card template', [tmplIn.comp, tmplRef.comp], at(3, 3)), id: tmplIn.id, pos: at(3, 3) };
+const tmplNode = { slot: slot('the card template', [tmplIn.comp, tmplRef.comp], at(4.4, 3)), id: tmplIn.id, pos: at(4.4, 3) };
 
 // Both requests land here. Each stashes the body twice - once whole for the
 // readout, once as the remainder the loop eats - then clears the previous
@@ -669,15 +705,19 @@ clear.slot.Components.Data[0].Data.Next.Data = loopAsync.id;
 // The loop spine runs left to right along row 8; everything it reads hangs below
 // it, and the one wire that goes backwards runs along row 13, under all of it.
 const R = 8;
-const loopTop = node('next record', T.FlowRelay, { Next: null }, at(0, R));
+const loopTop = node('next record', T.FlowRelay, { Next: null }, at(-0.6, R));
 loopAsync.slot.Components.Data[0].Data.TaskStart.Data = loopTop.id;
 const oneFrame = intIn('one frame', 1, at(0, R + 1));
 const breathe = node('let a frame pass', T.DelayFrames,
   { Updates: oneFrame.id, OnTriggered: null, Next: null }, at(1, R));
 
+// One tap for the remainder, in the row that reads it. Four consumers spread
+// across the loop pulling on the store directly is four wires back across the
+// zone; a relay beside them is one.
+const restTap = strRelay('the remainder, three ways', restStore.id, at(-1.2, R + 5));
 const newline = strIn('a newline', '\n', at(0, R + 3));
 const nlAt = node('where the record ends', T.IndexOf,
-  { Str: restStore.id, Part: newline.id, StartIndex: null, SearchFromEnd: null, ComparisonMode: null }, at(1, R + 3));
+  { Str: restTap.id, Part: newline.id, StartIndex: null, SearchFromEnd: null, ComparisonMode: null }, at(1, R + 3));
 const nlTrunk = intRelay('that offset, three ways', nlAt.id, at(2, R + 3));
 const shortest = intIn('shortest sane record', 8, at(2.6, R + 5));
 // One condition covers both ways the loop can be done: IndexOfString returns -1
@@ -690,11 +730,11 @@ const gate = node('another record ? spawn : done', T.If,
 
 const zero = intIn('from the start', 0, at(3.17, R + 3.25));
 const record = node('this record', T.Substr,
-  { Str: restStore.id, StartIndex: zero.id, Length: nlTrunk.id }, at(4, R + 4));
+  { Str: restTap.id, StartIndex: zero.id, Length: nlTrunk.id }, at(4, R + 4));
 const artUrl = node('trimmed to the art URL', T.Trim, { A: record.id }, at(5, R + 4));
-const afterNl = node('just past the newline', T.IntInc, { N: nlTrunk.id }, at(4, R + 6));
+const afterNl = node('just past the newline', T.IntInc, { N: nlTrunk.id }, at(4, R + 7));
 const remainder = node('everything after it', T.Substr,
-  { Str: restStore.id, StartIndex: afterNl.id, Length: null }, at(5, R + 6));
+  { Str: restTap.id, StartIndex: afterNl.id, Length: null }, at(5, R + 6));
 
 // `Duplicate` is an output sentinel. It has to be emitted as a field or there
 // is no id for the nodes downstream to address, and they would silently end up
@@ -709,7 +749,14 @@ const setUrl = node('tell the card its art', T.WriteVar,
 dup.slot.Components.Data[0].Data.Next.Data = setUrl.id;
 
 // Where it goes: the card's index is however many cards are already there.
-const howMany = node('how many cards so far', T.ChildCount, { Instance: cardsNode.id }, at(6, R + 8));
+// Its own copy of the Cards reference. Sharing the one in the spawn row means a
+// wire back across the entire loop; a reference node is two components and no
+// wire at all (pretty-flux section 2, the same reason the variable names are
+// duplicated per button row rather than trunked).
+const cardsRef2 = comp(T.SlotRef, { Reference: cardsSlot._slot.id });
+const cardsIn2 = comp(T.SlotIn, { Source: cardsRef2.id });
+const cardsNode2 = { slot: slot('the Cards slot', [cardsIn2.comp, cardsRef2.comp], at(5, R + 8)), id: cardsIn2.id, pos: at(5, R + 8) };
+const howMany = node('how many cards so far', T.ChildCount, { Instance: cardsNode2.id }, at(6, R + 8));
 const idx = intRelay('that index, twice', howMany.id, at(7, R + 8));
 const perRow = intIn(`cards per row (${COLS})`, COLS, at(7, R + 9));
 const colOf = node('which column', T.IntMod, { A: idx.id, B: perRow.id }, at(8, R + 7));
@@ -731,17 +778,22 @@ setUrl.slot.Components.Data[0].Data.OnSuccess.Data = setPos.id;
 const eat = node('eat that record', T.StoreWrite,
   { Variable: restStore.id, Value: remainder.id, OnWritten: null }, at(8, R));
 setPos.slot.Components.Data[0].Data.Next.Data = eat.id;
-const backA = node('and go round again', T.FlowRelay, { Next: null }, at(9, R));
-const backB = node('back to the top', T.FlowRelay, { Next: loopTop.id }, at(9, R + 13));
+const backA = node('and go round again', T.FlowRelay, { Next: null }, at(12.4, R));
+const backB = node('back to the top', T.FlowRelay, { Next: null }, at(12.4, R + 13));
+// Three corners, not one diagonal: the return runs down its own column, along a
+// row below everything, and back up the left edge. A straight line from the end
+// of the loop to the start cuts through every data row in between.
+const backC = node('and in again', T.FlowRelay, { Next: loopTop.id }, at(-0.6, R + 13));
 eat.slot.Components.Data[0].Data.OnWritten.Data = backA.id;
 backA.slot.Components.Data[0].Data.Next.Data = backB.id;
+backB.slot.Components.Data[0].Data.Next.Data = backC.id;
 loopTop.slot.Components.Data[0].Data.Next.Data = breathe.id;
 breathe.slot.Components.Data[0].Data.Next.Data = gate.id;
 
-const spawnNodes = [restStore, bodyStore, cardsNode, tmplNode, startLoop, getBody, getRest, postBody, postRest,
+const spawnNodes = [restStore, bodyStore, cardsNode, cardsNode2, tmplNode, startLoop, getBody, getRest, postBody, postRest,
   clear, loopAsync, loopTop, oneFrame, breathe, newline, nlAt, nlTrunk, shortest, another, gate,
-  zero, record, artUrl, afterNl, remainder, dup, cardPath, setUrl, howMany, idx, perRow,
-  colOf, rowOf, colF, rowF, pitchX, pitchY, xOf, yOf, zeroF, place, setPos, eat, backA, backB];
+  restTap, zero, record, artUrl, afterNl, remainder, dup, cardPath, setUrl, howMany, idx, perRow,
+  colOf, rowOf, colF, rowF, pitchX, pitchY, xOf, yOf, zeroF, place, setPos, eat, backA, backB, backC];
 controlNodes.push(...spawnNodes);
 controlZones.push(around('3 · unpack the response into cards', spawnNodes));
 
@@ -749,24 +801,23 @@ controlZones.push(around('3 · unpack the response into cards', spawnNodes));
 // graph, so a failure is legible without opening the flux at all.
 const RX = SX + COL * 18;
 const bodyTrunk = strRelay('response -> readout', bodyStore.id, [RX, 0, 0]);
-const firstEnd = node('end of the first record', T.Substr, { Str: bodyTrunk.id, StartIndex: null, Length: null }, [RX + COL * 0.6, -ROW, 0]);
-const firstTrim = node('first record, trimmed', T.Trim, { A: firstEnd.id }, [RX + COL * 1.2, -ROW, 0]);
-const bodyLen = node('response length', T.StrLen, { A: bodyTrunk.id }, [RX + COL * 0.6, ROW, 0]);
-const zeroLen = intIn('0', 0, [RX + COL * 0.6, -ROW * 2.6, 0]);
-const gotAny = node('did anything come back?', T.IntGt, { A: bodyLen.id, B: zeroLen.id }, [RX + COL * 1.8, -ROW * 2.5, 0]);
+const bodyLen = node('response length', T.StrLen, { A: bodyTrunk.id }, [RX + COL, ROW * 1.5, 0]);
+const zeroLen = intIn('0', 0, [RX + COL, ROW * 2.5, 0]);
+const gotAny = node('did anything come back?', T.IntGt, { A: bodyLen.id, B: zeroLen.id }, [RX + COL * 2, ROW * 0.5, 0]);
+const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX, -ROW * 3, 0]);
+const zeroStart = intIn('first record starts at 0', 0, [RX, -ROW * 4, 0]);
+const firstEnd = node('end of the first record', T.Substr,
+  { Str: bodyTrunk.id, StartIndex: zeroStart.id, Length: recWidth.id }, [RX + COL, -ROW * 1.5, 0]);
+const firstTrim = node('first record, trimmed', T.Trim, { A: firstEnd.id }, [RX + COL * 2, -ROW * 1.5, 0]);
 const statusMsg = node('status: first card, else the error', T.StrPick,
-  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: bodyTrunk.id }, [RX + COL * 2.4, 0, 0]);
-const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX - COL, -ROW * 1.0, 0]);
-const zeroStart = intIn('first record starts at 0', 0, [RX - COL, -ROW * 2.0, 0]);
-firstEnd.slot.Components.Data[0].Data.StartIndex.Data = zeroStart.id;
-firstEnd.slot.Components.Data[0].Data.Length.Data = recWidth.id;
+  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: bodyTrunk.id }, [RX + COL * 3, 0, 0]);
 
 const statusLabel = label('status text', 'Ready — pick a deck, or paste a palify link', 17, CYAN);
 const statusFieldId = statusLabel.Components.Data[1].Data.Content.ID;
 const urlLabel = label('url text', PROXY, 14, DIM);
 const urlFieldId = urlLabel.Components.Data[1].Data.Content.ID;
 dUrl.slot.Components.Data[1].Data.Drive.Data = urlFieldId;
-const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [RX + COL * 3.0, 0, 0]);
+const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [RX + COL * 4, 0, 0]);
 
 const readoutNodes = [bodyTrunk, firstEnd, firstTrim, bodyLen, zeroLen, gotAny, statusMsg, dStatus, recWidth, zeroStart];
 controlNodes.push(...readoutNodes);
@@ -776,7 +827,7 @@ controlZones.push(around('4 · what the panel shows you', readoutNodes));
 // at a time, so "it finished" and "it never started" look identical without it.
 // It is reported here, beside the gate that produces it, for the same routing
 // reason the request outcomes are reported beside the requests.
-const doneStub = node('no records left', T.FlowRelay, { Next: null }, at(1, R + 14));
+const doneStub = node('no records left', T.FlowRelay, { Next: null }, at(0.4, R + 14));
 gate.slot.Components.Data[0].Data.OnFalse.Data = doneStub.id;
 const doneText = strIn('text: all cards placed', 'all cards placed', at(2, R + 15));
 const donePath = strIn('name: ResoPal/event', 'ResoPal/event', at(2, R + 16));

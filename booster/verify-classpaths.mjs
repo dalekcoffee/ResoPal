@@ -25,6 +25,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import JSZip from 'jszip';
+import { memberOrder, isFluxNode, memberKinds, isOperation } from './members.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const decodeMjs = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
@@ -222,8 +223,81 @@ for (const id of syncReached) {
   if (isAsync(name)) problems.push([c.type, 'is an AsyncActionNode but is reachable from a synchronous impulse without a StartAsyncTask in between']);
 }
 
+// ── member order ─────────────────────────────────────────────────────────────
+// The check that would have caught the whole-package failure: the panel encoded
+// cleanly, validated with zero dangling references, and in-world every node was
+// red with wires on the wrong ports.
+//
+// `If` went out as {Condition, OnTrue, OnFalse}; the class declares
+// {OnTrue, OnFalse, Condition}. `GET_String` declares `Content` LAST, because it
+// comes from a subclass after the base's impulses, and emitting it fifth shifted
+// every impulse output by one - which is exactly what "the request is connected
+// to things but nothing calls it" looks like from inside the world.
+//
+// Resonite writes its own packages in declaration order. So do we now, and a
+// drift fails the build. A ProtoFlux node must also declare EVERY member: they
+// are all ports, and a port that is not in the file is a port the graph cannot
+// resolve.
+const emitted = new Map();
+(function walk(n, kind) {
+  if (!n || typeof n !== 'object') return;
+  if (Array.isArray(n)) return n.forEach((x) => walk(x, kind));
+  if (n.Type !== undefined && n.Data && n.Data.ID) {
+    const t = doc.Types[Number(n.Type)];
+    const keys = Object.keys(n.Data).filter((k) => k !== 'ID');
+    const k = keys[0] === 'persistent' ? 'asset' : 'component';
+    if (!emitted.has(t + '|' + k)) emitted.set(t + '|' + k, keys);
+  }
+  for (const v of Object.values(n)) walk(v, kind);
+})(doc);
+
+for (const [key, got] of emitted) {
+  const i = key.lastIndexOf('|');
+  const cp = key.slice(0, i), kind = key.slice(i + 1);
+  const want = memberOrder(cp, kind);
+  if (!want) continue;
+  const wantHere = want.filter((w) => got.includes(w));
+  if (JSON.stringify(got) !== JSON.stringify(wantHere))
+    problems.push([cp, `members are out of declared order\n           emitted ${JSON.stringify(got)}\n           declared ${JSON.stringify(wantHere)}`]);
+  if (isFluxNode(cp)) {
+    const absent = want.filter((w) => !got.includes(w));
+    if (absent.length)
+      problems.push([cp, `is a ProtoFlux node missing ports ${JSON.stringify(absent)} - every member is a port, and one that is not in the file cannot be resolved`]);
+  }
+}
+
+// ── port kinds ───────────────────────────────────────────────────────────────
+// A wire is only correct if the two ends are the same kind of thing. The binding
+// class says which each member is: `SyncRef<INodeOperation>` is an impulse and
+// must land on a node that can be RUN; `SyncRef<INode*Output<T>>` is a data
+// input and must land on something that produces a value - never on an action
+// node's own component id, which carries nothing. A named output such as
+// `GET_String.Content` is addressed by its FIELD id, and that is the difference
+// this check exists to hold.
+for (const [id, c] of comps) {
+  const kinds = memberKinds(c.type);
+  if (!kinds.size) continue;
+  for (const [k, v] of Object.entries(c.data)) {
+    const kind = kinds.get(k);
+    if (!kind) continue;
+    const d = v && typeof v === 'object' ? v.Data : null;
+    if (kind === 'output') {
+      if (d != null) problems.push([c.type, `writes into its own output "${k}" - an output exists to be addressed by field id, not assigned`]);
+      continue;
+    }
+    if (typeof d !== 'string') continue;
+    const target = comps.get(d);
+    if (kind === 'impulse') {
+      if (!target) problems.push([c.type, `impulse "${k}" points at a field, not a node - only a node can be run`]);
+      else if (!isOperation(target.type)) problems.push([c.type, `impulse "${k}" points at ${shortName(target.type)}, which is not an operation and cannot be run`]);
+    } else if (kind === 'data' && target && isOperation(target.type)) {
+      problems.push([c.type, `data input "${k}" points at the ACTION node ${shortName(target.type)} by component id; an action node's component id carries no value - a named output has to be addressed by its field id`]);
+    }
+  }
+}
+
 for (const [cp, why] of problems) { bad++; console.log(`  FAIL ${cp}\n         ${why}`); }
 console.log(bad
   ? `\n${bad} problem(s) across ${checked} types`
-  : `\nall ${checked} types exist, satisfy their constraints, and every async node runs in an async context`);
+  : `\nall ${checked} types exist, satisfy their constraints, declare their members in order, wire impulses to operations and data to values, and every async node runs in an async context`);
 process.exitCode = bad ? 1 : 0;

@@ -35,6 +35,22 @@ antialiased edge pixels straight leaves a white rim that survives the alpha cuto
 as well as `doc.Object`, because assets reference each other. Getting this wrong deleted `MainFont`
 and broke every button on the deck.
 
+**A component's members must be emitted in the order the class declares them.** Read the order
+out of the class's own `GetSyncMember(int index)` switch — `booster/members.mjs` does. Written in
+whatever order the builder happened to list them, the panel encoded cleanly, validated with zero
+dangling references, and in-world every node was red with wires on the wrong ports: `If` went out
+as `{Condition, OnTrue, OnFalse}` where the class declares `{OnTrue, OnFalse, Condition}`, and
+`GET_String` declares `Content` **last** — it comes from a subclass, after the base's impulses — so
+emitting it fifth shifted every impulse output by one. A ProtoFlux node must also emit **every**
+member, unwired ones as null: they are all ports, and a port that is not in the file is a port the
+graph cannot resolve.
+
+**An impulse wire must land on an operation, and a data wire must never land on an action node's
+component id.** The binding class says which each member is: `SyncRef<INodeOperation>` is an
+impulse, `SyncRef<INode*Output<T>>` is a data input, and a bare `Node*Output<T>` is the node's own
+output — which exists to be addressed by its **field** id. `booster/verify-classpaths.mjs` checks
+both directions.
+
 **BSON deserializes numbers as `Double` objects.** Assigning a `Double` where a plain JS number is
 expected is a silent no-op. `AlphaCutoff` was never applied twice for this reason.
 

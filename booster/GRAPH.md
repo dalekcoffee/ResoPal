@@ -1,6 +1,6 @@
 # Reading the graph
 
-**One canvas, about 112 nodes, four zones.** Unpack `Flux - control` and you have the
+**One canvas, about 115 nodes, four zones.** Unpack `Flux - control` and you have the
 whole thing. There is no second canvas any more: the 514-node decoder canvas is gone,
 because cards are no longer pre-baked. See "How the cards work" below.
 
@@ -212,7 +212,45 @@ the Worker's, at 200.
   as unconnected: each sat in the lane between the receiver and the write it fed. A
   constant is a leaf — nothing wires into it — so a wire touching one can only be an
   accident of position. Wires crossing a node that *has* inputs read as what they are, two
-  wires crossing; those are counted and capped rather than failed, because the response has
-  to travel from the request zone to the unpack zone somehow. The count is 22 against a
-  budget of 30; taking it to zero means running the library's own `router.mjs` over the
-  canvas instead of hand-placing it.
+  wires crossing; those are counted and capped rather than failed. **The count is currently
+  zero**, held there by three habits worth keeping: a producer four columns from its
+  consumers gets a relay tap beside them; a reference node is duplicated rather than wired
+  across a zone (two components and no wire at all); and the loop's return runs three
+  corners — down its own column, along a row below everything, back up the left edge —
+  rather than one diagonal through every data row.
+
+## Two things that fail silently, and now cannot
+
+**Members are emitted in the order the class declares them.** Not cosmetic. Written in the
+order the builder happened to list them, this package encoded cleanly, validated with zero
+dangling references, and in-world every node was red with wires on the wrong ports:
+
+| Node | What went out | What the class declares |
+|---|---|---|
+| `If` | `Condition, OnTrue, OnFalse` | `OnTrue, OnFalse, Condition` |
+| `GET_String` | `URL, Content, StatusCode, OnSent, …` | `URL, StatusCode, OnSent, …, Content` |
+| `DuplicateSlot` | `Template, OverrideParent, Duplicate, Next` | `Next, Template, OverrideParent, Duplicate` |
+
+`Content` is declared **last** because it comes from a subclass, after the base's impulses.
+Emitting it fifth shifted every impulse output by one — which is exactly what "the request
+is connected to things but nothing calls it" looks like from inside the world.
+`members.mjs` reads the real order out of each class's own `GetSyncMember(int index)`
+switch; the builder emits in it, and `verify-classpaths.mjs` fails on any drift. A ProtoFlux
+node also emits **every** member, unwired ones as null: they are all ports, and a port that
+is not in the file is one the graph cannot resolve.
+
+**Every wire connects two compatible ports.** The binding class says which kind each member
+is:
+
+| Declared as | Is | Must connect to |
+|---|---|---|
+| `SyncRef<INodeOperation>` | an impulse out | a node that can be **run** |
+| `SyncRef<INodeObjectOutput<T>>` | a data in | something that produces a value |
+| `Node*Output<T>` | the node's **own** output | nothing — others address its **field** id |
+
+That last row is the rule this project keeps rediscovering. A node's data output is its
+component id, but a *named* output like `GET_String.Content` or `DuplicateSlot.Duplicate` is
+a **field** id, and wiring the component id instead reads the action node's own value —
+which for an action node is nothing at all. The verifier now checks both directions, and
+passing a field name the class does not have is a build error rather than a wire that
+quietly goes nowhere.

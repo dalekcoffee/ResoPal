@@ -12,7 +12,7 @@ not started.
 Cards are no longer pre-baked. One inactive card template is duplicated per record, so the count is
 whatever came back and the graph is one canvas of ~112 nodes instead of 51 + 514.
 
-Five builds' worth of lessons, all now gated by tests:
+Six builds' worth of lessons, all now gated by tests:
 
 1. The first shipped logic-only ProtoFlux with no UI — nothing to look at unless the network call
    already worked.
@@ -32,6 +32,15 @@ Five builds' worth of lessons, all now gated by tests:
    `return null` on a null URI or an unresolved permission. That is what "I approved host
    access and then nothing happened" is made of.
 
+6. The fifth wrote each component's members in whatever order the builder listed them. Resonite
+   writes its own in the order the class declares, and the difference is not cosmetic: `If` went
+   out as `{Condition, OnTrue, OnFalse}` where the class declares `{OnTrue, OnFalse, Condition}`,
+   and `GET_String` declares `Content` **last** — it comes from a subclass, after the base's
+   impulses — so emitting it fifth shifted every impulse output by one. The package encoded
+   cleanly, validated with zero dangling references, and in-world every node was red with wires on
+   the wrong ports. `booster/members.mjs` reads the real order out of each class's own
+   `GetSyncMember` switch; the builder emits in it and the verifier fails on drift.
+
 That third one is the important lesson: **a wrong classpath fails silently, so "it encoded cleanly"
 proves very little.** `booster/verify-classpaths.mjs` now checks every emitted type against the
 decompiled engine source, generic constraints included, and runs as part of `npm test`.
@@ -39,7 +48,7 @@ decompiled engine source, generic constraints included, and runs as part of `npm
 The fourth and fifth came out of the first real in-world test, and both are now gates: an
 async-context reachability walk, and `every way the request can end reports on the event line`.
 
-The graph is one Moduprint canvas of ~112 nodes in four zones, with comment zones, relay banks and
+The graph is one Moduprint canvas of ~115 nodes in four zones, with comment zones, relay banks and
 the pretty-flux layout gates. `booster/GRAPH.md` is the map.
 
 **`booster/PRIOR-ART.md` is the most useful document here.** Sharkmare's `DeckReader` already

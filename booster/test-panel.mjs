@@ -384,11 +384,19 @@ check('and names CARD/url', String(arg(byComp.get(arg(setUrl, 'Path')), 'Value')
 const eat = chainFrom(dup.id)[3];
 const restStore = byComp.get(arg(eat, 'Variable'));
 check('the record is eaten out of a local variable', short(restStore?.type) === 'DataModelObjectFieldStore<string>');
+// Follow relay taps. The loop's readers pull on a relay beside them rather than
+// on the store four columns away - that is the house style, and it means these
+// checks have to look through one.
+const deref = (id) => {
+  let c = byComp.get(id);
+  while (/^(Value|Object)Relay</.test(short(c?.type) || '')) c = byComp.get(arg(c, 'Input'));
+  return c;
+};
 const nlNodes = compsOfType('IndexOfString');
 check('one IndexOfString finds the record boundary', nlNodes.length === 1);
 const nlAt = nlNodes[0];
 check('it looks for a newline in that same variable',
-  arg(nlAt, 'Str') === restStore?.id && arg(byComp.get(arg(nlAt, 'Part')), 'Value') === NEWLINE);
+  deref(arg(nlAt, 'Str'))?.id === restStore?.id && arg(byComp.get(arg(nlAt, 'Part')), 'Value') === NEWLINE);
 
 // The termination proof, asserted against the built graph rather than assumed:
 // the loop only continues while the newline is past a minimum, and the
@@ -398,14 +406,13 @@ const loopGate = ifs.find((i) => chainFrom(arg(i, 'OnTrue'), 2)[0]?.id === dup.i
 check('the loop is gated on finding another record', !!loopGate);
 const guard = byComp.get(arg(loopGate, 'Condition'));
 check('the guard is "newline past a minimum"', short(guard?.type) === 'ValueGreaterThan<int>');
-const deref = (id) => { let c = byComp.get(id); while (short(c?.type) === 'ValueRelay<int>') c = byComp.get(arg(c, 'Input')); return c; };
 const minRecord = num(arg(byComp.get(arg(guard, 'B')), 'Value'));
 check('the guard reads the same IndexOfString the parse does', deref(arg(guard, 'A'))?.id === nlAt.id);
 check('the minimum is positive, so a missing newline (-1) also ends the loop', minRecord > 0, String(minRecord));
 const remainder = byComp.get(arg(eat, 'Value'));
 check('the remainder starts one past that newline',
   short(remainder?.type) === 'Substring' &&
-  arg(remainder, 'Str') === restStore.id &&
+  deref(arg(remainder, 'Str'))?.id === restStore.id &&
   short(byComp.get(arg(remainder, 'StartIndex'))?.type) === 'ValueInc<int>' &&
   deref(arg(byComp.get(arg(remainder, 'StartIndex')), 'N'))?.id === nlAt.id);
 check('so every pass removes at least ' + (minRecord + 2) + ' characters and the loop cannot spin', true);

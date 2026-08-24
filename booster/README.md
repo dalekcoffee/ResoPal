@@ -100,9 +100,16 @@ RKL=/path/to/Resonite-Knowledge-Library npm test
 `npm test` runs two files, both against the **built package** rather than the builder's
 intentions, so a node wired to the wrong id fails there exactly as it would in-world.
 
-`verify-classpaths.mjs` checks every emitted type against the decompiled engine source,
-**generic constraints included**, and walks every impulse edge to prove no `AsyncActionNode`
-is reachable from a synchronous entry point without a `StartAsyncTask` in between. This is the check that would have caught the build
+`verify-classpaths.mjs` checks every emitted type against the decompiled engine source:
+**generic constraints**, **member order and completeness**, **port kinds** on both ends of every
+wire, and an impulse walk proving no `AsyncActionNode` is reachable from a synchronous entry point
+without a `StartAsyncTask` in between.
+
+Member order is the one that cost a whole build. Emitted in the order the builder happened to list
+them, the package encoded cleanly and in-world every node was red with wires on the wrong ports —
+`If` went out as `{Condition, OnTrue, OnFalse}` where the class declares `{OnTrue, OnFalse,
+Condition}`, and `GET_String` declares `Content` last, so emitting it fifth shifted every impulse
+output by one. `members.mjs` reads the real order out of each class's own `GetSyncMember` switch. This is the check that would have caught the build
 where every button was dead: it emitted `WriteDynamicValueVariable<string>`, and that
 node is declared `where T : unmanaged`, so the string form cannot exist. The package
 encoded perfectly and validated with zero dangling references; the component simply
@@ -141,8 +148,8 @@ proves very little.
   titled and disjoint, no two nodes overlapping a node visual, no producer fanning past a
   dozen consumers, relays actually feeding something, and **no wire running through a
   constant** — a constant is a leaf, so a wire touching one can only be an accident of
-  position. Wires crossing a node that has inputs of its own are counted and capped
-  instead, because the response has to cross the canvas somehow.
+  position. Wires crossing a node that has inputs of its own are counted and capped instead;
+  the count is currently **zero**.
 
 The evaluator models the decompiled nodes' own clamping — `Substring` returning `""` when
 the start runs past the end rather than throwing, `IndexOfString` returning −1 — not
