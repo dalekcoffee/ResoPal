@@ -142,15 +142,15 @@
           <div style="width:34px;height:34px;border-radius:11px;background:rgba(160,162,220,.16);border:1px solid rgba(160,162,220,.42);color:#b0b3ea;font:600 13px/33px 'JetBrains Mono',monospace;text-align:center">01</div>
           <div>
             <div style="font:400 25px/1.2 'Newsreader',serif">Your deck</div>
-            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, or upload a file for a private one.</div>
+            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, a profile URL, or a card code &mdash; or upload a file for a private deck.</div>
           </div>
         </div>
 
         <div onDragOver="{{ onDragOver }}" onDragLeave="{{ onDragLeave }}" onDrop="{{ onDrop }}" style="{{ dropZoneStyle }}">
-          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:2px 2px 10px">Public deck &mdash; paste the URL</div>
+          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:2px 2px 10px">Public deck, profile or card code</div>
           <div style="display:flex;gap:12px;align-items:stretch">
             <input type="text" value="{{ inputVal }}" onChange="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96" style="flex:1;min-width:0;height:58px;padding:0 18px;border-radius:16px;background:rgba(7,11,23,.72);border:1px solid rgba(150,170,230,.2);color:#e8ecfa;font:400 15px/1 'Figtree',sans-serif">
-            <button type="button" onClick="{{ submit }}" style="padding:0 34px;border-radius:16px;border:0;background:#a9abee;color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap" style-hover="background:#b8baf4">Load</button>
+            <button type="button" onClick="{{ submit }}" style="{{ submitStyle }}" style-hover="background:#b8baf4">{{ submitLabel }}</button>
           </div>
 
           <div style="display:flex;align-items:center;gap:16px;margin:20px 2px 16px">
@@ -164,7 +164,7 @@
             <div style="width:40px;height:40px;border-radius:12px;background:rgba(163,207,216,.12);border:1px solid rgba(163,207,216,.3);display:grid;place-items:center;font:700 11px/1 'JetBrains Mono',monospace;color:#a3cfd8">TXT</div>
             <div style="flex:1">
               <div style="font:600 14px/1.35 'Figtree',sans-serif;color:#dbe2f5">Drop a <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#a3cfd8">.txt</span> or <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#a3cfd8">.csv</span> exported from Palify</div>
-              <div style="font:400 12.5px/1.4 'Figtree',sans-serif;color:#69769c;margin-top:3px">Private decks can&rsquo;t be read from a URL.</div>
+              <div style="font:400 12.5px/1.4 'Figtree',sans-serif;color:#69769c;margin-top:3px">Private decks can&rsquo;t be read from a URL. One card per line, with or without a quantity.</div>
             </div>
             <button type="button" onClick="{{ pickFile }}" style="padding:12px 18px;border-radius:13px;border:1px solid rgba(163,207,216,.34);background:rgba(163,207,216,.1);color:#a3cfd8;font:600 13px/1 'Figtree',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap" style-hover="background:rgba(163,207,216,.2)">Choose file</button>
           </div>
@@ -184,16 +184,6 @@
           </sc-for>
           <div style="flex:1;min-width:12px"></div>
           <a href="https://palify.org/decks" target="_blank" rel="noopener" style="font:500 12.5px/1 'Figtree',sans-serif;white-space:nowrap">Browse community decks on Palify &nearr;</a>
-        </div>
-
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:18px">
-          <span style="font:500 11.5px/1 'Figtree',sans-serif;color:#69769c;margin-right:2px">Accepts</span>
-          <sc-for list="{{ examples }}" as="ex" hint-placeholder-count="3">
-            <button type="button" onClick="{{ ex.use }}" style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:11px;border:1px solid rgba(150,170,230,.16);background:rgba(255,255,255,.03);cursor:pointer;transition:all .15s" style-hover="border-color:rgba(160,162,220,.5);background:rgba(160,162,220,.1)">
-              <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8e9ac0;text-transform:uppercase">{{ ex.kind }}</span>
-              <span style="font:400 11.5px/1 'JetBrains Mono',monospace;color:#c3cbe4">{{ ex.sample }}</span>
-            </button>
-          </sc-for>
         </div>
 
         <sc-if value="{{ error }}" hint-placeholder-val="{{ false }}">
@@ -224,12 +214,9 @@
         <div style="display:flex;flex-direction:column;gap:10px">
             <sc-for list="{{ profileDecks }}" as="d" hint-placeholder-count="3">
               <button type="button" onClick="{{ d.pick }}" style="display:flex;align-items:center;gap:20px;padding:14px 18px;border-radius:18px;border:1px solid rgba(150,170,230,.14);background:rgba(255,255,255,.025);cursor:pointer;text-align:left;transition:all .15s" style-hover="border-color:rgba(160,162,220,.55);background:rgba(160,162,220,.09);transform:translateX(3px)">
-                <div style="display:flex">
-                  <sc-for list="{{ d.faces }}" as="f" hint-placeholder-count="4">
-                    <div style="width:40px;height:56px;border-radius:6px;margin-left:-10px;border:1px solid rgba(255,255,255,.12);overflow:hidden;position:relative;background:linear-gradient(150deg,#2b1830,#141a3a)">
-                      <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, rgba(180,182,230,.2) 0 6px, rgba(180,182,230,0) 6px 12px)"></div>
-                      <img src="{{ f.src }}" alt="" data-code="{{ f.code }}" onLoad="{{ gauge }}" style="{{ f.style }}">
-                    </div>
+                <div style="display:flex;width:86px;height:8px;border-radius:99px;overflow:hidden;background:rgba(150,170,230,.14);flex:none">
+                  <sc-for list="{{ d.colors }}" as="col" hint-placeholder-count="2">
+                    <div style="{{ col.style }}"></div>
                   </sc-for>
                 </div>
                 <div style="flex:1;min-width:0">
@@ -237,7 +224,7 @@
                   <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#69769c;margin-top:6px">{{ d.meta }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px">
-                  <span style="font:500 12.5px/1 'Figtree',sans-serif;color:#8e9ac0">{{ d.count }} cards</span>
+                  <span style="font:500 12.5px/1 'Figtree',sans-serif;color:#8e9ac0">{{ d.count }}</span>
                   <span style="font:600 15px/1 'Figtree',sans-serif;color:#9a9ce0">&rarr;</span>
                 </div>
               </button>
@@ -425,7 +412,7 @@
             <div style="font:400 25px/1.2 'Newsreader',serif">Deck review</div>
             <div style="font:600 15px/1.4 'Figtree',sans-serif;color:#dbe2f5;margin-top:9px">{{ deckName }}</div>
             <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px">
-              <span style="padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(150,170,230,.16);font:500 11.5px/1 'JetBrains Mono',monospace;color:#c3cbe4;white-space:nowrap">{{ deckTotal }} cards &middot; {{ uniqueCount }} unique</span>
+              <span style="padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(150,170,230,.16);font:500 11.5px/1 'JetBrains Mono',monospace;color:#c3cbe4;white-space:nowrap">{{ deckSize }} &middot; {{ uniqueCount }} unique</span>
               <span style="padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(150,170,230,.16);font:400 11.5px/1 'JetBrains Mono',monospace;color:#8e9ac0;white-space:nowrap">{{ deckSource }}</span>
               <span style="display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;background:rgba(164,212,186,.09);border:1px solid rgba(164,212,186,.26);font:500 11.5px/1 'Figtree',sans-serif;color:#a4d4ba;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#a4d4ba"></span>{{ cacheLabel }}</span>
             </div>
@@ -830,6 +817,7 @@ class Component extends DCLogic {
     cardDX: 0, cardOut: 0, cardDrag: false, snap: false, hold: false, celId: null,
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
     gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null, deck: null,
+    busy: null, profile: null, deckSource: null, importError: null, unknown: [],
     sizeMain: null, sizeSoul: null, outSize: 0,
     vw: typeof window !== 'undefined' ? window.innerWidth : 1440, imgBudget: 6
   };
@@ -930,21 +918,165 @@ class Component extends DCLogic {
   async loadStarter(set, name) {
     const file = set === 'TD01' ? 'data/td01-red-blue.csv' : 'data/td02-green-purple.csv';
     try {
-      const { parseDeckList } = await import('./web/decklist.js');
+      const [{ parseDeckList }] = await Promise.all([import('./web/decklist.js'), this.catalogue()]);
       const { deck } = parseDeckList(await (await fetch(file)).text());
-      this.setDeck(deck, name);
-    } catch (e) { this.openDeck(name); }
+      this.setDeck(deck, name, file.replace('data/', ''));
+    } catch (e) { this.importFailed('The trial deck list would not load (' + (e && e.message) + ').'); }
   }
 
-  setDeck(entries, label) {
-    const hue = c => (c.startsWith('TD01') ? '#dd9c9c' : c.startsWith('TD02') ? '#a3ccae' : '#9aa6c8');
+  // The catalogue an import is resolved against: base code -> name, colour and every
+  // printing, plus printing code -> base. data/pool-*.json is the committed Palify
+  // snapshot (regenerate with tools/fetch-pool.mjs), and it is the only place card
+  // names and printings may come from - a decklist's spelling drifts, and inventing
+  // the difference is exactly what CLAUDE.md forbids. One promise, because several
+  // import paths race for it.
+  catalogue() {
+    if (this.catP) return this.catP;
+    this.catP = Promise.all(['bp01', 'td01', 'td02'].map(set =>
+      fetch('data/pool-' + set + '.json').then(r => (r.ok ? r.json() : null)).catch(() => null)
+    )).then(files => {
+      const byBase = {}, byPrint = {};
+      files.filter(Boolean).forEach(j => {
+        Object.keys(j.base || {}).forEach(code => {
+          const b = j.base[code];
+          byBase[code] = { name: b.name || code, hue: COLOR_HUE[b.color] || '#cfc7a8', prints: [] };
+        });
+        Object.keys(j.byRarity || {}).forEach(rarity => (j.byRarity[rarity] || []).forEach(e => {
+          const base = byBase[e.base];
+          if (!base) return;
+          byPrint[e.code] = e.base;
+          base.prints.push([e.code, rarity, !e.variant]);
+        }));
+      });
+      // Base printing first: it is the default art, and rows() reads prints[0].
+      Object.keys(byBase).forEach(k => {
+        byBase[k].prints.sort((a, b) => (b[2] ? 1 : 0) - (a[2] ? 1 : 0) || this.rankOf(a[1]) - this.rankOf(b[1]));
+        byBase[k].prints = byBase[k].prints.map(pr => [pr[0], pr[1]]);
+      });
+      this.cat = { byBase, byPrint };
+      return this.cat;
+    });
+    return this.catP;
+  }
+
+  // Every import lands here, and this is the only place a deck is built.
+  //
+  // Quantities merge onto the BASE card: a row bakes exactly one printing (rows()
+  // picks one `selected` per row), so 2x BP01-001 plus 1x BP01-001SSP is three
+  // copies of one card with the SSP art chosen, not two rows sharing a key.
+  setDeck(entries, label, source) {
+    const cat = this.cat || { byBase: {}, byPrint: {} };
+    const deck = [], byCode = new Map(), variants = {}, unknown = [];
+    (entries || []).forEach(e => {
+      const code = String(e.code || '').toUpperCase();
+      const n = Math.max(1, Math.round(e.n || 1));
+      if (!code) return;
+      const base = cat.byPrint[code] || code;
+      const known = cat.byBase[base];
+      if (!known && unknown.indexOf(code) < 0) unknown.push(code);
+      if (known && code !== base) variants[base] = code;
+      const seen = byCode.get(base);
+      if (seen) { seen.n += n; return; }
+      const rec = {
+        code: base,
+        // A name from the import is a fallback for a card the snapshot has not got
+        // yet - never an override of one it has.
+        name: (known && known.name) || e.name || base,
+        n, hue: (known && known.hue) || '#9aa6c8',
+        prints: (known && known.prints) || [[code, '?']],
+      };
+      byCode.set(base, rec);
+      deck.push(rec);
+    });
+    if (!deck.length) return this.setState({ busy: null, notice: 'noCards', error: null });
+    // A single card imported on its own is named after the card, not "Imported deck".
+    const name = label || (deck.length === 1 ? deck[0].name : 'Imported deck');
     this.setState({
-      deck: entries.map(e => ({
-        code: e.code, name: e.name || e.code, n: e.n, hue: hue(e.code),
-        prints: [[e.code, 'C']],
-      })),
-      variants: {}, discarded: {}, fromPulls: false,
-    }, () => this.openDeck(label));
+      deck, variants, discarded: {}, fromPulls: false, busy: null, error: null,
+      deckSource: source || null, unknown, notice: unknown.length ? 'unknownCodes' : null,
+    }, () => this.openDeck(name));
+  }
+
+  // Palify sends no CORS headers on anything (docs/PALIFY-API.md), so deck and
+  // profile pages are read through the Worker, which parses them into JSON.
+  async getJSON(path) {
+    if (!ART_PROXY) throw new Error('No proxy is configured, so Palify pages cannot be read from the browser - see docs/WORKER.md.');
+    const r = await fetch(ART_PROXY.replace(/\/$/, '') + path, { mode: 'cors' });
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      const err = new Error((j && j.error) || ('the deck proxy answered HTTP ' + r.status));
+      err.status = r.status;
+      throw err;
+    }
+    return j;
+  }
+
+  loadDeck(id, fallbackName) {
+    const uuid = String(id).toLowerCase();
+    this.setState({ busy: 'deck', error: null, notice: null, importError: null });
+    Promise.all([this.getJSON('/deck/' + uuid), this.catalogue()])
+      .then(([j]) => {
+        if (!j || !j.cards || !j.cards.length) return this.importFailed('Palify shows no cards in that deck, so there is nothing to bake.');
+        this.setDeck(j.cards, j.name || fallbackName || 'Palify deck', 'palify.org/decks/' + uuid.slice(0, 8));
+      })
+      .catch(e => this.importFailed(e && e.status === 404
+        ? 'Palify has no public deck at that link. A private deck never comes through a URL \u2014 export it from Palify and drop the file in.'
+        : 'That deck could not be read \u2014 ' + ((e && e.message) || 'the request failed') + '.'));
+  }
+
+  loadProfile(handle) {
+    this.setState({ busy: 'profile', error: null, notice: null, importError: null, handle });
+    Promise.all([this.getJSON('/profile/' + handle), this.catalogue()])
+      .then(([j]) => {
+        if (!j || !j.decks || !j.decks.length) return this.setState({ busy: null, stage: 'input', profile: null, notice: 'noPublic' });
+        this.setState({ busy: null, stage: 'picker', profile: j, error: null, notice: null }, () => this.reveal('[data-rp="picker"]'));
+      })
+      .catch(e => this.importFailed(e && e.status === 404
+        ? 'There is no Palify profile at /u/' + handle + '.'
+        : 'That profile could not be read \u2014 ' + ((e && e.message) || 'the request failed') + '.'));
+  }
+
+  // A written list: a file's contents, or codes typed into the box.
+  async importText(text, label, source) {
+    this.setState({ busy: 'read', error: null, notice: null, importError: null });
+    try {
+      const [{ parseDeckList }] = await Promise.all([import('./web/decklist.js'), this.catalogue()]);
+      const { deck } = parseDeckList(text);
+      this.setDeck(deck, label || this.listName(text) || null, source);
+    } catch (e) {
+      this.importFailed('That list could not be read \u2014 ' + ((e && e.message) || 'the file would not open') + '.');
+    }
+  }
+
+  readFile(file) {
+    if (!file) return;
+    const stem = file.name.replace(/\.[^.]+$/, '');
+    Promise.resolve(file.text ? file.text() : new Response(file).text())
+      .then(t => this.importText(t, this.listName(t) || stem, file.name))
+      .catch(e => this.importFailed('That file could not be read (' + ((e && e.message) || 'unknown error') + ').'));
+  }
+
+  // Palify's .txt export opens with `# <deck name> (<n> cards)`, and that name is
+  // better than the filename. Only the first comment line is read.
+  listName(text) {
+    const m = /^\s*#\s*(\S.*?)\s*(?:\(\s*\d+\s*cards?\s*\))?\s*$/m.exec(String(text || '').split(/\r?\n/)[0] || '');
+    return m ? m[1] : '';
+  }
+
+  // A typed card code is a deck of one - the smallest import there is. Several,
+  // separated by commas or new lines, are a deck of several. Palify art URLs carry
+  // a code too, and pasting one is an obvious thing to try.
+  codesFrom(v) {
+    const url = /palify\.org\/cards?\/(?:w\d+\/)?([A-Za-z][A-Za-z0-9]{1,5}-[0-9]{1,4}[A-Za-z]{0,4})(?:\.webp)?/i.exec(v);
+    if (url) return url[1].toUpperCase();
+    const parts = v.split(/[,;\n]+/).map(x => x.trim()).filter(Boolean);
+    const one = /^(?:\d+\s*[x*]?\s+)?[A-Za-z][A-Za-z0-9]{1,5}-[0-9]{1,4}[A-Za-z]{0,4}$/;
+    return parts.length && parts.every(x => one.test(x)) ? parts.join('\n') : null;
+  }
+
+  importFailed(message) {
+    this.setState({ busy: null, notice: 'importFailed', importError: message, error: null });
   }
   // Thumbnails go through the proxy too when one is configured: it edge-caches them,
   // so Palify is hit once per image globally instead of once per viewer. It also makes
@@ -1162,22 +1294,24 @@ class Component extends DCLogic {
     }));
   }
 
+  // Everything the box accepts, in one place. Nothing here fakes a load: each
+  // branch either produces a real deck or reports why it could not.
   detect = () => {
     const v = this.state.input.trim();
     if (!v) return this.setState({ error: 'empty', notice: null });
-    if (/palify\.org\/u\/([\w.\-]+)/i.test(v)) {
-      const h = v.match(/palify\.org\/u\/([\w.\-]+)/i)[1];
-      if (/new|empty/i.test(h)) return this.setState({ stage: 'input', handle: h, error: null, notice: 'noPublic', gen: null });
-      return this.setState({ stage: 'picker', handle: h, error: null, notice: null }, () => this.reveal('[data-rp="picker"]'));
-    }
-    if (/palify\.org\/decks?\/[0-9a-f-]{6,}/i.test(v)) return this.openDeck();
-    if (/^\s*\d+\s*x?\s/i.test(v)) return this.openDeck();
+    let m;
+    if ((m = /palify\.org\/u\/([\w.\-]+)/i.exec(v))) return this.loadProfile(m[1]);
+    if ((m = /palify\.org\/decks?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(v))) return this.loadDeck(m[1]);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return this.loadDeck(v);
+    const codes = this.codesFrom(v);
+    if (codes) return this.importText(codes, null, codes.split('\n').length + (codes.indexOf('\n') < 0 ? ' card by code' : ' cards by code'));
+    if (/^\s*\d+\s*x?\s/i.test(v) || /\n/.test(v)) return this.importText(v, null, 'pasted list');
     this.setState({ error: /palify\.org/i.test(v) ? 'unknown' : 'notlink' });
   };
 
   openDeck = (label) => {
     this.writeCache();
-    const patch = { stage: 'deck', step: 1, error: null, notice: null, imgBudget: 6 };
+    const patch = { stage: 'deck', step: 1, error: null, imgBudget: 6 };
     if (typeof label === 'string') patch.deckLabel = label;
     this.setState(patch, () => this.reveal('[data-rp="review"]'));
     if (this.iq) clearInterval(this.iq);
@@ -1477,7 +1611,7 @@ class Component extends DCLogic {
       },
       nextPack: () => this.setState(st => ({ packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: this.rollPack(), revealIdx: 0, cardDX: 0, cardOut: 0, celebrate: null, packsLeft: st.packsLeft < 1 ? 1 : st.packsLeft, batch: st.packsLeft < 1 ? 1 : st.batch })),
       nextPackLabel: 'Rip another pack',
-      importPulls: () => { this.setState({ fromPulls: true, deckLabel: 'My pulls', imgBudget: 60 }); this.openDeck('My pulls'); },
+      importPulls: () => { this.setState({ fromPulls: true, deckLabel: 'My pulls', imgBudget: 60, notice: null, deckSource: null }); this.openDeck('My pulls'); },
       importPullsLabel: 'Import my pulls (' + s.binder.length + ')',
       imgFail: this.fail,
       gauge: this.gauge,
@@ -1487,30 +1621,42 @@ class Component extends DCLogic {
       submit: this.detect,
       onDragOver: e => { e.preventDefault(); if (!s.dropHot) this.setState({ dropHot: true }); },
       onDragLeave: () => this.setState({ dropHot: false }),
-      onDrop: e => { e.preventDefault(); this.setState({ dropHot: false, input: (e.dataTransfer.files[0] && e.dataTransfer.files[0].name) || 'deck.txt' }); this.openDeck(); },
+      onDrop: e => {
+        e.preventDefault();
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        this.setState({ dropHot: false, input: (f && f.name) || '' });
+        if (f) this.readFile(f);
+        else this.importFailed('Nothing arrived with that drop \u2014 drag the .txt or .csv file itself.');
+      },
       pickFile: () => {
-        const i = document.createElement('input'); i.type = 'file'; i.accept = '.txt,.csv';
-        i.onchange = () => { this.setState({ input: i.files[0] ? i.files[0].name : 'deck.txt' }); this.openDeck(); };
+        const i = document.createElement('input'); i.type = 'file'; i.accept = '.txt,.csv,text/plain,text/csv';
+        i.onchange = () => { this.setState({ input: i.files[0] ? i.files[0].name : '' }); this.readFile(i.files[0]); };
         i.click();
       },
       dropZoneStyle: 'padding:18px;border-radius:22px;border:1px solid ' + (s.dropHot ? 'rgba(163,207,216,.6)' : 'rgba(150,170,230,.14)') + ';background:' + (s.dropHot ? 'rgba(163,207,216,.07)' : 'rgba(7,11,23,.35)') + ';transition:all .15s',
-      examples: [
-        { kind: 'deck', sample: 'palify.org/decks/f2dd143c\u2026', use: () => this.setState({ input: 'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96', error: null }, this.openDeck) },
-        { kind: 'profile', sample: 'palify.org/u/dalek', use: () => this.setState({ input: 'https://palify.org/u/dalek', error: null }, () => this.detect()) },
-        { kind: 'file', sample: 'kindling-rush.txt', use: () => this.setState({ input: 'kindling-rush.txt', error: null }, this.openDeck) }
-      ],
+      submitLabel: s.busy === 'profile' ? 'Reading\u2026' : s.busy ? 'Loading\u2026' : 'Load',
+      submitStyle: "padding:0 34px;border-radius:16px;border:0;background:" + (s.busy ? 'rgba(169,171,238,.45)' : '#a9abee')
+        + ";color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:" + (s.busy ? 'progress' : 'pointer')
+        + ';transition:all .15s;white-space:nowrap',
       error: !!s.error,
-      errorTitle: s.error === 'empty' ? 'Nothing to convert yet' : s.error === 'unknown' ? 'That Palify page isn\u2019t a deck or a profile' : 'That doesn\u2019t look like a Palify link',
-      errorBody: s.error === 'empty' ? 'Paste a deck link, a profile link, or drop a file exported from Palify.' : s.error === 'unknown' ? 'ResoPal reads deck pages (/decks/\u2026) and profile pages (/u/\u2026). If the deck is private, no URL will work \u2014 export it from Palify and drop the file in.' : 'ResoPal only reads public Palify decks. If your deck lives somewhere else, export it as .txt or .csv and drop it here.',
+      errorTitle: s.error === 'empty' ? 'Nothing to convert yet' : s.error === 'unknown' ? 'That Palify page isn\u2019t a deck or a profile' : 'That isn\u2019t a deck link, a card code or a list',
+      errorBody: s.error === 'empty' ? 'Paste a deck link, a profile link or a card code \u2014 or drop a file exported from Palify.' : s.error === 'unknown' ? 'ResoPal reads deck pages (/decks/\u2026) and profile pages (/u/\u2026). If the deck is private, no URL will work \u2014 export it from Palify and drop the file in.' : 'A card code on its own works too \u2014 BP01-053, or 2x BP01-053. For a whole deck, paste its Palify link or drop the exported .txt / .csv here.',
 
       showPicker: s.stage === 'picker',
-      handle: s.handle,
-      pickerCountLabel: '3 public',
-      profileDecks: [
-        { name: 'Kindling Rush', count: 50, meta: 'f2dd143c \u00b7 updated 2 days ago', faces: ['BP01-001', 'BP01-002', 'BP01-006', 'BP01-011'] },
-        { name: 'Terra Wall (TD02 base)', count: 50, meta: '9a71ce02 \u00b7 updated last week', faces: ['TD02-005', 'BP01-081', 'BP01-004', 'BP01-007'] },
-        { name: 'Sparkit Tempo \u2014 draft', count: 44, meta: '4bb0f19d \u00b7 updated 3 weeks ago', faces: ['BP01-008', 'BP01-009', 'BP01-010', 'BP01-012'] }
-      ].map(d => ({ ...d, faces: d.faces.map(c => ({ src: this.img(c), code: c, style: this.face(c) })), pick: this.openDeck })),
+      handle: (s.profile && s.profile.title) || s.handle,
+      pickerCountLabel: (s.profile ? s.profile.decks.length : 0) + ' public',
+      // A profile page carries each deck's name, size and colour split - but no card
+      // codes, so the row shows the colour bar Palify itself draws rather than four
+      // faces we would have to invent or spend a deck fetch each to learn.
+      profileDecks: ((s.profile && s.profile.decks) || []).map(d => ({
+        name: d.name,
+        count: d.total === null ? '' : d.total + (d.total === 1 ? ' card' : ' cards'),
+        meta: d.id.slice(0, 8) + (d.colors.length ? ' \u00b7 ' + d.colors.map(c => c.color).join(' / ') : ''),
+        colors: (d.colors.length ? d.colors : [{ color: 'Colorless', pct: 100 }]).map(c => ({
+          style: 'width:' + c.pct + '%;background:' + (COLOR_HUE[c.color] || '#cfc7a8')
+        })),
+        pick: () => this.loadDeck(d.id, d.name)
+      })),
 
       showReview: s.stage === 'deck',
       reviewStepNo: '02',
@@ -1525,10 +1671,12 @@ class Component extends DCLogic {
         dotB: 'width:8px;height:8px;border-radius:50%;background:' + st.b,
         load: () => this.loadStarter(st.set, st.name)
       })),
-      deckTotal: total,
+      // One card is a deck now - a single code is a valid import - so nothing here
+      // may read "1 cards".
+      deckSize: total + (total === 1 ? ' card' : ' cards'),
       uniqueCount: kept.length,
-      deckSource: s.fromPulls ? s.packCount + (s.packCount === 1 ? ' pack ripped' : ' packs ripped') : s.input.indexOf('palify.org') >= 0 ? 'palify.org/decks/f2dd143c' : s.input || 'deck.txt',
-      cacheLabel: cached ? cached + ' card images cached today' : 'loading art gently \u00b7 a few at a time',
+      deckSource: s.fromPulls ? s.packCount + (s.packCount === 1 ? ' pack ripped' : ' packs ripped') : s.deckSource || s.input || 'deck list',
+      cacheLabel: cached ? cached + (cached === 1 ? ' card image cached today' : ' card images cached today') : 'loading art gently \u00b7 a few at a time',
       allBase: () => this.setState({ variants: {} }),
       cards: rows,
       reviewNextNote: s.fromPulls ? 'Nothing is generated yet. Next: the card back.' : 'Nothing is generated yet. Next: soul deck, then the card back.',
@@ -1675,7 +1823,7 @@ class Component extends DCLogic {
       pips: Array.from({ length: s.pack.length || 7 }).map((x, i) => ({
         style: 'width:' + (i === s.revealIdx ? '22px' : '7px') + ';height:7px;border-radius:99px;transition:all .2s;background:' + (i < s.revealIdx ? '#a4d4ba' : i === s.revealIdx ? '#a9abee' : 'rgba(150,170,230,.22)')
       })),
-      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
+      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, deck: null, deckSource: null, profile: null, busy: null, importError: null, unknown: [], sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
     };
     const cur = s.pack[s.revealIdx];
     if (cur) {
@@ -1755,6 +1903,43 @@ class Component extends DCLogic {
       label: tally[r] + ' ' + r,
       style: 'padding:5px 9px;border-radius:8px;border:1px solid ' + (RARITY_HUE[r] || '#9aa6c8') + '55;color:' + (RARITY_HUE[r] || '#9aa6c8') + ";font:600 10px/1 'JetBrains Mono',monospace;white-space:nowrap"
     }));
+    // Import outcomes reuse the bottom bar: a failed read has to say what failed and
+    // what to do next, never fall back to a deck nobody asked for.
+    if (s.notice === 'importFailed' || s.notice === 'noCards') {
+      const empty = s.notice === 'noCards';
+      Object.assign(vals, {
+        barPct: '100%',
+        barAccent: '#dfa2ab',
+        barBorder: 'rgba(216,162,171,.45)',
+        barIconBg: 'rgba(216,162,171,.14)',
+        barIcon: '!',
+        barTitle: empty ? 'No cards in that list' : 'That deck could not be imported',
+        barDetail: s.input || 'import',
+        barNote: empty
+          ? 'Nothing in it looked like a card code. A line is `2x Elizabee \u2013 Queen of the Flower Garden [BP01-053]`, `2x BP01-053`, `BP01-053`, or `2,BP01-053,name` \u2014 comments start with #.'
+          : (s.importError || 'The import failed.'),
+        barActions: [
+          { label: 'Try another link', go: () => { this.setState({ notice: null, importError: null, input: '' }); this.glide(0); }, style: btn('transparent', '#9aa6c8', 'rgba(150,170,230,.28)') },
+          { label: 'Import .txt / .csv', go: vals.pickFile, style: btn('rgba(216,162,171,.14)', '#eed6da', 'rgba(216,162,171,.45)') }
+        ]
+      });
+    }
+    if (s.notice === 'unknownCodes') {
+      const list = s.unknown.slice(0, 6).join(', ') + (s.unknown.length > 6 ? ' \u2026' : '');
+      Object.assign(vals, {
+        barPct: '100%',
+        barAccent: '#e3c893',
+        barBorder: 'rgba(227,200,147,.42)',
+        barIconBg: 'rgba(227,200,147,.14)',
+        barIcon: '?',
+        barTitle: s.unknown.length + (s.unknown.length === 1 ? ' code isn\u2019t in the card snapshot' : ' codes aren\u2019t in the card snapshot'),
+        barDetail: list,
+        barNote: 'They are kept in the deck exactly as written, with whatever name the list gave them \u2014 nothing here invents card data. If the art will not load, the code is probably a typo; if the set is new, the snapshot needs regenerating with tools/fetch-pool.mjs.',
+        barActions: [
+          { label: 'Got it', go: () => this.setState({ notice: null }), style: btn('rgba(227,200,147,.14)', '#e6d5b0', 'rgba(227,200,147,.45)') }
+        ]
+      });
+    }
     if (s.notice === 'noPublic') {
       Object.assign(vals, {
         barPct: '100%',

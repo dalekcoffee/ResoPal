@@ -20,12 +20,18 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 |---|---|
 | `/health` | returns `{ok:true}` — use it to confirm the deploy |
 | `/img/<CODE>?w=256\|512\|1024` | card art, CORS-enabled, edge-cached for a year |
-| `/deck/<uuid>` | raw RSC flight payload for a deck page |
-| `/profile/<handle>` | raw RSC flight payload for a profile page |
+| `/deck/<uuid>` | a deck page, parsed: `{id, name, author, total, cards:[{code,name,n}]}` |
+| `/profile/<handle>` | a profile page, parsed: `{handle, title, decks:[{id,name,total,colors}]}` |
 
-`/deck` and `/profile` return the payload **unparsed**. The format is undocumented, so the parser
-has to be written against a real response — fetch one, look at it, then build from what's actually
-there. Not needed for baking; only for URL paste later.
+`/deck` and `/profile` read Palify's RSC flight payload and parse it here, in
+`src/flight.js` — the format is undocumented and will change without warning, and when it does the
+fix should be one Worker deploy rather than a new front end on a static host. Add `?raw=1` to
+either route to get the payload untouched; that is how you re-derive the parser next time.
+
+Two things they will not do: guess, and trust the status line. A payload that no longer parses is a
+`502`, never a plausible wrong deck — and because Palify answers a missing or private deck with
+HTTP **200** carrying Next.js's own 404 payload, "not found" is detected in the body and returned
+as a `404`.
 
 ## Setup A — the Cloudflare dashboard (no CLI)
 

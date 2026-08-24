@@ -23,8 +23,10 @@ image pixels and a cross-origin image taints the canvas. `docs/WORKER.md` explai
 needed; `worker/README.md` is the setup. `data/art/` holds the TD02 trial deck as a same-origin
 fallback, so that deck still builds if the Worker is unreachable.
 
-Not built yet: pasting a Palify deck or profile URL. The Worker's `/deck` and `/profile` routes
-return the raw RSC payload; the parser has to be written against a real response.
+Pasting a Palify deck or profile URL works too, through the same Worker: `/deck/<uuid>` and
+`/profile/<handle>` fetch the page's RSC payload, parse it (`worker/src/flight.js`) and return
+clean JSON. Card codes are accepted as well — `BP01-053`, or `2x BP01-053` — so a single card is a
+valid import.
 
 ## How it works
 

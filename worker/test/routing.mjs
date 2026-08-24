@@ -1,11 +1,28 @@
 // Exercise routing + validation with a stubbed upstream; no network involved.
 globalThis.caches = { default: { match: async () => null, put: async () => {} } };
 const realFetch = globalThis.fetch;
+// Trimmed from real RSC payloads captured from palify.org - the surrounding React
+// element soup is what the parser has to survive, so keep some of it.
+const DECK_FLIGHT = '1:"$Sreact.fragment"\n1a:["$","h1",null,{"className":"font-display","children":"Meow"}]\n'
+  + '1b:["$","$L1c",null,{"name":"Meow","cards":{"bp01-053-elizabee":1},"deckId":"66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc",'
+  + '"list":[{"n":1,"name":"Elizabee \u2013 Queen of the Flower Garden","code":"BP01-053"},'
+  + '{"n":2,"name":"Katress \u2013 Abyssal Sorcerer","code":"BP01-075"}]}]\n'
+  + '1d:["$","$L1e",null,{"deckId":"66cdf5a2","deckName":"Meow","creator":"DalekCoffee"}]\n'
+  + '1f:["$","$L20",null,{"stats":{"total":3,"avgCost":5.5}}]\n';
+const PROFILE_FLIGHT = '1:"$Sreact.fragment"\n'
+  + '11:["$","$L19",null,{"linkPath":"/u/dalek","input":{"kind":"profile","title":"DalekCoffee","handle":"dalek"}}]\n'
+  + '1c:["$","h2",null,{"children":"Public decks"}]\n'
+  + '1d:["$","div",null,{"children":[["$","$L1f","66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc",{"href":"/decks/66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc","className":"rounded-xl",'
+  + '"children":[["$","div",null,{"className":"font-display","children":"Meow"}],["$","div",null,{"className":"text-xs","children":[3," cards"]}],'
+  + '["$","div",null,{"className":"flex","children":[["$","div","Purple",{"style":{"width":"66.7%","background":"var(--color-el-purple)"}}],["$","div","Green",{"style":{"width":"33.3%"}}]]}]]}],'
+  + '["$","$L1f","f2dd143c-8e6f-4142-87d2-051195185f96",{"href":"/decks/f2dd143c-8e6f-4142-87d2-051195185f96","className":"rounded-xl",'
+  + '"children":[["$","div",null,{"className":"font-display","children":"Green/Purple Trial"}],["$","div",null,{"className":"text-xs","children":[50," cards"]}]]}]]}]\n';
 let lastUpstream = null;
 globalThis.fetch = async (u, init) => {
   lastUpstream = { url: String(u), headers: (init && init.headers) || {} };
   if (String(u).includes('/cards/w')) return new Response(new Uint8Array([1,2,3]), { status: 200 });
-  if (String(u).includes('/decks/') || String(u).includes('/u/')) return new Response('flight-payload', { status: 200 });
+  if (String(u).includes('/decks/')) return new Response(DECK_FLIGHT, { status: 200 });
+  if (String(u).includes('/u/')) return new Response(PROFILE_FLIGHT, { status: 200 });
   return new Response('nope', { status: 404 });
 };
 const { default: worker } = await import('../src/index.js');
@@ -146,6 +163,40 @@ check('fixed and flat agree card for card, in order',
 const deckFixed = await (await get('/api/deck?deck=td02&format=fixed')).text();
 check('a deck uses the same record width', deckFixed.length === 50 * W, `${deckFixed.length / W} records`);
 check('no record is truncated', recs.every((r) => r.trim().length <= W - 1));
+
+// ── /deck and /profile: Palify's pages, parsed into JSON ──────────────────────
+console.log('\n/deck + /profile:');
+const dk = await (await get('/deck/66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc')).json();
+check('a deck comes back as JSON, not a flight payload', Array.isArray(dk.cards));
+check('the list survives verbatim, in order',
+  JSON.stringify(dk.cards.map((c) => c.code + 'x' + c.n)) === '["BP01-053x1","BP01-075x2"]', JSON.stringify(dk.cards));
+check('names come through unescaped', dk.cards[0].name === 'Elizabee \u2013 Queen of the Flower Garden', dk.cards[0].name);
+check('total is the sum of the list', dk.total === 3, String(dk.total));
+check('deck name and author are read', dk.name === 'Meow' && dk.author === 'DalekCoffee', `${dk.name} / ${dk.author}`);
+check('?raw=1 still returns the payload untouched',
+  (await (await get('/deck/66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc?raw=1')).text()) === DECK_FLIGHT);
+
+const pf = await (await get('/profile/dalek')).json();
+check('a profile lists its public decks', pf.decks.length === 2, JSON.stringify(pf.decks));
+check('each deck carries id, name and count',
+  pf.decks[0].id === '66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc' && pf.decks[0].name === 'Meow' && pf.decks[0].total === 3,
+  JSON.stringify(pf.decks[0]));
+check('a deck row cannot read the next row\u2019s name', pf.decks[1].name === 'Green/Purple Trial', pf.decks[1].name);
+check('the colour bar is read', pf.decks[0].colors.length === 2 && pf.decks[0].colors[0].color === 'Purple',
+  JSON.stringify(pf.decks[0].colors));
+check('the display name comes from the profile, not the page title', pf.title === 'DalekCoffee', pf.title);
+
+// A payload we cannot read must be an error, never a plausible wrong deck.
+const savedFetch = globalThis.fetch;
+globalThis.fetch = async () => new Response('a page that is not a deck', { status: 200 });
+check('an unreadable payload is a 502, not a guess',
+  (await get('/deck/66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc')).status === 502);
+// Palify serves a missing deck as 200 + Next's own 404 payload.
+globalThis.fetch = async () => new Response('4:E{"digest":"NEXT_HTTP_ERROR_FALLBACK;404"}\n', { status: 200 });
+check('a missing deck is a 404, not a 502',
+  (await get('/deck/66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc')).status === 404);
+check('a missing profile is a 404 too', (await get('/profile/nobody')).status === 404);
+globalThis.fetch = savedFetch;
 
 // Runs last: it deliberately empties the token bucket for this IP.
 let sawThrottle = false;

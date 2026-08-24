@@ -62,12 +62,25 @@ Proxy one card image and attach CORS headers.
 
 ### `GET /deck/:uuid` and `GET /profile/:handle`
 
-Fetch the Palify page with `RSC: 1`, parse the flight payload, return clean JSON.
+Fetch the Palify page with `RSC: 1`, parse the flight payload, return clean JSON. Built —
+`worker/src/flight.js`, written against real payloads (a deck page is ~81–109 KB, a profile ~28 KB).
 
 Keep the parsing here rather than in the browser — the flight format is undocumented and will
 change without warning. When it breaks you want to fix one Worker, not ship a new front end.
+`?raw=1` returns the payload untouched, which is how the parser gets rewritten when that day comes.
 
 Cache these for minutes, not a year; decks get edited.
+
+Two behaviours that are not optional:
+
+- **A payload that will not parse is a 502.** Never a fallback, never a partial deck. A wrong deck
+  that looks right is the worst outcome this project has — the site shipped for a while doing
+  exactly that, quietly serving its demo deck for every import.
+- **A missing page arrives as HTTP 200.** Palify serves a deleted, private or nonexistent deck as
+  200 with Next.js's own 404 payload, so the not-found check reads the body for the
+  `NEXT_HTTP_ERROR_FALLBACK;404` digest and answers 404. Do not match on the string
+  `404: This page could not be found.` — every Next.js page carries it in an unrendered slot,
+  including perfectly good decks.
 
 ### `GET /cards`
 
