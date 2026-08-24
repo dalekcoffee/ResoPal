@@ -6,6 +6,7 @@
 <title>ResoPal — Palworld TCG decks in Resonite</title>
 <meta name="description" content="Turn any Palworld TCG deck from Palify into a ready-to-import, shuffleable deck object for Resonite. Paste a deck link, get a .resonitepackage.">
 <meta name="theme-color" content="#070b17">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="apple-touch-icon" href="assets/logo.png">
 <link rel="canonical" href="https://resopal.dalek.coffee/">
@@ -73,7 +74,7 @@
   <div style="position:fixed;top:18px;left:0;right:0;z-index:60;display:flex;justify-content:center;padding:0 24px;pointer-events:none">
     <div style="pointer-events:auto;width:100%;max-width:1180px;display:flex;align-items:center;gap:20px;padding:12px 16px 12px 20px;border-radius:22px;background:rgba(13,19,38,.86);backdrop-filter:blur(14px);border:1px solid rgba(150,170,230,.16);box-shadow:0 18px 44px rgba(2,5,16,.6)">
       <div style="display:flex;align-items:center;gap:11px;flex:none">
-        <img src="assets/logo.png" alt="ResoPal" width="32" height="32" draggable="false" style="width:32px;height:32px;border-radius:10px;flex:none;object-fit:cover;background:#12100c;box-shadow:inset 0 0 0 1px rgba(200,163,94,.45)">
+        <img src="assets/logo.svg" alt="ResoPal" width="32" height="32" draggable="false" style="width:32px;height:32px;border-radius:50%;flex:none;object-fit:contain">
         <div style="display:flex;flex-direction:column;gap:2px">
           <div style="font:600 19px/1 'Newsreader',serif;letter-spacing:.01em">ResoPal</div>
           <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#69769c;text-transform:uppercase;white-space:nowrap">Palworld TCG &rarr; Resonite</div>
@@ -142,7 +143,7 @@
           <div style="width:34px;height:34px;border-radius:11px;background:rgba(160,162,220,.16);border:1px solid rgba(160,162,220,.42);color:#b0b3ea;font:600 13px/33px 'JetBrains Mono',monospace;text-align:center">01</div>
           <div>
             <div style="font:400 25px/1.2 'Newsreader',serif">Your deck</div>
-            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, a profile URL, or a card code &mdash; or upload a file for a private deck.</div>
+            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, a profile URL, or a card code &mdash; upload a file for a private deck, or search for a single card by name.</div>
           </div>
         </div>
 
@@ -168,6 +169,44 @@
             </div>
             <button type="button" onClick="{{ pickFile }}" style="padding:12px 18px;border-radius:13px;border:1px solid rgba(163,207,216,.34);background:rgba(163,207,216,.1);color:#a3cfd8;font:600 13px/1 'Figtree',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap" style-hover="background:rgba(163,207,216,.2)">Choose file</button>
           </div>
+
+          <div style="display:flex;align-items:center;gap:16px;margin:20px 2px 16px">
+            <div style="flex:1;height:1px;background:rgba(150,170,230,.14)"></div>
+            <span style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#69769c">OR</span>
+            <div style="flex:1;height:1px;background:rgba(150,170,230,.14)"></div>
+          </div>
+
+          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:0 2px 10px">One card &mdash; search by name</div>
+          <input type="text" value="{{ cardQ }}" onChange="{{ onCardQ }}" placeholder="Elizabee, Katress, BP01-053…" style="width:100%;height:50px;padding:0 16px;border-radius:14px;background:rgba(7,11,23,.72);border:1px solid rgba(150,170,230,.2);color:#e8ecfa;font:400 14.5px/1 'Figtree',sans-serif">
+
+          <sc-if value="{{ showFinder }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ found }}" as="c" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:14px;padding:10px 12px;border-radius:14px;border:1px solid rgba(150,170,230,.12);background:rgba(255,255,255,.022)">
+                  <div style="position:relative;width:44px;height:62px;flex:none;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,rgba(30,26,52,.9),#141a3a)">
+                    <div style="{{ c.stripe }}"></div>
+                    <img src="{{ c.img }}" alt="" data-code="{{ c.code }}" onLoad="{{ gauge }}" loading="lazy" decoding="async" style="{{ c.imgStyle }}">
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font:600 13.5px/1.35 'Figtree',sans-serif;color:#dbe2f5;text-wrap:pretty">{{ c.name }}</div>
+                    <div style="font:400 11px/1 'JetBrains Mono',monospace;color:#69769c;margin-top:5px">{{ c.code }} &middot; {{ c.typeLabel }}</div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;max-width:52%">
+                    <sc-for list="{{ c.prints }}" as="p" hint-placeholder-count="2">
+                      <button type="button" onClick="{{ p.add }}" style="{{ p.style }}" title="{{ p.title }}">
+                        <span style="{{ p.dot }}"></span>
+                        <span>{{ p.label }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ finderEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;padding:12px 14px;border-radius:14px;border:1px dashed rgba(150,170,230,.2);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ finderEmptyText }}</div>
+          </sc-if>
         </div>
 
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:20px;padding:16px 18px;border-radius:18px;background:rgba(255,255,255,.022);border:1px solid rgba(150,170,230,.12)">
@@ -817,7 +856,7 @@ class Component extends DCLogic {
     cardDX: 0, cardOut: 0, cardDrag: false, snap: false, hold: false, celId: null,
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
     gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null, deck: null,
-    busy: null, profile: null, deckSource: null, importError: null, unknown: [],
+    busy: null, profile: null, deckSource: null, importError: null, unknown: [], cardQ: '',
     sizeMain: null, sizeSoul: null, outSize: 0,
     vw: typeof window !== 'undefined' ? window.innerWidth : 1440, imgBudget: 6
   };
@@ -939,7 +978,7 @@ class Component extends DCLogic {
       files.filter(Boolean).forEach(j => {
         Object.keys(j.base || {}).forEach(code => {
           const b = j.base[code];
-          byBase[code] = { name: b.name || code, hue: COLOR_HUE[b.color] || '#cfc7a8', prints: [] };
+          byBase[code] = { name: b.name || code, hue: COLOR_HUE[b.color] || '#cfc7a8', color: b.color || '', type: b.type || '', prints: [] };
         });
         Object.keys(j.byRarity || {}).forEach(rarity => (j.byRarity[rarity] || []).forEach(e => {
           const base = byBase[e.base];
@@ -1086,6 +1125,32 @@ class Component extends DCLogic {
     const one = /^(?:\d+\s*[x*]?\s+)?[A-Za-z][A-Za-z0-9]{1,5}-[0-9]{1,4}[A-Za-z]{0,4}$/;
     return parts.length && parts.every(x => one.test(x)) ? parts.join('\n') : null;
   }
+
+  // Search the committed snapshot, never Palify: 150 cards are already on disk, so
+  // finding a card costs no request, hits no rate limit and works offline. Matches
+  // on name or code; a name that starts with the query outranks one that merely
+  // contains it, which outranks a code match.
+  findCards(q) {
+    const needle = String(q || '').trim().toLowerCase();
+    if (!this.cat || needle.length < 2) return [];
+    const cat = this.cat, hits = [];
+    Object.keys(cat.byBase).forEach(code => {
+      const c = cat.byBase[code];
+      const at = c.name.toLowerCase().indexOf(needle);
+      const byCode = code.toLowerCase().indexOf(needle) === 0 || cat.byPrint[needle.toUpperCase()] === code;
+      if (at < 0 && !byCode) return;
+      hits.push({ code, card: c, rank: at === 0 ? 0 : at > 0 ? 1 : 2, at: at < 0 ? 1e9 : at });
+    });
+    hits.sort((a, b) => a.rank - b.rank || a.at - b.at || a.code.localeCompare(b.code));
+    return hits.slice(0, 6);
+  }
+
+  // The catalogue is fetched on the first keystroke rather than at mount - most
+  // visitors paste a deck link and never open the finder.
+  searchCards = (q) => {
+    this.setState({ cardQ: q });
+    if (!this.cat) this.catalogue().then(() => this.forceUpdate());
+  };
 
   importFailed(message) {
     this.setState({ busy: null, notice: 'importFailed', importError: message, error: null });
@@ -1471,6 +1536,7 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state, sheetGrid = { c: 10, r: 7 };
     const rows = this.rows(s);
+    const found = this.findCards(s.cardQ);
     const kept = rows.filter(r => !r.discarded);
     const total = kept.reduce((t, r) => t + r.qtyN, 0);
     const hasSoul = !s.soulSkipped;
@@ -1646,6 +1712,30 @@ class Component extends DCLogic {
         i.click();
       },
       dropZoneStyle: 'padding:18px;border-radius:22px;border:1px solid ' + (s.dropHot ? 'rgba(163,207,216,.6)' : 'rgba(150,170,230,.14)') + ';background:' + (s.dropHot ? 'rgba(163,207,216,.07)' : 'rgba(7,11,23,.35)') + ';transition:all .15s',
+      cardQ: s.cardQ,
+      onCardQ: e => this.searchCards(e.target.value),
+      // One card, chosen by name and printing. It imports as a deck of one - the
+      // rest of the flow (soul deck, card back, bake) is unchanged.
+      found: found.map(h => ({
+        code: h.code,
+        name: h.card.name,
+        typeLabel: [h.card.color, h.card.type].filter(Boolean).join(' \u00b7 ') || 'Card',
+        img: this.img(h.card.prints[0][0]),
+        imgStyle: this.face(h.card.prints[0][0]),
+        stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + h.card.hue + '33 0 6px, transparent 6px 12px)',
+        prints: h.card.prints.map(pr => ({
+          label: pr[1],
+          title: 'Import ' + pr[0] + ' (' + pr[1] + ')',
+          add: () => { this.setState({ cardQ: '' }); this.setDeck([{ code: pr[0], n: 1 }], null, 'card by name'); },
+          dot: 'width:6px;height:6px;border-radius:50%;background:' + (RARITY_HUE[pr[1]] || '#9aa6c8'),
+          style: "display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:9px;cursor:pointer;transition:all .12s;border:1px solid rgba(150,170,230,.16);background:rgba(255,255,255,.03);color:#c3cbe4;font:600 10.5px/1 'JetBrains Mono',monospace"
+        }))
+      })),
+      showFinder: found.length > 0,
+      finderEmpty: s.cardQ.trim().length >= 2 && !found.length,
+      finderEmptyText: this.cat
+        ? 'No card in the snapshot matches \u201c' + s.cardQ.trim() + '\u201d. Try part of a name \u2014 Elizabee, Katress \u2014 or a code like BP01-053.'
+        : 'Loading the card list\u2026',
       submitLabel: s.busy === 'profile' ? 'Reading\u2026' : s.busy ? 'Loading\u2026' : 'Load',
       submitStyle: "padding:0 34px;border-radius:16px;border:0;background:" + (s.busy ? 'rgba(169,171,238,.45)' : '#a9abee')
         + ";color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:" + (s.busy ? 'progress' : 'pointer')
@@ -1835,7 +1925,7 @@ class Component extends DCLogic {
       pips: Array.from({ length: s.pack.length || 7 }).map((x, i) => ({
         style: 'width:' + (i === s.revealIdx ? '22px' : '7px') + ';height:7px;border-radius:99px;transition:all .2s;background:' + (i < s.revealIdx ? '#a4d4ba' : i === s.revealIdx ? '#a9abee' : 'rgba(150,170,230,.22)')
       })),
-      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, deck: null, deckSource: null, profile: null, busy: null, importError: null, unknown: [], sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
+      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', cardQ: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, deck: null, deckSource: null, profile: null, busy: null, importError: null, unknown: [], sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
     };
     const cur = s.pack[s.revealIdx];
     if (cur) {

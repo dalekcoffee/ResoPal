@@ -38,7 +38,7 @@ Everything lives on one continuously-revealing page. Sections appear below one a
 
 - Fixed, 18px from top, centered, max-width 1180px, z-index 60.
 - `padding: 12px 16px 12px 20px`, `border-radius: 22px`, `background: rgba(13,19,38,.86)`, `backdrop-filter: blur(14px)`, `border: 1px solid rgba(150,170,230,.16)`, `box-shadow: 0 18px 44px rgba(2,5,16,.6)`.
-- Left: 32×32px logo tile (`border-radius:10px`, `linear-gradient(150deg,#a9abee,#a8d3dc)`, containing an 11px rotated 45° navy square), then wordmark "ResoPal" (Newsreader 600 19px) over "PALWORLD TCG → RESONITE" (JetBrains Mono 500 9.5px, `letter-spacing:.13em`, `#69769c`, uppercase).
+- Left: 32×32px logo disc (`assets/logo.svg`, `border-radius:50%`, `object-fit:contain` — the mark carries its own gold rim, so it gets no tile ring behind it), then wordmark "ResoPal" (Newsreader 600 19px) over "PALWORLD TCG → RESONITE" (JetBrains Mono 500 9.5px, `letter-spacing:.13em`, `#69769c`, uppercase).
 - Credits block (hidden below 1180px viewport): "Built on" eyebrow + "Deck Maker by **Ukilop** · art by **Palify**" (Palify is a link to palify.org).
 - Mode switch: 2 pills in a `rgba(7,11,23,.6)` track — "Import a deck" / "Rip a pack". Active: `background:#a9abee; color:#1a2038; font-weight:600`. Inactive: transparent, `#9aa6c8`, weight 500.
 - "resrec:///" copy button + "Start over" button. Both plain slate: `border:1px solid rgba(150,170,230,.18)`, `background:rgba(255,255,255,.03)`, `color:#9aa6c8`. On copy, the glyph text swaps to "copied ✓" in `#a4d4ba` and the border goes `rgba(164,212,186,.5)` for 1.8s. Below 1180px the label collapses, leaving only the glyph (keep the `title`/`aria-label`).
@@ -66,15 +66,15 @@ Card shell used by every section: `border-radius:28px`, `border:1px solid rgba(1
 
 Section header pattern (all sections): 34×34px step number tile (`border-radius:11px`, `background:rgba(160,162,220,.16)`, `border:1px solid rgba(160,162,220,.42)`, `color:#b0b3ea`, JetBrains Mono 600 13px) + **big serif title** (Newsreader 400 25px/1.2) with **small description below** (Figtree 400 13.5px/1.5, `#8e9ac0`, `margin-top:9px`).
 
-- Title "Your deck" / desc "Paste a public deck URL, or upload a file for a private one."
+- Title "Your deck" / desc "Paste a public deck URL, a profile URL, or a card code — or upload a file for a private deck."
 - Drop zone wrapper: `padding:18px`, `border-radius:22px`, `background:rgba(7,11,23,.35)`. On dragover: border `rgba(163,207,216,.6)`, background `rgba(163,207,216,.07)`.
-- Eyebrow "PUBLIC DECK — PASTE THE URL" (JetBrains Mono 600 10.5px, `letter-spacing:.13em`, `#8e9ac0`).
+- Eyebrow "PUBLIC DECK, PROFILE OR CARD CODE" (JetBrains Mono 600 10.5px, `letter-spacing:.13em`, `#8e9ac0`).
 - Input: 58px tall, `border-radius:16px`, `background:rgba(7,11,23,.72)`, `border:1px solid rgba(150,170,230,.2)`, Figtree 400 15px. Placeholder is the **full** URL including `https://` (no separate prefix chip — that caused double-https on paste).
-- Submit button: label **"Load"**, `padding:0 34px`, `border-radius:16px`, `background:#a9abee`, `color:#1a2038`, Figtree 600 15px. Hover `#b8baf4`.
+- Submit button: label **"Load"**, `padding:0 34px`, `border-radius:16px`, `background:#a9abee`, `color:#1a2038`, Figtree 600 15px. Hover `#b8baf4`. While a fetch is in flight it reads "Loading…" / "Reading…" at 45% opacity with `cursor:progress` — a paste that reaches across the network must never look inert.
 - "OR" divider, then eyebrow "PRIVATE DECK — UPLOAD THE FILE" and a dashed row: 40×40 "TXT" tile (`rgba(163,207,216,.12)`, border `rgba(163,207,216,.3)`, `#a3cfd8`), copy "Drop a .txt or .csv exported from Palify" + "Private decks can't be read from a URL.", and a "Choose file" button in the same cyan.
+- Second "OR" divider, then eyebrow "ONE CARD — SEARCH BY NAME": a 50px input (`Elizabee, Katress, BP01-053…`) that searches the committed snapshot from two characters up. Up to 6 result rows, each a 44×62 thumbnail, the card's name, `CODE · Colour · Type`, and one chip per printing labelled by rarity — the chip is the import, so choosing the art and importing the card are one click. A query with no match gets a dashed row saying so; nothing silently imports.
 - **Starter decks row**: "Don't have a deck?" + two buttons — "Trial deck — Red / Blue" (TD01, dots `#dd9c9c`/`#9dc2dd`) and "Trial deck — Green / Purple" (TD02, dots `#a3ccae`/`#c2a3e2`) — plus a right-aligned link "Browse community decks on Palify ↗".
-- "Accepts" example chips (deck / profile / file) that fill the input and submit.
-- Error state: `border:1px solid rgba(216,162,171,.34)`, `background:rgba(216,162,171,.08)`, 26px "!" tile, title `#eed6da`, body `#bda3a8`, and an "Upload a file instead" action. Three messages: empty, "That Palify page isn't a deck or a profile", "That doesn't look like a Palify link" (body: "ResoPal only reads public Palify decks…").
+- Error state: `border:1px solid rgba(216,162,171,.34)`, `background:rgba(216,162,171,.08)`, 26px "!" tile, title `#eed6da`, body `#bda3a8`, and an "Upload a file instead" action. Three messages: empty, "That Palify page isn't a deck or a profile", "That isn't a deck link, a card code or a list" (body names the card-code form). Import failures that happen after a fetch — a missing deck, a proxy that answers wrongly — use the bottom bar instead, and always say which side went wrong.
 
 ### 3. Pick a deck (step 02, profile URLs only)
 
