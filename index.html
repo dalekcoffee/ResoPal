@@ -1002,11 +1002,23 @@ class Component extends DCLogic {
   async getJSON(path) {
     if (!ART_PROXY) throw new Error('No proxy is configured, so Palify pages cannot be read from the browser - see docs/WORKER.md.');
     const r = await fetch(ART_PROXY.replace(/\/$/, '') + path, { mode: 'cors' });
+    const body = await r.text();
     let j = null;
-    try { j = await r.json(); } catch (e) {}
+    try { j = JSON.parse(body); } catch (e) {}
     if (!r.ok) {
       const err = new Error((j && j.error) || ('the deck proxy answered HTTP ' + r.status));
       err.status = r.status;
+      throw err;
+    }
+    // A 200 that is not JSON is a broken proxy, not an empty deck. An older Worker
+    // relays Palify's RSC payload unparsed (it starts `0:{` or `1:"$S`), and reading
+    // that as "no cards in this deck" sends the user hunting for a problem with
+    // their deck. Say which side is wrong.
+    if (!j || typeof j !== 'object') {
+      const err = new Error(/^\s*\d+:/.test(body)
+        ? 'the proxy relayed Palify\u2019s page unparsed, which means it is running an older build \u2014 redeploy worker/ (docs/WORKER.md)'
+        : 'the proxy answered with something that is not JSON');
+      err.status = 0;
       throw err;
     }
     return j;
