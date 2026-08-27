@@ -1,6 +1,6 @@
 # In-world panel
 
-`out/ResoPal_Panel.resonitepackage` (263 KB) is a grabbable UIX panel. Drag it into
+`out/ResoPal_Panel.resonitepackage` (264 KB) is a grabbable UIX panel. Drag it into
 Resonite and you get a working UI immediately — no network call needed to see something.
 
 Five preset buttons, a paste field and an import button:
@@ -39,7 +39,7 @@ Three driven lines under the title tell you where things stand without opening t
   placed`. Every terminal impulse in the graph writes it, so "nothing happened" is not one
   of the things it can say.
 
-**Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** One canvas, ~112 nodes, four
+**Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** One canvas, ~118 nodes, four
 zones. [PRIOR-ART.md](PRIOR-ART.md) is what an existing, working in-world deck importer
 does differently, and which of those we took.
 

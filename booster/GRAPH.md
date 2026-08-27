@@ -1,6 +1,6 @@
 # Reading the graph
 
-**One canvas, about 115 nodes, four zones.** Unpack `Flux - control` and you have the
+**One canvas, about 118 nodes, four zones.** Unpack `Flux - control` and you have the
 whole thing. There is no second canvas any more: the 514-node decoder canvas is gone,
 because cards are no longer pre-baked. See "How the cards work" below.
 
@@ -25,7 +25,8 @@ under the title:
   | `host access refused` | either request's `OnDenied` (zone 2) |
   | `network error - no answer from the host` | either request's `OnError` (zone 2) |
   | `response received - HTTP 200` | either request's `OnResponse`, with the real code (zone 2) |
-  | `all cards placed` | the loop running out of records (zone 3) |
+  | `a card would not take its art` | the per-card write's `OnNotFound` / `OnFailed` (zone 3) |
+| `all cards placed` | the loop running out of records (zone 3) |
 
   The HTTP code is there because `GET_String` writes an exception into `Content` **only
   on a transport failure**. A 404 is a perfectly successful request whose body is not
@@ -181,10 +182,17 @@ scales that to the card height and `MaxSize` caps the width at one grid cell. Th
 closes was recorded as needing "a node that exposes a loaded texture's aspect" — there is
 none, and none is needed.
 
-**Nothing counts the cards.** A card exists because a record existed. `ChildrenCount` on
-the spawn parent gives the index the grid position is computed from, so seven records make
-seven cards and fifty make fifty, with no ceiling anywhere in the graph. The only cap is
-the Worker's, at 200.
+**Nothing counts the cards.** A card exists because a record existed. Each one asks
+`IndexOfChild` for its **own** index — not `ChildrenCount` on the parent, which by that
+point already includes the card being placed and would put every card one cell late. Seven
+records make seven cards and fifty make fifty, with no ceiling anywhere in the graph. The
+only cap is the Worker's, at 200.
+
+**The card stays active; its holder is switched off.** `DuplicateSlot` calls
+`slot.Duplicate()`, which copies `Active` verbatim — duplicating an inactive card gives an
+inactive card, and nothing in the spawn chain turns it back on. Hiding the template behind
+an inactive parent keeps it out of sight while the copy, reparented under the active `Cards`
+slot, comes up visible.
 
 ## What the tests hold to
 

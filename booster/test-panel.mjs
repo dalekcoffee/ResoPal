@@ -262,7 +262,7 @@ function evalComp(c, body, depth) {
     // A local variable. The node IS the value; STATE is what the simulated loop
     // has written into it so far.
     case 'DataModelObjectFieldStore<string>': r = STATE.has(c.id) ? STATE.get(c.id) : ''; break;
-    case 'ChildrenCount': r = STATE.has('children') ? STATE.get('children') : 0; break;
+    case 'IndexOfChild': r = STATE.has('children') ? STATE.get('children') : 0; break;
     case 'ValueInc<int>': r = evalRef(arg(c, 'N'), body, depth) + 1; break;
     case 'ValueMod<int>': r = A() % B(); break;
     case 'ValueDiv<int>': r = Math.trunc(A() / B()); break;
@@ -291,7 +291,11 @@ const findSlot = (name, from = doc.Object) => {
 const tmplHolder = findSlot('Card template');
 const tmpl = tmplHolder && (tmplHolder.Children || [])[0];
 check('there is a card template', !!tmpl);
-check('and it is inactive, so it is never one of the cards', tmpl?.Active?.Data === false);
+// DuplicateSlot copies Active verbatim, so the CARD has to stay active and its
+// holder is what gets switched off - otherwise every card spawns invisible and
+// nothing in the graph turns it back on.
+check('the holder is inactive, so the template is out of sight', tmplHolder?.Active?.Data === false);
+check('but the card itself is active, or every duplicate spawns invisible', tmpl?.Active?.Data !== false);
 const tmplComps = (tmpl?.Components?.Data || []).map((c) => ({ t: short(TYPES[num(c.Type)]), d: c.Data }));
 const hasT = (t) => tmplComps.find((c) => c.t === t);
 for (const t of ['DynamicVariableSpace', 'DynamicValueVariable<string>', 'StaticTexture2D',
@@ -353,6 +357,8 @@ check('Cards starts empty - the count comes from the response, not the package',
   (cardsSlot?.Children || []).length === 0);
 
 // Walk the impulse chain from the duplicate to the end of the iteration.
+const evtWritesEarly = () => allWrites.filter((w) =>
+  String(arg(byComp.get(arg(w, 'Path')), 'Value')) === 'ResoPal/event');
 const IMPULSE = ['Next', 'OnSuccess', 'OnWritten', 'OnTrue', 'OnFalse', 'TaskStart', 'OnTriggered', 'OnResponse'];
 const chainFrom = (id, stop = 24) => {
   const out = [];
@@ -421,6 +427,12 @@ check('so every pass removes at least ' + (minRecord + 2) + ' characters and the
 const loopBody = chainFrom(loopGate.id, 2);
 const delays = compsOfType('DelayUpdates');
 check('the loop lets a frame pass each time round', delays.length === 1);
+const indexNodes = compsOfType('IndexOfChild');
+check('the grid index is the card\'s own, not a count taken after it exists',
+  indexNodes.length === 1 && byField.get(arg(indexNodes[0], 'Instance'))?.name === 'Duplicate',
+  `${compsOfType('ChildrenCount').length} ChildrenCount nodes`);
+check('a card that will not take its art says so instead of stopping silently',
+  evtWritesEarly().some((w) => arg(setUrl, 'OnNotFound') === w.id && arg(setUrl, 'OnFailed') === w.id));
 check('and runs inside a StartAsyncTask', compsOfType('StartAsyncTask').length >= 3);
 check('the previous import is cleared first', compsOfType('DestroySlotChildren').length === 1);
 
@@ -435,6 +447,9 @@ function runLoop(body, limit = 400) {
   const urls = [], spots = [];
   STATE.set(restStore.id, body);
   for (let i = 0; i < limit; i++) {
+    // IndexOfChild on the duplicate: by the time the position is computed the
+    // card is already parented, so a COUNT would include it and every card
+    // would land one cell late. This models the index the card actually has.
     STATE.set('children', urls.length);
     memo.clear();
     if (!evalRef(arg(loopGate, 'Condition'), body)) return { urls, spots, ran: i };
@@ -509,7 +524,13 @@ check('the status text is driven', !!statusProxy);
 const statusTarget = statusProxy && byField.get(arg(statusProxy, 'Drive'));
 check('it drives a Text.Content', statusTarget?.name === 'Content' && short(statusTarget.comp.type) === 'Text');
 check('shows the first card on success', evalProxy(statusProxy, pull1) === pull1.slice(0, 64).trim());
+// A transport failure is not an empty body - GET_String writes the exception
+// into the same Content - so it comes out of the same branch as a card.
 check('shows the error text on failure', evalProxy(statusProxy, errBody) === errBody);
+// And with nothing fetched yet the line must not be driven blank over the
+// caption the panel ships with.
+const atRest = evalProxy(statusProxy, '');
+check('says something before anything is pressed', !!atRest && atRest !== 'null' && atRest.length > 4, JSON.stringify(atRest));
 
 // The URL echo proves the button half of the chain on its own: it shows the URL
 // the request will use, so a press that changes it but returns nothing is

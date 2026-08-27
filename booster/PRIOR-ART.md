@@ -43,12 +43,11 @@ switch (await context.Engine.Security.RequestAccessPermission(
 ```
 
 The request node asks for permission itself, at `HostAccessScope.HTTP`, and blocks until the
-user answers. Our zone-2 gate is therefore **optional**, not required. We keep ours only
-because it lets us pass a `Reason` string that names ResoPal instead of the engine's generic
-"Web Request Node" — and it is now harmless, because its `Scope` is spelled out as `HTTP`, so
-the grant it records is exactly the one the request node then asks for and no second prompt
-appears. Left at the default `Everything` it would ask a broader question than the request
-needs.
+user answers. Our zone-2 gate was therefore **optional**, not required — and it is now
+**gone**. It was kept for one turn because it let us pass a `Reason` string naming ResoPal
+rather than the engine's generic "Web Request Node", but it could not be shared between two
+request nodes without a multiplexer, and a pre-gate is one more way to fail for a prompt the
+user gets anyway. The cost of dropping it is that generic reason string.
 
 Three failure modes hide in that same method, and all three are silent:
 

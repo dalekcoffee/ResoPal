@@ -109,7 +109,7 @@ const T = {
   // template replaces seventy pre-baked decoders.
   Dup:         PB + 'FrooxEngine.Slots.DuplicateSlot',
   ClearKids:   PB + 'FrooxEngine.Slots.DestroySlotChildren',
-  ChildCount:  PB + 'FrooxEngine.Slots.ChildrenCount',
+  IndexOfChild: PB + 'FrooxEngine.Slots.IndexOfChild',
   SetPos:      PB + 'FrooxEngine.Transform.SetLocalPosition',
   DelayFrames: PB + 'FrooxEngine.Async.DelayUpdates',
   IndexOf:     PB + 'Strings.IndexOfString',
@@ -490,10 +490,13 @@ const cardTemplate = slot('card', [
   slot('as a Uri', [cardUri.comp], [COL, 0, 0]),
   slot('drive the texture URL', [cardDrive.comp, cardDriveProxy.comp], [COL * 2, 0, 0]),
 ]);
-// Inactive so the template itself is never one of the cards on screen. The
-// duplicate is made active by the spawn chain.
-cardTemplate.Active.Data = false;
+// The CARD stays active and its HOLDER is switched off. `DuplicateSlot` calls
+// `slot.Duplicate()`, which copies `Active` verbatim - duplicating an inactive
+// card gives an inactive card, and nothing in the spawn chain turns it back on.
+// Hiding it behind an inactive parent keeps the template out of sight while the
+// copy, reparented under the active Cards slot, comes up visible.
 const templateSlot = slot('Card template', [], [0, -0.42, 0], [cardTemplate]);
+templateSlot.Active.Data = false;
 const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.42, 0]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -673,6 +676,11 @@ const at = (col, row) => [SX + col * COL, -row * ROW * 1.6, 0];
 
 const restStore = proxyNode('rest of the response', T.Store, T.StoreProxy, {}, at(-1.2, 3));
 const bodyStore = proxyNode('the whole response', T.Store, T.StoreProxy, {}, at(-0.6, -1));
+// Seed both with an empty string rather than leaving the Sync<string> at null.
+// Nothing reads them before the first response, but a local that is "" behaves
+// like a zero-length string everywhere and one that is null relies on every
+// string node in the chain handling null the same way.
+for (const store of [restStore, bodyStore]) store.slot.Components.Data[1].Data.Value.Data = '';
 const cardsRef = comp(T.SlotRef, { Reference: cardsSlot._slot.id });
 const cardsIn = comp(T.SlotIn, { Source: cardsRef.id });
 const cardsNode = { slot: slot('the Cards slot', [cardsIn.comp, cardsRef.comp], at(3, 6)), id: cardsIn.id, pos: at(3, 6) };
@@ -748,15 +756,12 @@ const setUrl = node('tell the card its art', T.WriteVar,
   at(6, R));
 dup.slot.Components.Data[0].Data.Next.Data = setUrl.id;
 
-// Where it goes: the card's index is however many cards are already there.
-// Its own copy of the Cards reference. Sharing the one in the spawn row means a
-// wire back across the entire loop; a reference node is two components and no
-// wire at all (pretty-flux section 2, the same reason the variable names are
-// duplicated per button row rather than trunked).
-const cardsRef2 = comp(T.SlotRef, { Reference: cardsSlot._slot.id });
-const cardsIn2 = comp(T.SlotIn, { Source: cardsRef2.id });
-const cardsNode2 = { slot: slot('the Cards slot', [cardsIn2.comp, cardsRef2.comp], at(5, R + 8)), id: cardsIn2.id, pos: at(5, R + 8) };
-const howMany = node('how many cards so far', T.ChildCount, { Instance: cardsNode2.id }, at(6, R + 8));
+// Where it goes. The card asks for its OWN index rather than counting the
+// Cards slot's children: by the time this runs the duplicate is already
+// parented, so a count includes it and every card would land one cell late.
+// `IndexOfChild` returns `slot.ChildIndex` for the slot handed to it, which is
+// exactly the number wanted, and needs no second reference to Cards.
+const howMany = node('which card is this', T.IndexOfChild, { Instance: dup.f.Duplicate }, at(6, R + 8));
 const idx = intRelay('that index, twice', howMany.id, at(7, R + 8));
 const perRow = intIn(`cards per row (${COLS})`, COLS, at(7, R + 9));
 const colOf = node('which column', T.IntMod, { A: idx.id, B: perRow.id }, at(8, R + 7));
@@ -772,6 +777,16 @@ const place = node('where the card goes', T.PackF3, { X: xOf.id, Y: yOf.id, Z: z
 const setPos = node('put it there', T.SetPos,
   { Instance: dup.f.Duplicate, Position: place.id, Next: null }, at(7, R));
 setUrl.slot.Components.Data[0].Data.OnSuccess.Data = setPos.id;
+// If this write fails the loop stops dead - OnSuccess is what continues it - so
+// one card would sit there with no art and nothing would say why. Both failure
+// paths report instead.
+const cardFailText = strIn('text: a card would not take its art', 'a card would not take its art', at(6.6, 4));
+const cardFailPath = strIn('name: ResoPal/event', 'ResoPal/event', at(6.6, 5));
+const cardFailSay = node('-> ResoPal/event', T.WriteVar, {
+  Target: null, Path: cardFailPath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: cardFailText.id,
+}, at(7.6, 4));
+setUrl.slot.Components.Data[0].Data.OnNotFound.Data = cardFailSay.id;
+setUrl.slot.Components.Data[0].Data.OnFailed.Data = cardFailSay.id;
 
 // Only now is the record consumed. Everything above reads `rest`, so eating it
 // first would make every one of those reads see the NEXT record instead.
@@ -790,9 +805,10 @@ backB.slot.Components.Data[0].Data.Next.Data = backC.id;
 loopTop.slot.Components.Data[0].Data.Next.Data = breathe.id;
 breathe.slot.Components.Data[0].Data.Next.Data = gate.id;
 
-const spawnNodes = [restStore, bodyStore, cardsNode, cardsNode2, tmplNode, startLoop, getBody, getRest, postBody, postRest,
+const spawnNodes = [restStore, bodyStore, cardsNode, tmplNode, startLoop, getBody, getRest, postBody, postRest,
   clear, loopAsync, loopTop, oneFrame, breathe, newline, nlAt, nlTrunk, shortest, another, gate,
-  restTap, zero, record, artUrl, afterNl, remainder, dup, cardPath, setUrl, howMany, idx, perRow,
+  restTap, zero, record, artUrl, afterNl, remainder, dup, cardPath, setUrl,
+  cardFailText, cardFailPath, cardFailSay, howMany, idx, perRow,
   colOf, rowOf, colF, rowF, pitchX, pitchY, xOf, yOf, zeroF, place, setPos, eat, backA, backB, backC];
 controlNodes.push(...spawnNodes);
 controlZones.push(around('3 · unpack the response into cards', spawnNodes));
@@ -809,8 +825,14 @@ const zeroStart = intIn('first record starts at 0', 0, [RX, -ROW * 4, 0]);
 const firstEnd = node('end of the first record', T.Substr,
   { Str: bodyTrunk.id, StartIndex: zeroStart.id, Length: recWidth.id }, [RX + COL, -ROW * 1.5, 0]);
 const firstTrim = node('first record, trimmed', T.Trim, { A: firstEnd.id }, [RX + COL * 2, -ROW * 1.5, 0]);
-const statusMsg = node('status: first card, else the error', T.StrPick,
-  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: bodyTrunk.id }, [RX + COL * 3, 0, 0]);
+// OnFalse is reached only when the body is EMPTY. A transport failure is not
+// empty - GET_String writes the exception into Content - so the error still
+// comes out of OnTrue, trimmed like a record. Without a placeholder here the
+// drive writes "" over the caption the panel ships with and the line goes blank
+// before anything has even been pressed.
+const readyText = strIn('text: Ready', 'Ready — pick a deck, or paste a palify link', [RX + COL * 2, ROW * 1.5, 0]);
+const statusMsg = node('status: first card, else the error, else Ready', T.StrPick,
+  { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: readyText.id }, [RX + COL * 3, 0, 0]);
 
 const statusLabel = label('status text', 'Ready — pick a deck, or paste a palify link', 17, CYAN);
 const statusFieldId = statusLabel.Components.Data[1].Data.Content.ID;
@@ -819,7 +841,7 @@ const urlFieldId = urlLabel.Components.Data[1].Data.Content.ID;
 dUrl.slot.Components.Data[1].Data.Drive.Data = urlFieldId;
 const dStatus = drive('drive the status line', 'str', statusMsg.id, statusFieldId, [RX + COL * 4, 0, 0]);
 
-const readoutNodes = [bodyTrunk, firstEnd, firstTrim, bodyLen, zeroLen, gotAny, statusMsg, dStatus, recWidth, zeroStart];
+const readoutNodes = [bodyTrunk, firstEnd, firstTrim, bodyLen, zeroLen, gotAny, readyText, statusMsg, dStatus, recWidth, zeroStart];
 controlNodes.push(...readoutNodes);
 controlZones.push(around('4 · what the panel shows you', readoutNodes));
 
@@ -870,7 +892,7 @@ const varsSlot = slot('Vars', [urlVar.comp, evtVar.comp], [0, 0, 0]);
  * variable - so the field and the graph never reference each other by name.
  */
 const pasteText = comp(T.Text, {
-  Font: fontChain.id, Content: '', ParseRichText: false, NullContent: 'paste a palify.org deck link, or a decklist',
+  Font: fontChain.id, Content: null, ParseRichText: false, NullContent: 'paste a palify.org deck link, or a decklist',
   Size: D(15), HorizontalAlign: 'Left', VerticalAlign: 'Middle', AlignmentMode: 'Geometric',
   Color: C(TEXT), Materials: pf.list([textMat.id]), LineHeight: D(0.8), MaskPattern: null,
   HorizontalAutoSize: false, VerticalAutoSize: false, AutoSizeMin: D(8), AutoSizeMax: D(64),
