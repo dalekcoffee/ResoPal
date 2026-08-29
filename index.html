@@ -143,7 +143,7 @@
           <div style="width:34px;height:34px;border-radius:11px;background:rgba(160,162,220,.16);border:1px solid rgba(160,162,220,.42);color:#b0b3ea;font:600 13px/33px 'JetBrains Mono',monospace;text-align:center">01</div>
           <div>
             <div style="font:400 25px/1.2 'Newsreader',serif">Your deck</div>
-            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, a profile URL, or a card code &mdash; upload a file for a private deck, or search for a single card by name.</div>
+            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, a profile URL, or a card code &mdash; upload a file for a private deck, or search for individual cards by name.</div>
           </div>
         </div>
 
@@ -176,7 +176,7 @@
             <div style="flex:1;height:1px;background:rgba(150,170,230,.14)"></div>
           </div>
 
-          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:0 2px 10px">One card &mdash; search by name</div>
+          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:0 2px 10px">Individual cards &mdash; search by name</div>
           <input type="text" value="{{ cardQ }}" onChange="{{ onCardQ }}" placeholder="Elizabee, Katress, BP01-053…" style="width:100%;height:50px;padding:0 16px;border-radius:14px;background:rgba(7,11,23,.72);border:1px solid rgba(150,170,230,.2);color:#e8ecfa;font:400 14.5px/1 'Figtree',sans-serif">
 
           <sc-if value="{{ showFinder }}" hint-placeholder-val="{{ false }}">
@@ -206,6 +206,43 @@
 
           <sc-if value="{{ finderEmpty }}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:12px;padding:12px 14px;border-radius:14px;border:1px dashed rgba(150,170,230,.2);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ finderEmptyText }}</div>
+          </sc-if>
+
+          <sc-if value="{{ hasPicks }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px;padding:16px 18px;border-radius:18px;border:1px solid rgba(160,162,220,.36);background:rgba(160,162,220,.07)">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#b0b3ea;text-transform:uppercase">Cards to import</div>
+                <div style="font:400 12px/1 'Figtree',sans-serif;color:#8e9ac0">{{ picksLabel }}</div>
+                <div style="flex:1"></div>
+                <button type="button" onClick="{{ clearPicks }}" style="padding:7px 11px;border-radius:10px;border:1px solid rgba(150,170,230,.2);background:transparent;color:#8e9ac0;font:500 11.5px/1 'Figtree',sans-serif;cursor:pointer;white-space:nowrap">Clear</button>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ picks }}" as="p" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:13px;padding:9px 11px;border-radius:13px;background:rgba(7,11,23,.5);border:1px solid rgba(150,170,230,.12)">
+                    <div style="position:relative;width:38px;height:53px;flex:none;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,rgba(30,26,52,.9),#141a3a)">
+                      <div style="{{ p.stripe }}"></div>
+                      <img src="{{ p.img }}" alt="" data-code="{{ p.code }}" onLoad="{{ gauge }}" loading="lazy" decoding="async" style="{{ p.imgStyle }}">
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font:600 13px/1.35 'Figtree',sans-serif;color:#dbe2f5;text-wrap:pretty">{{ p.name }}</div>
+                      <div style="font:400 10.5px/1 'JetBrains Mono',monospace;color:#69769c;margin-top:5px">{{ p.meta }}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:2px;flex:none;border-radius:10px;border:1px solid rgba(150,170,230,.18);background:rgba(255,255,255,.03)">
+                      <button type="button" onClick="{{ p.minus }}" style="width:30px;height:30px;border-radius:8px;border:0;background:transparent;color:#b0b3ea;font:600 16px/1 'Figtree',sans-serif;cursor:pointer">&minus;</button>
+                      <div style="width:34px;text-align:center;font:600 13px/1 'JetBrains Mono',monospace;color:#e8ecfa">{{ p.qty }}</div>
+                      <button type="button" onClick="{{ p.plus }}" style="{{ p.plusStyle }}">+</button>
+                    </div>
+                    <button type="button" onClick="{{ p.remove }}" title="Remove" style="flex:none;width:30px;height:30px;border-radius:9px;border:1px solid rgba(150,170,230,.18);background:transparent;color:#8e9ac0;font:500 14px/1 'Figtree',sans-serif;cursor:pointer">&times;</button>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:14px">
+                <button type="button" onClick="{{ importPicks }}" style="flex:none;padding:13px 22px;border-radius:14px;border:0;background:#a9abee;color:#1a2038;font:600 14px/1 'Figtree',sans-serif;cursor:pointer;white-space:nowrap">{{ importPicksLabel }}</button>
+                <div style="flex:1;min-width:180px;font:400 12px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ picksNote }}</div>
+              </div>
+            </div>
           </sc-if>
         </div>
 
@@ -622,7 +659,7 @@
               </div>
             </div>
 
-            <div style="padding:14px 18px;border-radius:16px;background:rgba(255,255,255,.022);border:1px solid rgba(150,170,230,.12);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">This back is used for every card in both decks.</div>
+            <div style="padding:14px 18px;border-radius:16px;background:rgba(255,255,255,.022);border:1px solid rgba(150,170,230,.12);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ backScopeNote }}</div>
 
             <sc-if value="{{ atBack }}" hint-placeholder-val="{{ false }}">
               <button type="button" onClick="{{ confirmBack }}" style="align-self:flex-start;padding:15px 26px;border-radius:15px;border:0;background:#a9abee;color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:pointer">Back is set &mdash; continue</button>
@@ -688,6 +725,13 @@
 
               <sc-if value="{{ hasSoul }}" hint-placeholder-val="{{ false }}">
                 <button type="button" onClick="{{ generateBoth }}" style="{{ bothBtnStyle }}">{{ bothBtnLabel }}</button>
+              </sc-if>
+
+              <sc-if value="{{ staleExport }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:13px 16px;border-radius:14px;border:1px solid rgba(227,200,147,.4);background:rgba(227,200,147,.08)">
+                  <div style="width:22px;height:22px;border-radius:8px;background:rgba(227,200,147,.18);color:#e3c893;font:700 11px/22px 'JetBrains Mono',monospace;text-align:center;flex:none">!</div>
+                  <div style="flex:1;font:400 12.5px/1.5 'Figtree',sans-serif;color:#e6d5b0">{{ staleExportNote }}</div>
+                </div>
               </sc-if>
 
               <div style="font:400 12px/1.5 'Figtree',sans-serif;color:#7d88ab;margin-top:16px">Every card is baked in at full resolution &mdash; 8192&sup2; sheet, so effect text stays readable in-world and nothing streams once it&rsquo;s there.</div>
@@ -833,6 +877,9 @@ const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR',
 // (tools/fetch-pool.mjs + a weights entry), not an edit to this file.
 const SET = 'BP01';
 const STACK_RAREST_FIRST = true;   // see rows(): index 0 is one fixed end of the stack
+// The template's atlas is a 10x7 grid and composeAtlas throws past it, so the card
+// finder stops adding there rather than letting the bake fail an hour later.
+const MAX_DECK = 70;
 const COLOR_HUE = { Red: '#dd9c9c', Blue: '#9dc2dd', Green: '#a3ccae', Purple: '#c2a3e2', Colorless: '#cfc7a8' };
 
 // Filled from data/pool-<set>.json at mount: rarity -> [{p: printing, b: base card}].
@@ -860,6 +907,7 @@ class Component extends DCLogic {
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
     gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null, deck: null,
     busy: null, profile: null, deckSource: null, importError: null, unknown: [], cardQ: '',
+    picks: [], fromCards: false, staleExport: false,
     sizeMain: null, sizeSoul: null, outSize: 0,
     vw: typeof window !== 'undefined' ? window.innerWidth : 1440, imgBudget: 6
   };
@@ -1006,7 +1054,7 @@ class Component extends DCLogic {
   // Quantities merge onto the BASE card: a row bakes exactly one printing (rows()
   // picks one `selected` per row), so 2x BP01-001 plus 1x BP01-001SSP is three
   // copies of one card with the SSP art chosen, not two rows sharing a key.
-  setDeck(entries, label, source) {
+  setDeck(entries, label, source, opts) {
     const cat = this.cat || { byBase: {}, byPrint: {} };
     const deck = [], byCode = new Map(), variants = {}, unknown = [];
     (entries || []).forEach(e => {
@@ -1034,7 +1082,8 @@ class Component extends DCLogic {
     // A single card imported on its own is named after the card, not "Imported deck".
     const name = label || (deck.length === 1 ? deck[0].name : 'Imported deck');
     this.setState({
-      deck, variants, discarded: {}, fromPulls: false, busy: null, error: null,
+      deck, variants, discarded: {}, fromPulls: false, fromCards: !!(opts && opts.fromCards),
+      busy: null, error: null,
       deckSource: source || null, unknown, notice: unknown.length ? 'unknownCodes' : null,
     }, () => this.openDeck(name));
   }
@@ -1154,6 +1203,74 @@ class Component extends DCLogic {
     this.setState({ cardQ: q });
     if (!this.cat) this.catalogue().then(() => this.forceUpdate());
   };
+
+  // The finder fills a basket, it does not import on click. Someone reaching for
+  // "one card by name" nearly always wants a handful - so picks accumulate and the
+  // deck is whatever they chose, however many that is.
+  //
+  // A pick is keyed by PRINTING, so two arts of the same card can both sit in the
+  // basket; setDeck then merges them onto the base card the way every other import
+  // does, because a row bakes exactly one printing. picksNote says so on screen
+  // rather than letting the deck review look like it lost a card.
+  pickTotal(picks) { return (picks || this.state.picks).reduce((t, p) => t + p.n, 0); }
+
+  addPick(base, card, code, rarity) {
+    this.setState(st => {
+      if (this.pickTotal(st.picks) >= MAX_DECK) return null;
+      const picks = st.picks.slice();
+      const at = picks.findIndex(p => p.code === code);
+      if (at < 0) picks.push({ code, base, name: card.name, hue: card.hue, rarity, n: 1 });
+      else picks[at] = { ...picks[at], n: picks[at].n + 1 };
+      return { picks };
+    });
+  }
+
+  bumpPick(code, d) {
+    this.setState(st => {
+      if (d > 0 && this.pickTotal(st.picks) >= MAX_DECK) return null;
+      const picks = st.picks
+        .map(p => (p.code === code ? { ...p, n: p.n + d } : p))
+        .filter(p => p.n > 0);
+      return { picks };
+    });
+  }
+
+  importPicks = () => {
+    const picks = this.state.picks;
+    if (!picks.length) return;
+    const n = this.pickTotal(picks);
+    const uniq = new Set(picks.map(p => p.base)).size;
+    this.setState({ cardQ: '', picks: [] });
+    // One card keeps its own name (setDeck does that); several are the user's own
+    // selection, not a deck anyone published.
+    this.setDeck(picks.map(p => ({ code: p.code, n: p.n })),
+      uniq === 1 && n === 1 ? null : 'Chosen cards',
+      n + (n === 1 ? ' card by name' : ' cards by name'),
+      { fromCards: true });
+  };
+
+  // A soul deck is only ever offered where it makes sense to bake a second object:
+  // never for ripped pulls, and never for a handful of cards picked by name - both
+  // are "give me these cards", not "build me a deck".
+  noSoul(s) { return s.fromPulls || s.fromCards; }
+
+  // Everything a bake reads, as one string. `ready` means "this exact deck is built
+  // and sitting in this.out" - change a printing, a quantity, a discard, the label,
+  // the back or the soul choice and the finished file no longer matches the screen.
+  // Without this the second click on a changed deck silently re-downloaded the old
+  // package, which is indistinguishable from the change not working.
+  //
+  // Per kind, because each export reads a different part of the screen: the card
+  // back owes nothing to the deck list, and the main deck owes nothing to the soul
+  // count. The back's zoom/rotate/pan are deliberately absent - they are
+  // preview-only and never reach bakeDeck, so they cannot change the output.
+  exportSig(s, kept, kind) {
+    const soul = (kind === 'soul' || kind === 'both') && !s.soulSkipped && !this.noSoul(s)
+      ? s.soulCode + 'x' + s.soulCount : '-';
+    const main = kind === 'soul' || kind === 'back'
+      ? '-' : kept.map(r => this.sel(r.key) + ':' + r.qtyN).join(',');
+    return [kind, s.deckLabel, s.backSrc, soul, main].join('|');
+  }
 
   importFailed(message) {
     this.setState({ busy: null, notice: 'importFailed', importError: message, error: null });
@@ -1391,7 +1508,11 @@ class Component extends DCLogic {
 
   openDeck = (label) => {
     this.writeCache();
-    const patch = { stage: 'deck', step: 1, error: null, imgBudget: 6 };
+    // A new deck cannot inherit the last one's finished export - drop it here
+    // rather than letting the export screen offer someone else's package.
+    this.out = null;
+    this.outSig = null;
+    const patch = { stage: 'deck', step: 1, error: null, imgBudget: 6, ready: false, gen: null, staleExport: false };
     if (typeof label === 'string') patch.deckLabel = label;
     this.setState(patch, () => this.reveal('[data-rp="review"]'));
     if (this.iq) clearInterval(this.iq);
@@ -1427,22 +1548,27 @@ class Component extends DCLogic {
 
   async startGen(kind) {
     const st = this.state;
-    // second click on a finished export is the download, not another bake
-    if (st.ready && st.genKind === kind && this.out && this.out.kind === kind) return this.saveOut();
+    const rows = this.rows(st).filter(r => !r.discarded);
+    const sig = this.exportSig(st, rows, kind);
+    // A second click on a finished export is the download, not another bake - but
+    // only while the deck on screen is still the deck that was baked. Otherwise the
+    // download would hand over the previous package.
+    if (st.ready && st.genKind === kind && this.out && this.out.kind === kind && this.outSig === sig)
+      return this.saveOut();
 
-    this.setState({ genKind: kind, ready: false, gen: { pct: 2, failed: false } });
+    this.setState({ genKind: kind, ready: false, staleExport: false, gen: { pct: 2, failed: false } });
     this.out = null;
+    this.outSig = null;
     const slug = (st.deckLabel || 'deck').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'deck';
 
     try {
-      const rows = this.rows(st).filter(r => !r.discarded);
       const main = rows.map(r => ({ code: this.sel(r.key), n: r.qtyN }));
       // Every Soul printing is the same card with different art, and a Palify deck
       // never carries one - so the soul deck is one chosen code times a count, baked
       // into its own package. See docs/PALIFY-API.md.
       const soul = [{ code: st.soulCode, n: st.soulCount }];
       const wantsMain = kind !== 'soul';
-      const wantsSoul = (kind === 'soul' || kind === 'both') && !st.soulSkipped && !st.fromPulls;
+      const wantsSoul = (kind === 'soul' || kind === 'both') && !st.soulSkipped && !this.noSoul(st);
       if (kind === 'soul' && !wantsSoul) throw new Error('There is no soul deck to export \u2014 it was skipped.');
       if (wantsMain && !main.length) throw new Error('This deck has no cards to export.');
 
@@ -1517,6 +1643,7 @@ class Component extends DCLogic {
         }
         this.out = { kind, files };
       }
+      this.outSig = sig;
 
       const bytes = this.out.files.reduce((t, f) => t + f.blob.size, 0);
       const mb = b => (b / 1048576).toFixed(2) + ' MB';
@@ -1530,7 +1657,10 @@ class Component extends DCLogic {
         gen: { pct: 100, failed: false }, ready: true, outSize: bytes,
         sizeMain: mainMB || st.sizeMain, sizeSoul: soulMB || st.sizeSoul,
       });
-      this.saveOut();                              // first bake downloads straight away
+      // First bake downloads straight away - unless the deck changed while it was
+      // baking, in which case the file is already out of date and the render-time
+      // check is about to drop it.
+      if (this.exportSig(this.state, this.rows(this.state).filter(r => !r.discarded), kind) === sig) this.saveOut();
     } catch (e) {
       this.setState({ gen: { pct: this.state.gen ? this.state.gen.pct : 40, failed: true }, genError: String((e && e.message) || e) });
     }
@@ -1540,9 +1670,23 @@ class Component extends DCLogic {
     const s = this.state, sheetGrid = { c: 10, r: 7 };
     const rows = this.rows(s);
     const found = this.findCards(s.cardQ);
+    const picksTotal = this.pickTotal(s.picks);
+    const picksFull = picksTotal >= MAX_DECK;
+    const picksMerge = new Set(s.picks.map(p => p.base)).size < s.picks.length;
     const kept = rows.filter(r => !r.discarded);
     const total = kept.reduce((t, r) => t + r.qtyN, 0);
     const hasSoul = !s.soulSkipped;
+    // A finished export is only a download while it still matches the deck on
+    // screen. Anything the bake reads changing - a printing, a quantity, a discard,
+    // the back, the soul choice - drops the built file and turns the button back
+    // into Generate, because handing over the previous package looks exactly like
+    // the change having done nothing. Deferred out of render: this is a state
+    // change noticed while rendering, and it cannot loop (ready goes false).
+    if (s.ready && this.outSig !== this.exportSig(s, kept, s.genKind)) {
+      this.out = null;
+      this.outSig = null;
+      Promise.resolve().then(() => this.setState({ ready: false, gen: null, staleExport: true }));
+    }
     const pct = s.gen ? s.gen.pct : 0;
     const imgTotal = Math.max(1, rows.length);
     const imgDone = Math.min(imgTotal, Math.max(0, Math.round(((pct - 10) / 50) * imgTotal)));
@@ -1692,7 +1836,7 @@ class Component extends DCLogic {
       },
       nextPack: () => this.setState(st => ({ packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: this.rollPack(), revealIdx: 0, cardDX: 0, cardOut: 0, celebrate: null, packsLeft: st.packsLeft < 1 ? 1 : st.packsLeft, batch: st.packsLeft < 1 ? 1 : st.batch })),
       nextPackLabel: 'Rip another pack',
-      importPulls: () => { this.setState({ fromPulls: true, deckLabel: 'My pulls', imgBudget: 60, notice: null, deckSource: null }); this.openDeck('My pulls'); },
+      importPulls: () => { this.setState({ fromPulls: true, fromCards: false, deckLabel: 'My pulls', imgBudget: 60, notice: null, deckSource: null }); this.openDeck('My pulls'); },
       importPullsLabel: 'Import my pulls (' + s.binder.length + ')',
       imgFail: this.fail,
       gauge: this.gauge,
@@ -1717,8 +1861,9 @@ class Component extends DCLogic {
       dropZoneStyle: 'padding:18px;border-radius:22px;border:1px solid ' + (s.dropHot ? 'rgba(163,207,216,.6)' : 'rgba(150,170,230,.14)') + ';background:' + (s.dropHot ? 'rgba(163,207,216,.07)' : 'rgba(7,11,23,.35)') + ';transition:all .15s',
       cardQ: s.cardQ,
       onCardQ: e => this.searchCards(e.target.value),
-      // One card, chosen by name and printing. It imports as a deck of one - the
-      // rest of the flow (soul deck, card back, bake) is unchanged.
+      // Cards chosen by name and printing go into a basket, not straight into a
+      // deck of one: the deck is however many the user picked. The rest of the flow
+      // (card back, bake) is unchanged - only the soul deck is dropped, see noSoul().
       found: found.map(h => ({
         code: h.code,
         name: h.card.name,
@@ -1728,13 +1873,38 @@ class Component extends DCLogic {
         stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + h.card.hue + '33 0 6px, transparent 6px 12px)',
         prints: h.card.prints.map(pr => ({
           label: pr[1],
-          title: 'Import ' + pr[0] + ' (' + pr[1] + ')',
-          add: () => { this.setState({ cardQ: '' }); this.setDeck([{ code: pr[0], n: 1 }], null, 'card by name'); },
+          title: picksFull ? 'The deck is full at ' + MAX_DECK + ' cards' : 'Add ' + pr[0] + ' (' + pr[1] + ')',
+          add: () => this.addPick(h.code, h.card, pr[0], pr[1]),
           dot: 'width:6px;height:6px;border-radius:50%;background:' + (RARITY_HUE[pr[1]] || '#9aa6c8'),
-          style: "display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:9px;cursor:pointer;transition:all .12s;border:1px solid rgba(150,170,230,.16);background:rgba(255,255,255,.03);color:#c3cbe4;font:600 10.5px/1 'JetBrains Mono',monospace"
+          style: "display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:9px;transition:all .12s;border:1px solid rgba(150,170,230,.16);background:rgba(255,255,255,.03);color:#c3cbe4;font:600 10.5px/1 'JetBrains Mono',monospace;cursor:" + (picksFull ? 'not-allowed;opacity:.45' : 'pointer')
         }))
       })),
       showFinder: found.length > 0,
+
+      // The basket. Picks are keyed by printing; setDeck merges two printings of one
+      // card onto the base card (one row bakes one printing), and picksNote says so
+      // before the deck review looks like it swallowed a card.
+      hasPicks: s.picks.length > 0,
+      picksLabel: picksTotal + (picksTotal === 1 ? ' card' : ' cards') + (picksFull ? ' \u00b7 full' : ''),
+      picks: s.picks.map(p => ({
+        code: p.code, name: p.name, qty: p.n + '\u00d7',
+        meta: p.code + ' \u00b7 ' + p.rarity,
+        img: this.img(p.code),
+        imgStyle: this.face(p.code),
+        stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 6px, transparent 6px 12px)',
+        minus: () => this.bumpPick(p.code, -1),
+        plus: () => this.bumpPick(p.code, 1),
+        remove: () => this.setState(st => ({ picks: st.picks.filter(x => x.code !== p.code) })),
+        plusStyle: "width:30px;height:30px;border-radius:8px;border:0;background:transparent;color:#b0b3ea;font:600 16px/1 'Figtree',sans-serif;cursor:" + (picksFull ? 'not-allowed;opacity:.4' : 'pointer')
+      })),
+      picksNote: picksFull
+        ? 'That is the whole 10 \u00d7 7 sheet \u2014 ' + MAX_DECK + ' cards is as many as one deck object holds.'
+        : picksMerge
+          ? 'Two printings of the same card are baked as one card with one art \u2014 the last printing picked wins.'
+          : 'Add as many as you like, then import them as one deck. No soul deck is offered for cards picked this way.',
+      importPicksLabel: 'Import ' + picksTotal + (picksTotal === 1 ? ' card' : ' cards'),
+      importPicks: this.importPicks,
+      clearPicks: () => this.setState({ picks: [] }),
       finderEmpty: s.cardQ.trim().length >= 2 && !found.length,
       finderEmptyText: this.cat
         ? 'No card in the snapshot matches \u201c' + s.cardQ.trim() + '\u201d. Try part of a name \u2014 Elizabee, Katress \u2014 or a code like BP01-053.'
@@ -1784,12 +1954,12 @@ class Component extends DCLogic {
       cacheLabel: cached ? cached + (cached === 1 ? ' card image cached today' : ' card images cached today') : 'loading art gently \u00b7 a few at a time',
       allBase: () => this.setState({ variants: {} }),
       cards: rows,
-      reviewNextNote: s.fromPulls ? 'Nothing is generated yet. Next: the card back.' : 'Nothing is generated yet. Next: soul deck, then the card back.',
-      confirmReview: () => s.fromPulls
+      reviewNextNote: this.noSoul(s) ? 'Nothing is generated yet. Next: the card back.' : 'Nothing is generated yet. Next: soul deck, then the card back.',
+      confirmReview: () => this.noSoul(s)
         ? this.setState({ step: 3 }, () => this.reveal('[data-rp="back"]'))
         : this.setState({ step: 2 }, () => this.reveal('[data-rp="soul"]')),
 
-      showSoul: s.stage === 'deck' && s.step >= 2 && !s.fromPulls,
+      showSoul: s.stage === 'deck' && s.step >= 2 && !this.noSoul(s),
       soulStepNo: '03',
       atSoul: s.step === 2,
       souls: SOULS.map((code, i) => ({
@@ -1811,10 +1981,13 @@ class Component extends DCLogic {
       confirmSoul: () => this.setState({ step: 3 }, () => this.reveal('[data-rp="back"]')),
 
       showBack: s.stage === 'deck' && s.step >= 3,
-      backStepNo: s.fromPulls ? '03' : '04',
-      exportStepNo: s.fromPulls ? '04' : '05',
+      backStepNo: this.noSoul(s) ? '03' : '04',
+      exportStepNo: this.noSoul(s) ? '04' : '05',
       atBack: s.step === 3,
       backSrc: s.backSrc,
+      backScopeNote: this.noSoul(s) || s.soulSkipped
+        ? 'This back is used for every card in the deck.'
+        : 'This back is used for every card in both decks.',
       backImgStyle: 'position:absolute;left:50%;top:50%;width:118%;transform:translate(-50%,-50%) translate(' + s.ox + 'px,' + s.oy + 'px) scale(' + s.zoom + ') rotate(' + s.rot + 'deg);transform-origin:center;user-select:none;pointer-events:none',
       gridOpacity: s.dragging ? '1' : '0',
       backModeLabel: s.backCustom ? 'custom back' : 'official default back',
@@ -1839,7 +2012,11 @@ class Component extends DCLogic {
       showExport: s.stage === 'deck' && s.step >= 4,
       exportGridStyle: 'display:grid;gap:22px;margin-top:22px;grid-template-columns:' + (s.vw < 1080 ? 'minmax(0,1fr)' : (this.props.exportLayout ?? 'hero') === 'pair' ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1.12fr) minmax(0,.88fr)'),
 
-      hasSoul: hasSoul && !s.fromPulls,
+      hasSoul: hasSoul && !this.noSoul(s),
+      // Set the moment a built export stops matching the deck on screen, so the
+      // panel says why the button went back to "Generate".
+      staleExport: s.staleExport && !s.gen,
+      staleExportNote: 'The deck changed since the last export \u2014 generate again to get a file that matches it.',
       mainFileName: slug + '.resonitepackage',
       mainSize: s.sizeMain || '18.4 MB',
       soulFileName: slug + '-Soul.resonitepackage',
@@ -1940,7 +2117,7 @@ class Component extends DCLogic {
       pips: Array.from({ length: s.pack.length || 7 }).map((x, i) => ({
         style: 'width:' + (i === s.revealIdx ? '22px' : '7px') + ';height:7px;border-radius:99px;transition:all .2s;background:' + (i < s.revealIdx ? '#a4d4ba' : i === s.revealIdx ? '#a9abee' : 'rgba(150,170,230,.22)')
       })),
-      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', cardQ: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, deck: null, deckSource: null, profile: null, busy: null, importError: null, unknown: [], sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
+      startOver: () => { if (this.timer) clearInterval(this.timer); this.out = null; this.outSig = null; this.setState({ stage: 'input', step: 0, input: '', cardQ: '', picks: [], gen: null, ready: false, staleExport: false, error: null, variants: {}, notice: null, fromPulls: false, fromCards: false, deck: null, deckSource: null, profile: null, busy: null, importError: null, unknown: [], sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
     };
     const cur = s.pack[s.revealIdx];
     if (cur) {
