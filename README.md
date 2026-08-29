@@ -26,7 +26,8 @@ fallback, so that deck still builds if the Worker is unreachable.
 Pasting a Palify deck or profile URL works too, through the same Worker: `/deck/<uuid>` and
 `/profile/<handle>` fetch the page's RSC payload, parse it (`worker/src/flight.js`) and return
 clean JSON. Card codes are accepted as well — `BP01-053`, or `2x BP01-053` — so a single card is a
-valid import.
+valid import. Cards can also be searched for by name and collected into a basket, which imports as a
+deck of exactly the cards picked (up to the sheet's 70).
 
 ## How it works
 
