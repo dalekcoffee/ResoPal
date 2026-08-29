@@ -37,6 +37,14 @@
   input:focus-visible, button:focus-visible { outline:2px solid #9a9ce0; outline-offset:2px; }
   ::selection { background:rgba(160,162,220,.4); }
   img { -webkit-user-drag:none; user-drag:none; -webkit-touch-callout:none; user-select:none; pointer-events:none; }
+  /* The ripper is a drag surface, not a document. user-select:none on the drag
+     zone alone does not help: a mousedown that starts there still opens a text
+     selection in the copy *around* it, so a tear highlighted the heading instead
+     of tearing, and the next grab was then eaten by the browser dragging that
+     selection - dragstart cancels the pointer stream, which the drag handlers
+     read as "let go". Nothing on this screen is meant to be selected by hand;
+     the binder's codes have a copy button. */
+  [data-rp="rip"] { -webkit-user-select:none; user-select:none; }
   @keyframes rp-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
   @keyframes rp-twinkle { 0%,100% { opacity:.35; } 50% { opacity:.9; } }
   @keyframes rp-drift { from { transform:translate3d(0,0,0); } to { transform:translate3d(-200px,-60px,0); } }
@@ -982,7 +990,21 @@ class Component extends DCLogic {
       })
       .catch(() => { this.filling = false; this.serverDown = true; });
   }
-  noDrag = (e) => { if (e.target && e.target.tagName === 'IMG') e.preventDefault(); };
+  // Blocks the browser's own mousedown behaviour so a drag on the pack or on a
+  // card is a drag and nothing else. preventDefault stops a fresh selection from
+  // opening; a selection left over from an earlier one still has to be cleared,
+  // because pressing on selected text starts a native drag-and-drop and the
+  // pointer stream dies with it. Returns false for non-primary buttons, which
+  // must not arm a tear at all.
+  armDrag = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return false;
+    e.preventDefault();
+    try { const sel = window.getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); } catch (err) {}
+    this.grabbing = true;
+    return true;
+  };
+  // Images are never draggable; while a ripper drag is live, nothing is.
+  noDrag = (e) => { if (this.grabbing || (e.target && e.target.tagName === 'IMG')) e.preventDefault(); };
   // Every card sits on a striped placeholder so a slow or failed load still looks
   // intentional - but a broken <img> paints the browser's own broken icon over it.
   // Swap the source for a transparent pixel so the placeholder shows through as
@@ -1722,7 +1744,7 @@ class Component extends DCLogic {
       tearPct: Math.round((s.torn ? 1 : s.tear) * 100) + '%',
       tearHintWrapStyle: 'display:flex;flex-direction:column;align-items:center;gap:11px;transition:opacity .3s ease;opacity:' + (s.lifting ? '0' : '1'),
       tearHintStyle: "font:600 14px/1 'Figtree',sans-serif;color:#dbe2f5" + (s.torn ? '' : ';animation:rp-bob 2.4s ease-in-out infinite'),
-      tearHint: s.torn ? 'Opening\u2026' : s.tear >= 0.55 ? 'Let go to open it' : s.tear > 0.08 ? 'Keep tearing\u2026' : 'Drag across the top of the pack to tear it',
+      tearHint: s.torn ? 'Opening\u2026' : s.tear >= 0.55 ? 'Let go to open it' : s.tear > 0.08 ? 'Keep tearing\u2026' : 'Drag across the pack to tear it open',
       packBodyStyle: 'position:absolute;left:0;width:250px;height:444px;overflow:hidden;z-index:2;pointer-events:none;top:83px'
         + ';transition:transform .5s cubic-bezier(.25,.9,.3,1),opacity .42s ease .06s'
         + ';transform:translateY(' + (s.torn ? '118px' : '0px') + ') scale(' + (s.lifting ? '.97' : '1') + ')'
@@ -1768,9 +1790,16 @@ class Component extends DCLogic {
           shade: 'position:absolute;inset:0;pointer-events:none;background:' + (back ? 'rgba(4,7,18,.55)' : 'linear-gradient(rgba(4,7,18,0) 55%, rgba(4,7,18,.5))')
         };
       }),
-      swipeZoneStyle: 'position:absolute;left:0;right:0;top:0;height:92px;cursor:' + (s.tearDrag ? 'grabbing' : 'grab') + ';touch-action:none;user-select:none;-webkit-user-drag:none;z-index:5',
+      // The grab area is the whole pack plus a margin, not the top strip. The
+      // strip is 83px of a 527px pack, so aiming at it was the hard part of the
+      // tear; a drag anywhere on the pack now tears it, and the strip stays the
+      // thing that visibly comes off. The overhang covers the drop shadow, where
+      // people aim. Nothing else in the pack box takes pointer events, so this
+      // sits on top of all of it safely - and it stops at the pack's bottom edge
+      // so the hint and the "or click to open" button below stay clickable.
+      swipeZoneStyle: 'position:absolute;left:-16px;right:-16px;top:-16px;bottom:0;cursor:' + (s.tearDrag ? 'grabbing' : 'grab') + ';touch-action:none;user-select:none;-webkit-user-drag:none;z-index:5',
       tearStart: e => {
-        if (this.tearRef || s.torn) return;
+        if (this.tearRef || s.torn || !this.armDrag(e)) return;
         this.tearRef = { x: e.clientX };
         this.setState({ tearDrag: true });
         const mv = ev => {
@@ -1783,6 +1812,7 @@ class Component extends DCLogic {
           window.removeEventListener('pointerup', up);
           window.removeEventListener('pointercancel', up);
           this.tearRef = null;
+          this.grabbing = false;
         };
         // Let go of the top and the pack opens: strip flies off, body slides, cards rise.
         const up = () => {
@@ -1816,7 +1846,7 @@ class Component extends DCLogic {
       advanceLabel: s.revealIdx + 1 < s.pack.length ? 'or reveal all ' + (s.pack.length - s.revealIdx) + ' cards' : 'or click to finish',
       revealAreaStyle: 'position:relative;width:420px;height:470px;display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-drag:none;cursor:' + (s.cardDrag ? 'grabbing' : 'grab'),
       cardStart: e => {
-        if (this.state.cardOut || this.state.hold || this.cardRef) return;
+        if (this.state.cardOut || this.state.hold || this.cardRef || !this.armDrag(e)) return;
         this.cardRef = { x: e.clientX };
         this.setState({ cardDrag: true });
         const mv = ev => { if (this.cardRef) this.setState({ cardDX: ev.clientX - this.cardRef.x }); };
@@ -1824,6 +1854,7 @@ class Component extends DCLogic {
           window.removeEventListener('pointermove', mv);
           window.removeEventListener('pointerup', up);
           window.removeEventListener('pointercancel', up);
+          this.grabbing = false;
           if (!this.cardRef) return;
           this.cardRef = null;
           const dx = this.state.cardDX;
@@ -2164,7 +2195,7 @@ class Component extends DCLogic {
         burst: cel && cel.tier >= 1 ? Array.from({ length: [0, 14, 30, 52][cel.tier] }).map((x, i) => {
           const n = [0, 14, 30, 52][cel.tier], a = (i / n) * Math.PI * 2, d = 130 + Math.random() * (100 + cel.tier * 70);
           const c = [hue, '#e3c893', '#a3cfd8', '#c2a3e2', '#dd9c9c', '#a4d4ba'][i % 6], big = i % 3 === 0;
-          return { style: '--tx:' + Math.round(Math.cos(a) * d) + 'px;--ty:' + Math.round(Math.sin(a) * d) + 'px;--tr:' + Math.round(Math.random() * 540 - 270) + 'deg;position:absolute;width:' + (big ? 13 : 8) + 'px;height:' + (big ? 5 : 8) + 'px;border-radius:2px;background:' + c + ';z-index:1;animation:rp-burst ' + (1.15 + (i % 5) * 0.16 + cel.tier * 0.12).toFixed(2) + 's cubic-bezier(.2,.7,.4,1) ' + ((i % 9) * 0.035).toFixed(2) + 's both' };
+          return { style: '--tx:' + Math.round(Math.cos(a) * d) + 'px;--ty:' + Math.round(Math.sin(a) * d) + 'px;--tr:' + Math.round(Math.random() * 540 - 270) + 'deg;position:absolute;pointer-events:none;width:' + (big ? 13 : 8) + 'px;height:' + (big ? 5 : 8) + 'px;border-radius:2px;background:' + c + ';z-index:1;animation:rp-burst ' + (1.15 + (i % 5) * 0.16 + cel.tier * 0.12).toFixed(2) + 's cubic-bezier(.2,.7,.4,1) ' + ((i % 9) * 0.035).toFixed(2) + 's both' };
         }) : []
       });
     }
