@@ -125,18 +125,21 @@ Seven lines of URLs means it is current; `{"error":"no such route"}` means deplo
 
 The Worker's code is four ES modules plus three JSON files imported from `../data/`, so the
 dashboard's editor cannot take `src/index.js` on its own — it has no way to resolve the imports.
-Bundle it to one file first, with the same esbuild that `wrangler deploy` uses:
+That build is committed, so no terminal is needed anywhere in this path:
+
+> **[`worker/dist/resopal-worker.js`](dist/resopal-worker.js)** — open it on GitHub, press
+> **Copy raw file**, paste over the Worker's code in the dashboard, hit **Deploy**.
+
+It is a self-contained ES module and needs no bindings, no variables and no KV.
+
+To regenerate it — after **any** change under `worker/src/` or `data/`, because the JSON is
+compiled in, and that is what pins the deployed odds to the deployed build:
 
 ```bash
-cd worker && npx wrangler deploy --dry-run --outdir dist
+node worker/bundle.mjs
 ```
 
-`dist/index.js` is then a self-contained ES module: paste it over the Worker's code in the
-dashboard and hit Deploy. It needs no bindings, no variables and no KV. Delete the trailing
-`//# sourceMappingURL=` line — the map is not uploaded and the reference just 404s.
-
-Re-bundle after **any** change under `worker/src/` or `data/`, because the JSON is compiled in:
-that is what pins the deployed odds to the deployed commit.
+which runs wrangler's own dry-run, so the dashboard and the CLI deploy the same bytes.
 
 That's the whole deploy. It prints a URL like:
 
