@@ -320,13 +320,6 @@ check('and a deck can recognise it as a card',
 // The collider follows the quad instead of being a fixed rectangle, because
 // TextureSizeDriver rewrites that quad for landscape cards - BP01 has 19, and a
 // portrait collider on a landscape card is a hit area hanging off both ends.
-{
-  const sw = hasT('Float2ToFloat3SwizzleDriver')?.d;
-  check('the collider tracks the quad, not a fixed size',
-    !!sw && byField.get(sw.Source?.Data)?.comp.id === hasT('QuadMesh')?.d.ID &&
-    byField.get(byField.get(sw.Target?.Data) ? sw.Target.Data : '')?.comp.id === hasT('BoxCollider')?.d.ID);
-}
-
 // A back face, so turning a card over shows a card back rather than the front
 // mirrored. It is a child rotated a half turn, not a texture swap: no toggle, no
 // state, nothing that can get out of step with which way the card is facing.
@@ -336,18 +329,28 @@ check('and a deck can recognise it as a card',
   check('the card has a back face', !!back);
   for (const t of ['QuadMesh', 'UnlitMaterial', 'StaticTexture2D', 'MeshRenderer'])
     check(`the back carries its own ${t}`, bComps.includes(t));
-  const rot = (back?.Rotation?.Data || []).map(num);
-  check('turned a half turn about Y', Math.abs(rot[1] ?? 0) === 1 && Math.abs(rot[3] ?? 1) < 1e-6);
+  // Facing is decided on the MESH's own Rotation, never by turning a slot. A
+  // slot's turn composes with the mesh's, two half turns cancel, and the back
+  // ends up facing the same way as the front and covering it - which is exactly
+  // what happened, twice. The working card had the front mesh at [0,1,0,0].
+  const meshRot = (sl) => ((sl?.Components?.Data || [])
+    .find((c) => short(TYPES[num(c.Type)]) === 'QuadMesh')?.Data.Rotation?.Data || []).map(num);
+  const frontR = meshRot(tmpl), backR = meshRot(back);
+  check('the front mesh states its own facing', Math.abs(frontR[1] ?? 0) === 1 && Math.abs(frontR[3] ?? 1) < 1e-6);
+  check('and the back mesh states the opposite', Math.abs(backR[3] ?? 0) === 1 && Math.abs(backR[1] ?? 1) < 1e-6);
+  check('no slot in the card is turned - facing lives on the mesh',
+    [tmpl, back].every((sl) => Math.abs((sl?.Rotation?.Data || []).map(num)[1] ?? 0) < 1e-6));
   check('and set back from the front so the faces do not z-fight',
     Math.abs((back?.Position?.Data || []).map(num)[2] ?? 0) > 0);
   // A QuadMesh faces float3.Backward. Single-sided and unrotated, the card shows
   // its BACK to anyone standing where the panel faces and culls the front, which
   // in-world looks exactly like art that never loaded.
-  const cardRot = (tmpl?.Rotation?.Data || []).map(num);
-  check('the card itself is turned to face outward',
-    Math.abs(cardRot[1] ?? 0) === 1 && Math.abs(cardRot[3] ?? 1) < 1e-6);
-  check('so the front and the back face opposite ways',
-    Math.abs(cardRot[1] ?? 0) === 1 && Math.abs(rot[1] ?? 0) === 1);
+  // The collider is a fixed size with real thickness. Driven from the quad it is
+  // zero until TextureSizeDriver has seen the texture load, and a card you cannot
+  // pick up until its art arrives reads as a card that does not work.
+  const box = hasT('BoxCollider')?.d;
+  check('the collider has real thickness', ((box?.Size?.Data || []).map(num)[2] ?? 0) > 0);
+  check('and is not driven from the quad', !hasT('Float2ToFloat3SwizzleDriver'));
   check('the front is single-sided, or the back would never be seen',
     hasT('QuadMesh')?.d.DualSided?.Data === false);
   // The back is the same image for every card, so it ships in the package - a

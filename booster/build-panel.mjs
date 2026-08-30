@@ -468,7 +468,15 @@ const cardMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: cardTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',
 });
-const cardMesh = comp(T.QuadMesh, { Size: V2(CARD_W, CARD_H), DualSided: false, UseVertexColors: false });
+// QuadMesh carries its OWN Rotation, and the engine default is identity (see
+// QuadMesh.cs line 171). The card that worked in-world had it at [0,1,0,0] - a
+// half turn about Y - and omitting the field left the quad facing the other way,
+// so the card presented its back and the front was culled. State it here rather
+// than inherit a default: this one field decides which way a card faces.
+const cardMesh = comp(T.QuadMesh, {
+  Size: V2(CARD_W, CARD_H), Rotation: [D(0), D(1), D(0), D(0)],
+  DualSided: false, UseVertexColors: false,
+});
 const cardRenderer = comp(T.MeshRenderer, {
   Mesh: cardMesh.id, Materials: pf.list([cardMat.id]), MaterialPropertyBlocks: [],
   ShadowCastMode: 'On', SortingOrder: I(0),
@@ -524,7 +532,14 @@ const backMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: backTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',
 });
-const backMesh = comp(T.QuadMesh, { Size: V2(CARD_W, CARD_H), DualSided: false, UseVertexColors: false });
+// The back faces the other way, and says so on the same field. Rotating the SLOT
+// instead is what went wrong twice: the slot's turn composes with the mesh's own,
+// and two half turns cancel - the back ends up facing the same way as the front
+// and covers it.
+const backMesh = comp(T.QuadMesh, {
+  Size: V2(CARD_W, CARD_H), Rotation: [D(0), D(0), D(0), D(1)],
+  DualSided: false, UseVertexColors: false,
+});
 const backRenderer = comp(T.MeshRenderer, {
   Mesh: backMesh.id, Materials: pf.list([backMat.id]), MaterialPropertyBlocks: [],
   ShadowCastMode: 'On', SortingOrder: I(0),
@@ -532,24 +547,21 @@ const backRenderer = comp(T.MeshRenderer, {
 // The back is a child rotated a half turn about Y, a hair behind the front, so
 // the two faces do not z-fight. Turning the card over shows the back, which is
 // what a card does - no flip button, no toggle, no state to get out of step.
-const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, 0.0004]);
-backFace.Rotation.Data = [D(0), D(1), D(0), D(0)];
+const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, -0.0004]);
 
 // ── the card as a physical object ────────────────────────────────────────────
 // A collider is what makes a card touchable and grabbable; without one it is a
 // picture hanging in the air. Its size follows the quad rather than being fixed,
 // because TextureSizeDriver rewrites that quad for landscape cards - a fixed
 // collider would be the wrong shape for the 19 landscape cards in BP01.
+// A fixed size with real thickness, not one driven from the quad. The quad starts
+// at (0,0) and only gets its size once TextureSizeDriver has seen the texture
+// load - so a driven collider is zero-sized until then, and a card you cannot
+// grab until its art arrives is a card that looks broken. DeckReader's card uses
+// a fixed 0.35 x 0.5 x 0.0027 for the same reason.
 const cardCollider = comp(T.BoxCollider, {
   Offset: V3(0, 0, 0), Type: 'Static', Mass: D(1),
-  CharacterCollider: false, IgnoreRaycasts: false, Size: V3(CARD_W, CARD_H, 0),
-});
-// X, Y and Z are INDICES into the float2, not axis names: 0 is x, 1 is y, and -1
-// is out of range, which the class's own OnAwake uses to mean zero. So the
-// collider follows the quad in width and height and stays flat - the same shape
-// the panel's own canvas collider uses.
-const cardColliderSize = comp(T.Swizzle, {
-  Source: cardMesh.f.Size, Target: cardCollider.f.Size, X: I(0), Y: I(1), Z: I(-1),
+  CharacterCollider: false, IgnoreRaycasts: false, Size: V3(CARD_W, CARD_H, 0.002),
 });
 const cardGrab = comp(T.Grabbable, { Scalable: false, ReparentOnRelease: true, PreserveUserSpace: true });
 // Keyword "Card" is what a deck's receiver surface looks for. Nothing uses it
@@ -560,7 +572,7 @@ const cardSnapper = comp(T.Snapper, { Keywords: pf.list(['Card']) });
 const cardTemplate = slot('card', [
   cardVarSpace.comp, cardUrlVar.comp, cardTexture.comp, cardMat.comp,
   cardMesh.comp, cardRenderer.comp, cardSize.comp,
-  cardCollider.comp, cardColliderSize.comp, cardGrab.comp, cardSnapper.comp,
+  cardCollider.comp, cardGrab.comp, cardSnapper.comp,
 ], [0, 0, 0], [
   backFace,
   slot('CARD/url -> texture', [cardSrc.comp, cardSrcRef.comp], [0, 0, 0]),
@@ -572,14 +584,6 @@ const cardTemplate = slot('card', [
 // card gives an inactive card, and nothing in the spawn chain turns it back on.
 // Hiding it behind an inactive parent keeps the template out of sight while the
 // copy, reparented under the active Cards slot, comes up visible.
-// A QuadMesh faces float3.Backward, and the front is single-sided now that there
-// is a real back - so an unrotated card presents its BACK to anyone standing
-// where the panel faces, and the front is culled, which reads in-world as a card
-// that never loaded. Turning the card itself a half turn puts the front outward
-// and the back behind it. The card's own children keep their relative facing, so
-// this is the only place the question is decided.
-cardTemplate.Rotation.Data = [D(0), D(1), D(0), D(0)];
-
 const templateSlot = slot('Card template', [], [0, -0.42, 0], [cardTemplate]);
 templateSlot.Active.Data = false;
 const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.42, 0]);
