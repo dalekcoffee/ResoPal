@@ -136,10 +136,24 @@ export const toFlat = (pulls) => pulls.map((c) => `${c.code},${c.rarity}`).join(
  */
 export const RECORD_WIDTH = 64;
 
+/**
+ * In-world art is served at 512px, not the 1024 the site bakes from.
+ *
+ * A spawned card is its own texture - there is no atlas in-world - so a 50-card
+ * deck is 50 textures resident at once. At w=1024 that is ~95 MB of VRAM; at
+ * w=512 it is ~24 MB, and 512px is the same per-card resolution a whole-set
+ * atlas could have managed inside Resonite's 8192 texture limit anyway.
+ *
+ * Resonite caches by URL, so cards shared between players and between decks cost
+ * nothing extra - which is why per-card textures beat a bespoke atlas per deck
+ * for a room full of people: the atlases would all be different images.
+ */
+export const IN_WORLD_WIDTH = 512;
+
 export function toFixed(pulls, artBase) {
   const out = [];
   for (const c of pulls) {
-    const url = artBase + c.code;
+    const url = `${artBase}${c.code}?w=${IN_WORLD_WIDTH}`;
     if (url.length > RECORD_WIDTH - 1)
       throw new Error(`art URL ${url.length} chars exceeds the ${RECORD_WIDTH - 1} the fixed format allows`);
     out.push(url.padEnd(RECORD_WIDTH - 1, ' ') + '\n');

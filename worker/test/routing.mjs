@@ -150,6 +150,7 @@ check('listing names every deck', listing.decks.length >= 2 && listing.decks.eve
 // Every assertion here is something the ProtoFlux side would fail silently on.
 console.log('\nformat=fixed:');
 const W = 64;
+const { IN_WORLD_WIDTH } = await import('../src/roll.js');
 const fixedRes = await get('/api/pull?seed=fx&packs=3&format=fixed');
 const fixed = await fixedRes.text();
 check('announces its record width', fixedRes.headers.get('x-record-width') === String(W));
@@ -158,13 +159,26 @@ check('21 records for 3 packs', fixed.length / W === 21, `${fixed.length / W}`);
 const recs = Array.from({ length: fixed.length / W }, (_, i) => fixed.slice(i * W, (i + 1) * W));
 check('every record ends in a newline', recs.every((r) => r.endsWith('\n')));
 check('every record trims to an absolute art URL',
-  recs.every((r) => /^https:\/\/[^\s]+\/img\/[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4}$/.test(r.trim())), recs[0]);
+  recs.every((r) => /^https:\/\/[^\s]+\/img\/[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4}\?w=\d+$/.test(r.trim())), recs[0]);
+// In-world every card is its own texture - no atlas - so a 50-card deck is 50
+// textures resident at once. 512 keeps that near 24 MB instead of 95.
+check('and asks for the in-world width, not the bake width',
+  recs.every((r) => r.trim().endsWith(`?w=${IN_WORLD_WIDTH}`)) && IN_WORLD_WIDTH === 512);
 const fixedFlat = await (await get('/api/pull?seed=fx&packs=3&format=flat')).text();
 check('fixed and flat agree card for card, in order',
-  recs.map((r) => r.trim().split('/img/')[1]).join(',') === fixedFlat.trimEnd().split('\n').map((l) => l.split(',')[0]).join(','));
+  recs.map((r) => r.trim().split('/img/')[1].split('?')[0]).join(',') === fixedFlat.trimEnd().split('\n').map((l) => l.split(',')[0]).join(','));
 const deckFixed = await (await get('/api/deck?deck=td02&format=fixed')).text();
 check('a deck uses the same record width', deckFixed.length === 50 * W, `${deckFixed.length / W} records`);
 check('no record is truncated', recs.every((r) => r.trim().length <= W - 1));
+// The widest card code in any pool, plus the origin and the width parameter,
+// still has to fit - toFixed throws rather than truncate, which would be a card
+// silently pointing at the wrong art.
+{
+  const widest = [...new Set(Object.values(pool.byRarity).flat().map((c) => c.code))]
+    .reduce((a, b) => (b.length > a.length ? b : a));
+  const longest = `https://resopal-proxy.dalek.workers.dev/img/${widest}?w=${IN_WORLD_WIDTH}`;
+  check(`the widest code (${widest}) still fits a record`, longest.length <= W - 1, `${longest.length} of ${W - 1}`);
+}
 
 // ── /api/resolve: a pasted link or list, in the same records ─────────────────
 console.log('\n/api/resolve:');
