@@ -86,7 +86,7 @@ check('the font asset ships inside the package',
 
 const buttons = compsOfType('Button');
 const triggers = compsOfType('ButtonDynamicImpulseTrigger');
-check('six buttons', buttons.length === 6, String(buttons.length));
+check('four buttons', buttons.length === 4, String(buttons.length));
 check('every button has an impulse trigger', triggers.length === buttons.length);
 check('every button tints an Image on its own slot', buttons.every((b) => {
   const drivers = arg(b, 'ColorDrivers') || [];
@@ -116,7 +116,7 @@ check('it tells you what to paste', String(arg(pasteText, 'NullContent') || '').
 // ── 2. pressing a button reaches the graph ───────────────────────────────────
 console.log(`${NEWLINE}buttons -> graph:`);
 const receivers = compsOfType('DynamicImpulseReceiver');
-check('one receiver per button', receivers.length === 6, String(receivers.length));
+check('one receiver per button', receivers.length === 4, String(receivers.length));
 const tagsSent = triggers.map((t) => arg(t, 'PressedTag')).sort();
 const tagsHeard = receivers.map((r) => arg(byComp.get(arg(r, 'Tag')), 'Value')).sort();
 check('every tag a button sends is heard', JSON.stringify(tagsSent) === JSON.stringify(tagsHeard),
@@ -140,7 +140,7 @@ check('every trigger targets a slot that holds the receivers', triggers.every((t
     for (const c of s.Components?.Data || []) if (short(TYPES[num(c.Type)]) === 'DynamicImpulseReceiver') n++;
     (s.Children || []).forEach(count);
   })(found);
-  return n === 6;
+  return n === 4;
 }));
 
 let check_async_seen = false;
@@ -149,10 +149,10 @@ const allWrites = compsOfType('WriteDynamicObjectVariable<string>');
 // event writes that report which branch ran, and the loop fires the one that
 // tells a fresh card its art. Only the first kind is a button.
 const writes = allWrites.filter((w) => receivers.some((r) => arg(r, 'OnTriggered') === w.id));
-check('five receivers trigger a URL write', writes.length === 5, String(writes.length));
-check('five distinct URLs, one per preset button',
-  new Set(writes.map((w) => arg(byComp.get(arg(w, 'Value')), 'Value'))).size === 5);
-check('exactly one GET, shared by all five', compsOfType('GET_String').length === 1);
+check('three receivers trigger a URL write', writes.length === 3, String(writes.length));
+check('three distinct URLs, one per preset button',
+  new Set(writes.map((w) => arg(byComp.get(arg(w, 'Value')), 'Value'))).size === 3);
+check('exactly one GET, shared by all three', compsOfType('GET_String').length === 1);
 check('every write continues into the request', writes.every((w) => {
   // write -> trunk relay -> StartAsyncTask -> GET. The async wrapper is not
   // optional: GET_String is an AsyncActionNode and an ordinary impulse cannot

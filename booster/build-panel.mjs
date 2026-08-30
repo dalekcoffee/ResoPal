@@ -65,9 +65,12 @@ const RECORD_WIDTH = 64;
 const BUTTONS = [
   { tag: 'deck/td01', label: 'Trial Deck  ·  Red / Blue',     url: `${PROXY}/api/deck?deck=td01&format=fixed` },
   { tag: 'deck/td02', label: 'Trial Deck  ·  Green / Purple', url: `${PROXY}/api/deck?deck=td02&format=fixed` },
+  // ONE pack in-world, where the site offers 3 and 10. A pull spawns a card per
+  // record, each fetching its own texture, and a world full of people opening
+  // ten packs at once is seventy simultaneous texture loads per person. The site
+  // has no such problem - it is one browser, and the cards are already in an
+  // atlas. Ten packs there, one here.
   { tag: 'pack/1',    label: 'Open 1 Booster  ·  BP01',       url: `${PROXY}/api/pull?set=BP01&packs=1&format=fixed` },
-  { tag: 'pack/3',    label: 'Open 3 Boosters  ·  BP01',      url: `${PROXY}/api/pull?set=BP01&packs=3&format=fixed` },
-  { tag: 'pack/10',   label: 'Open 10 Boosters  ·  BP01',     url: `${PROXY}/api/pull?set=BP01&packs=10&format=fixed` },
 ];
 
 // The paste field POSTs whatever is in it. The Worker decides whether that was a
