@@ -92,6 +92,39 @@ person who adds one.
 
 ---
 
+## 6. Landscape cards were rotated but not readable — *fixed*
+
+**Issue.** Every card face on the page used the same idiom:
+
+```js
+'position:absolute;inset:0;width:100%;height:100%;object-fit:cover'
+  + (wide ? ';transform:rotate(90deg) scale(1.4)' : '')
+```
+
+The two halves fight each other. `object-fit` resolves at layout, before any transform: the `<img>`
+is laid out over the **portrait** box, so `cover` scales the 1024x732 landscape art to the box's
+height and throws away everything outside a half-width centre strip. Only then does `rotate(90deg)`
+spin what is left, and `scale(1.4)` blows it up to cover the box again. The result was a zoomed
+sliver of the middle of the card — no title, no frame, body text running off the edge — on the rip
+reveal, the pack summary, the binder, the sealed-pack peek and the deck-review thumbs. Nineteen of
+BP01's 101 cards are landscape, so most packs showed at least one.
+
+The rotation *direction* was never wrong, which is why this read as a mystery rather than a typo.
+
+**Fix.** One `face(code)` helper, used by every card face. For landscape art it lays the `<img>` out
+at the box's dimensions **swapped** — `left:50%;top:50%;width:141%;height:72%` — and rotates about
+its centre, so `object-fit` is fitting landscape art into a landscape element (a ~0.3% crop) and the
+rotation lands it on the portrait box exactly. That is the same transform the atlas bake makes
+(`ROT = 90` in `web/compose.js`), so a card now previews the way it will look in the deck.
+
+141/72 rather than the exact 140/71.4: the card boxes on the page are not all precisely 1:1.4, and a
+percent of overscan is cheaper than a transparent hairline down one edge of a card.
+
+The deck-picker's 40x56 face thumbnails gauged their art but never used the flag, so they showed
+landscape art unrotated; they go through `face()` too now.
+
+---
+
 ## Verification
 
 Rendered in headless Chromium with React served locally and `palify.org` blocked outright, to force
@@ -107,6 +140,13 @@ PAGE ERRORS: 0
 
 All three hero images fell back to the striped placeholder with no broken icons, and the screenshot
 matches the design.
+
+§6 was verified the same way, with `data/pool-bp01.json` intercepted and every rarity list filtered
+down to its landscape entries, so the roll can only produce sideways cards. Screenshots before and
+after the fix, at the rip reveal, the pack summary, the binder and the deck-review thumbs: before,
+each card is a zoomed centre strip; after, the whole card, turned clockwise, filling the box. The
+art is served from `palify.org` unchanged, so what the screenshots compare is the CSS and nothing
+else.
 
 ---
 

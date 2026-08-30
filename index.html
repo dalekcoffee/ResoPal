@@ -6,6 +6,7 @@
 <title>ResoPal — Palworld TCG decks in Resonite</title>
 <meta name="description" content="Turn any Palworld TCG deck from Palify into a ready-to-import, shuffleable deck object for Resonite. Paste a deck link, get a .resonitepackage.">
 <meta name="theme-color" content="#070b17">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="apple-touch-icon" href="assets/logo.png">
 <link rel="canonical" href="https://resopal.dalek.coffee/">
@@ -36,6 +37,14 @@
   input:focus-visible, button:focus-visible { outline:2px solid #9a9ce0; outline-offset:2px; }
   ::selection { background:rgba(160,162,220,.4); }
   img { -webkit-user-drag:none; user-drag:none; -webkit-touch-callout:none; user-select:none; pointer-events:none; }
+  /* The ripper is a drag surface, not a document. user-select:none on the drag
+     zone alone does not help: a mousedown that starts there still opens a text
+     selection in the copy *around* it, so a tear highlighted the heading instead
+     of tearing, and the next grab was then eaten by the browser dragging that
+     selection - dragstart cancels the pointer stream, which the drag handlers
+     read as "let go". Nothing on this screen is meant to be selected by hand;
+     the binder's codes have a copy button. */
+  [data-rp="rip"] { -webkit-user-select:none; user-select:none; }
   @keyframes rp-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
   @keyframes rp-twinkle { 0%,100% { opacity:.35; } 50% { opacity:.9; } }
   @keyframes rp-drift { from { transform:translate3d(0,0,0); } to { transform:translate3d(-200px,-60px,0); } }
@@ -73,7 +82,7 @@
   <div style="position:fixed;top:18px;left:0;right:0;z-index:60;display:flex;justify-content:center;padding:0 24px;pointer-events:none">
     <div style="pointer-events:auto;width:100%;max-width:1180px;display:flex;align-items:center;gap:20px;padding:12px 16px 12px 20px;border-radius:22px;background:rgba(13,19,38,.86);backdrop-filter:blur(14px);border:1px solid rgba(150,170,230,.16);box-shadow:0 18px 44px rgba(2,5,16,.6)">
       <div style="display:flex;align-items:center;gap:11px;flex:none">
-        <img src="assets/logo.png" alt="ResoPal" width="32" height="32" draggable="false" style="width:32px;height:32px;border-radius:10px;flex:none;object-fit:cover;background:#12100c;box-shadow:inset 0 0 0 1px rgba(200,163,94,.45)">
+        <img src="assets/logo.svg" alt="ResoPal" width="32" height="32" draggable="false" style="width:32px;height:32px;border-radius:50%;flex:none;object-fit:contain">
         <div style="display:flex;flex-direction:column;gap:2px">
           <div style="font:600 19px/1 'Newsreader',serif;letter-spacing:.01em">ResoPal</div>
           <div style="font:500 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#69769c;text-transform:uppercase;white-space:nowrap">Palworld TCG &rarr; Resonite</div>
@@ -142,15 +151,15 @@
           <div style="width:34px;height:34px;border-radius:11px;background:rgba(160,162,220,.16);border:1px solid rgba(160,162,220,.42);color:#b0b3ea;font:600 13px/33px 'JetBrains Mono',monospace;text-align:center">01</div>
           <div>
             <div style="font:400 25px/1.2 'Newsreader',serif">Your deck</div>
-            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, or upload a file for a private one.</div>
+            <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Paste a public deck URL, a profile URL, or a card code &mdash; upload a file for a private deck, or search for individual cards by name.</div>
           </div>
         </div>
 
         <div onDragOver="{{ onDragOver }}" onDragLeave="{{ onDragLeave }}" onDrop="{{ onDrop }}" style="{{ dropZoneStyle }}">
-          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:2px 2px 10px">Public deck &mdash; paste the URL</div>
+          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:2px 2px 10px">Public deck, profile or card code</div>
           <div style="display:flex;gap:12px;align-items:stretch">
             <input type="text" value="{{ inputVal }}" onChange="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96" style="flex:1;min-width:0;height:58px;padding:0 18px;border-radius:16px;background:rgba(7,11,23,.72);border:1px solid rgba(150,170,230,.2);color:#e8ecfa;font:400 15px/1 'Figtree',sans-serif">
-            <button type="button" onClick="{{ submit }}" style="padding:0 34px;border-radius:16px;border:0;background:#a9abee;color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap" style-hover="background:#b8baf4">Load</button>
+            <button type="button" onClick="{{ submit }}" style="{{ submitStyle }}" style-hover="background:#b8baf4">{{ submitLabel }}</button>
           </div>
 
           <div style="display:flex;align-items:center;gap:16px;margin:20px 2px 16px">
@@ -164,10 +173,85 @@
             <div style="width:40px;height:40px;border-radius:12px;background:rgba(163,207,216,.12);border:1px solid rgba(163,207,216,.3);display:grid;place-items:center;font:700 11px/1 'JetBrains Mono',monospace;color:#a3cfd8">TXT</div>
             <div style="flex:1">
               <div style="font:600 14px/1.35 'Figtree',sans-serif;color:#dbe2f5">Drop a <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#a3cfd8">.txt</span> or <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#a3cfd8">.csv</span> exported from Palify</div>
-              <div style="font:400 12.5px/1.4 'Figtree',sans-serif;color:#69769c;margin-top:3px">Private decks can&rsquo;t be read from a URL.</div>
+              <div style="font:400 12.5px/1.4 'Figtree',sans-serif;color:#69769c;margin-top:3px">Private decks can&rsquo;t be read from a URL. One card per line, with or without a quantity.</div>
             </div>
             <button type="button" onClick="{{ pickFile }}" style="padding:12px 18px;border-radius:13px;border:1px solid rgba(163,207,216,.34);background:rgba(163,207,216,.1);color:#a3cfd8;font:600 13px/1 'Figtree',sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap" style-hover="background:rgba(163,207,216,.2)">Choose file</button>
           </div>
+
+          <div style="display:flex;align-items:center;gap:16px;margin:20px 2px 16px">
+            <div style="flex:1;height:1px;background:rgba(150,170,230,.14)"></div>
+            <span style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#69769c">OR</span>
+            <div style="flex:1;height:1px;background:rgba(150,170,230,.14)"></div>
+          </div>
+
+          <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#8e9ac0;text-transform:uppercase;margin:0 2px 10px">Individual cards &mdash; search by name</div>
+          <input type="text" value="{{ cardQ }}" onChange="{{ onCardQ }}" placeholder="Elizabee, Katress, BP01-053…" style="width:100%;height:50px;padding:0 16px;border-radius:14px;background:rgba(7,11,23,.72);border:1px solid rgba(150,170,230,.2);color:#e8ecfa;font:400 14.5px/1 'Figtree',sans-serif">
+
+          <sc-if value="{{ showFinder }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ found }}" as="c" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:14px;padding:10px 12px;border-radius:14px;border:1px solid rgba(150,170,230,.12);background:rgba(255,255,255,.022)">
+                  <div style="position:relative;width:44px;height:62px;flex:none;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,rgba(30,26,52,.9),#141a3a)">
+                    <div style="{{ c.stripe }}"></div>
+                    <img src="{{ c.img }}" alt="" data-code="{{ c.code }}" onLoad="{{ gauge }}" loading="lazy" decoding="async" style="{{ c.imgStyle }}">
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font:600 13.5px/1.35 'Figtree',sans-serif;color:#dbe2f5;text-wrap:pretty">{{ c.name }}</div>
+                    <div style="font:400 11px/1 'JetBrains Mono',monospace;color:#69769c;margin-top:5px">{{ c.code }} &middot; {{ c.typeLabel }}</div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;max-width:52%">
+                    <sc-for list="{{ c.prints }}" as="p" hint-placeholder-count="2">
+                      <button type="button" onClick="{{ p.add }}" style="{{ p.style }}" title="{{ p.title }}">
+                        <span style="{{ p.dot }}"></span>
+                        <span>{{ p.label }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ finderEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;padding:12px 14px;border-radius:14px;border:1px dashed rgba(150,170,230,.2);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ finderEmptyText }}</div>
+          </sc-if>
+
+          <sc-if value="{{ hasPicks }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px;padding:16px 18px;border-radius:18px;border:1px solid rgba(160,162,220,.36);background:rgba(160,162,220,.07)">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                <div style="font:600 10.5px/1 'JetBrains Mono',monospace;letter-spacing:.13em;color:#b0b3ea;text-transform:uppercase">Cards to import</div>
+                <div style="font:400 12px/1 'Figtree',sans-serif;color:#8e9ac0">{{ picksLabel }}</div>
+                <div style="flex:1"></div>
+                <button type="button" onClick="{{ clearPicks }}" style="padding:7px 11px;border-radius:10px;border:1px solid rgba(150,170,230,.2);background:transparent;color:#8e9ac0;font:500 11.5px/1 'Figtree',sans-serif;cursor:pointer;white-space:nowrap">Clear</button>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ picks }}" as="p" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:13px;padding:9px 11px;border-radius:13px;background:rgba(7,11,23,.5);border:1px solid rgba(150,170,230,.12)">
+                    <div style="position:relative;width:38px;height:53px;flex:none;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,rgba(30,26,52,.9),#141a3a)">
+                      <div style="{{ p.stripe }}"></div>
+                      <img src="{{ p.img }}" alt="" data-code="{{ p.code }}" onLoad="{{ gauge }}" loading="lazy" decoding="async" style="{{ p.imgStyle }}">
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font:600 13px/1.35 'Figtree',sans-serif;color:#dbe2f5;text-wrap:pretty">{{ p.name }}</div>
+                      <div style="font:400 10.5px/1 'JetBrains Mono',monospace;color:#69769c;margin-top:5px">{{ p.meta }}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:2px;flex:none;border-radius:10px;border:1px solid rgba(150,170,230,.18);background:rgba(255,255,255,.03)">
+                      <button type="button" onClick="{{ p.minus }}" style="width:30px;height:30px;border-radius:8px;border:0;background:transparent;color:#b0b3ea;font:600 16px/1 'Figtree',sans-serif;cursor:pointer">&minus;</button>
+                      <div style="width:34px;text-align:center;font:600 13px/1 'JetBrains Mono',monospace;color:#e8ecfa">{{ p.qty }}</div>
+                      <button type="button" onClick="{{ p.plus }}" style="{{ p.plusStyle }}">+</button>
+                    </div>
+                    <button type="button" onClick="{{ p.remove }}" title="Remove" style="flex:none;width:30px;height:30px;border-radius:9px;border:1px solid rgba(150,170,230,.18);background:transparent;color:#8e9ac0;font:500 14px/1 'Figtree',sans-serif;cursor:pointer">&times;</button>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:14px">
+                <button type="button" onClick="{{ importPicks }}" style="flex:none;padding:13px 22px;border-radius:14px;border:0;background:#a9abee;color:#1a2038;font:600 14px/1 'Figtree',sans-serif;cursor:pointer;white-space:nowrap">{{ importPicksLabel }}</button>
+                <div style="flex:1;min-width:180px;font:400 12px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ picksNote }}</div>
+              </div>
+            </div>
+          </sc-if>
         </div>
 
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:20px;padding:16px 18px;border-radius:18px;background:rgba(255,255,255,.022);border:1px solid rgba(150,170,230,.12)">
@@ -184,16 +268,6 @@
           </sc-for>
           <div style="flex:1;min-width:12px"></div>
           <a href="https://palify.org/decks" target="_blank" rel="noopener" style="font:500 12.5px/1 'Figtree',sans-serif;white-space:nowrap">Browse community decks on Palify &nearr;</a>
-        </div>
-
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:18px">
-          <span style="font:500 11.5px/1 'Figtree',sans-serif;color:#69769c;margin-right:2px">Accepts</span>
-          <sc-for list="{{ examples }}" as="ex" hint-placeholder-count="3">
-            <button type="button" onClick="{{ ex.use }}" style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:11px;border:1px solid rgba(150,170,230,.16);background:rgba(255,255,255,.03);cursor:pointer;transition:all .15s" style-hover="border-color:rgba(160,162,220,.5);background:rgba(160,162,220,.1)">
-              <span style="font:600 9.5px/1 'JetBrains Mono',monospace;letter-spacing:.1em;color:#8e9ac0;text-transform:uppercase">{{ ex.kind }}</span>
-              <span style="font:400 11.5px/1 'JetBrains Mono',monospace;color:#c3cbe4">{{ ex.sample }}</span>
-            </button>
-          </sc-for>
         </div>
 
         <sc-if value="{{ error }}" hint-placeholder-val="{{ false }}">
@@ -224,12 +298,9 @@
         <div style="display:flex;flex-direction:column;gap:10px">
             <sc-for list="{{ profileDecks }}" as="d" hint-placeholder-count="3">
               <button type="button" onClick="{{ d.pick }}" style="display:flex;align-items:center;gap:20px;padding:14px 18px;border-radius:18px;border:1px solid rgba(150,170,230,.14);background:rgba(255,255,255,.025);cursor:pointer;text-align:left;transition:all .15s" style-hover="border-color:rgba(160,162,220,.55);background:rgba(160,162,220,.09);transform:translateX(3px)">
-                <div style="display:flex">
-                  <sc-for list="{{ d.faces }}" as="f" hint-placeholder-count="4">
-                    <div style="width:40px;height:56px;border-radius:6px;margin-left:-10px;border:1px solid rgba(255,255,255,.12);overflow:hidden;position:relative;background:linear-gradient(150deg,#2b1830,#141a3a)">
-                      <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, rgba(180,182,230,.2) 0 6px, rgba(180,182,230,0) 6px 12px)"></div>
-                      <img src="{{ f.src }}" alt="" data-code="{{ f.code }}" onLoad="{{ gauge }}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
-                    </div>
+                <div style="display:flex;width:86px;height:8px;border-radius:99px;overflow:hidden;background:rgba(150,170,230,.14);flex:none">
+                  <sc-for list="{{ d.colors }}" as="col" hint-placeholder-count="2">
+                    <div style="{{ col.style }}"></div>
                   </sc-for>
                 </div>
                 <div style="flex:1;min-width:0">
@@ -237,7 +308,7 @@
                   <div style="font:400 12px/1 'JetBrains Mono',monospace;color:#69769c;margin-top:6px">{{ d.meta }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px">
-                  <span style="font:500 12.5px/1 'Figtree',sans-serif;color:#8e9ac0">{{ d.count }} cards</span>
+                  <span style="font:500 12.5px/1 'Figtree',sans-serif;color:#8e9ac0">{{ d.count }}</span>
                   <span style="font:600 15px/1 'Figtree',sans-serif;color:#9a9ce0">&rarr;</span>
                 </div>
               </button>
@@ -425,7 +496,7 @@
             <div style="font:400 25px/1.2 'Newsreader',serif">Deck review</div>
             <div style="font:600 15px/1.4 'Figtree',sans-serif;color:#dbe2f5;margin-top:9px">{{ deckName }}</div>
             <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px">
-              <span style="padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(150,170,230,.16);font:500 11.5px/1 'JetBrains Mono',monospace;color:#c3cbe4;white-space:nowrap">{{ deckTotal }} cards &middot; {{ uniqueCount }} unique</span>
+              <span style="padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(150,170,230,.16);font:500 11.5px/1 'JetBrains Mono',monospace;color:#c3cbe4;white-space:nowrap">{{ deckSize }} &middot; {{ uniqueCount }} unique</span>
               <span style="padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(150,170,230,.16);font:400 11.5px/1 'JetBrains Mono',monospace;color:#8e9ac0;white-space:nowrap">{{ deckSource }}</span>
               <span style="display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;background:rgba(164,212,186,.09);border:1px solid rgba(164,212,186,.26);font:500 11.5px/1 'Figtree',sans-serif;color:#a4d4ba;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#a4d4ba"></span>{{ cacheLabel }}</span>
             </div>
@@ -596,7 +667,7 @@
               </div>
             </div>
 
-            <div style="padding:14px 18px;border-radius:16px;background:rgba(255,255,255,.022);border:1px solid rgba(150,170,230,.12);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">This back is used for every card in both decks.</div>
+            <div style="padding:14px 18px;border-radius:16px;background:rgba(255,255,255,.022);border:1px solid rgba(150,170,230,.12);font:400 12.5px/1.5 'Figtree',sans-serif;color:#8e9ac0">{{ backScopeNote }}</div>
 
             <sc-if value="{{ atBack }}" hint-placeholder-val="{{ false }}">
               <button type="button" onClick="{{ confirmBack }}" style="align-self:flex-start;padding:15px 26px;border-radius:15px;border:0;background:#a9abee;color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:pointer">Back is set &mdash; continue</button>
@@ -630,7 +701,10 @@
               <div style="display:flex;flex-direction:column;gap:11px;margin:24px 0 0">
                 <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:16px 18px;border-radius:18px;background:rgba(7,11,23,.55);border:1px solid rgba(150,170,230,.16)">
                   <div style="width:40px;height:56px;border-radius:7px;background:linear-gradient(150deg,#3a1620,#1a1230);border:1px solid rgba(255,255,255,.14);position:relative;overflow:hidden;flex:none">
-                    <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, rgba(221,156,156,.22) 0 6px, rgba(221,156,156,0) 6px 12px)"></div>
+                    <div style="{{ mainThumbStripe }}"></div>
+                    <sc-if value="{{ hasMainThumb }}" hint-placeholder-val="{{ true }}">
+                      <img src="{{ mainThumb }}" alt="" data-code="{{ mainThumbCode }}" onLoad="{{ gauge }}" decoding="async" style="{{ mainThumbStyle }}">
+                    </sc-if>
                   </div>
                   <div style="flex:1 1 130px;min-width:0">
                     <div style="font:600 14.5px/1.3 'Figtree',sans-serif;color:#e8ecfa">Main deck</div>
@@ -659,6 +733,13 @@
 
               <sc-if value="{{ hasSoul }}" hint-placeholder-val="{{ false }}">
                 <button type="button" onClick="{{ generateBoth }}" style="{{ bothBtnStyle }}">{{ bothBtnLabel }}</button>
+              </sc-if>
+
+              <sc-if value="{{ staleExport }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:13px 16px;border-radius:14px;border:1px solid rgba(227,200,147,.4);background:rgba(227,200,147,.08)">
+                  <div style="width:22px;height:22px;border-radius:8px;background:rgba(227,200,147,.18);color:#e3c893;font:700 11px/22px 'JetBrains Mono',monospace;text-align:center;flex:none">!</div>
+                  <div style="flex:1;font:400 12.5px/1.5 'Figtree',sans-serif;color:#e6d5b0">{{ staleExportNote }}</div>
+                </div>
               </sc-if>
 
               <div style="font:400 12px/1.5 'Figtree',sans-serif;color:#7d88ab;margin-top:16px">Every card is baked in at full resolution &mdash; 8192&sup2; sheet, so effect text stays readable in-world and nothing streams once it&rsquo;s there.</div>
@@ -804,6 +885,9 @@ const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR',
 // (tools/fetch-pool.mjs + a weights entry), not an edit to this file.
 const SET = 'BP01';
 const STACK_RAREST_FIRST = true;   // see rows(): index 0 is one fixed end of the stack
+// The template's atlas is a 10x7 grid and composeAtlas throws past it, so the card
+// finder stops adding there rather than letting the bake fail an hour later.
+const MAX_DECK = 70;
 const COLOR_HUE = { Red: '#dd9c9c', Blue: '#9dc2dd', Green: '#a3ccae', Purple: '#c2a3e2', Colorless: '#cfc7a8' };
 
 // Filled from data/pool-<set>.json at mount: rarity -> [{p: printing, b: base card}].
@@ -830,6 +914,8 @@ class Component extends DCLogic {
     cardDX: 0, cardOut: 0, cardDrag: false, snap: false, hold: false, celId: null,
     batch: 1, packsLeft: 1, tearDir: 1, torn: false, tearDrag: false, lifting: false, dragging: false, dropHot: false,
     gen: null, ready: false, copied: null, cachedCount: 0, genKind: 'package', notice: null, deck: null,
+    busy: null, profile: null, deckSource: null, importError: null, unknown: [], cardQ: '',
+    picks: [], fromCards: false, staleExport: false,
     sizeMain: null, sizeSoul: null, outSize: 0,
     vw: typeof window !== 'undefined' ? window.innerWidth : 1440, imgBudget: 6
   };
@@ -904,7 +990,21 @@ class Component extends DCLogic {
       })
       .catch(() => { this.filling = false; this.serverDown = true; });
   }
-  noDrag = (e) => { if (e.target && e.target.tagName === 'IMG') e.preventDefault(); };
+  // Blocks the browser's own mousedown behaviour so a drag on the pack or on a
+  // card is a drag and nothing else. preventDefault stops a fresh selection from
+  // opening; a selection left over from an earlier one still has to be cleared,
+  // because pressing on selected text starts a native drag-and-drop and the
+  // pointer stream dies with it. Returns false for non-primary buttons, which
+  // must not arm a tear at all.
+  armDrag = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return false;
+    e.preventDefault();
+    try { const sel = window.getSelection(); if (sel && !sel.isCollapsed) sel.removeAllRanges(); } catch (err) {}
+    this.grabbing = true;
+    return true;
+  };
+  // Images are never draggable; while a ripper drag is live, nothing is.
+  noDrag = (e) => { if (this.grabbing || (e.target && e.target.tagName === 'IMG')) e.preventDefault(); };
   // Every card sits on a striped placeholder so a slow or failed load still looks
   // intentional - but a broken <img> paints the browser's own broken icon over it.
   // Swap the source for a transparent pixel so the placeholder shows through as
@@ -930,21 +1030,272 @@ class Component extends DCLogic {
   async loadStarter(set, name) {
     const file = set === 'TD01' ? 'data/td01-red-blue.csv' : 'data/td02-green-purple.csv';
     try {
-      const { parseDeckList } = await import('./web/decklist.js');
+      const [{ parseDeckList }] = await Promise.all([import('./web/decklist.js'), this.catalogue()]);
       const { deck } = parseDeckList(await (await fetch(file)).text());
-      this.setDeck(deck, name);
-    } catch (e) { this.openDeck(name); }
+      this.setDeck(deck, name, file.replace('data/', ''));
+    } catch (e) { this.importFailed('The trial deck list would not load (' + (e && e.message) + ').'); }
   }
 
-  setDeck(entries, label) {
-    const hue = c => (c.startsWith('TD01') ? '#dd9c9c' : c.startsWith('TD02') ? '#a3ccae' : '#9aa6c8');
+  // The catalogue an import is resolved against: base code -> name, colour and every
+  // printing, plus printing code -> base. data/pool-*.json is the committed Palify
+  // snapshot (regenerate with tools/fetch-pool.mjs), and it is the only place card
+  // names and printings may come from - a decklist's spelling drifts, and inventing
+  // the difference is exactly what CLAUDE.md forbids. One promise, because several
+  // import paths race for it.
+  catalogue() {
+    if (this.catP) return this.catP;
+    this.catP = Promise.all(['bp01', 'td01', 'td02'].map(set =>
+      fetch('data/pool-' + set + '.json').then(r => (r.ok ? r.json() : null)).catch(() => null)
+    )).then(files => {
+      const byBase = {}, byPrint = {};
+      files.filter(Boolean).forEach(j => {
+        Object.keys(j.base || {}).forEach(code => {
+          const b = j.base[code];
+          byBase[code] = { name: b.name || code, hue: COLOR_HUE[b.color] || '#cfc7a8', color: b.color || '', type: b.type || '', prints: [] };
+        });
+        Object.keys(j.byRarity || {}).forEach(rarity => (j.byRarity[rarity] || []).forEach(e => {
+          const base = byBase[e.base];
+          if (!base) return;
+          byPrint[e.code] = e.base;
+          base.prints.push([e.code, rarity, !e.variant]);
+        }));
+      });
+      // Base printing first: it is the default art, and rows() reads prints[0].
+      Object.keys(byBase).forEach(k => {
+        byBase[k].prints.sort((a, b) => (b[2] ? 1 : 0) - (a[2] ? 1 : 0) || this.rankOf(a[1]) - this.rankOf(b[1]));
+        byBase[k].prints = byBase[k].prints.map(pr => [pr[0], pr[1]]);
+      });
+      this.cat = { byBase, byPrint };
+      return this.cat;
+    });
+    return this.catP;
+  }
+
+  // Every import lands here, and this is the only place a deck is built.
+  //
+  // Quantities merge onto the BASE card: a row bakes exactly one printing (rows()
+  // picks one `selected` per row), so 2x BP01-001 plus 1x BP01-001SSP is three
+  // copies of one card with the SSP art chosen, not two rows sharing a key.
+  setDeck(entries, label, source, opts) {
+    const cat = this.cat || { byBase: {}, byPrint: {} };
+    const deck = [], byCode = new Map(), variants = {}, unknown = [];
+    (entries || []).forEach(e => {
+      const code = String(e.code || '').toUpperCase();
+      const n = Math.max(1, Math.round(e.n || 1));
+      if (!code) return;
+      const base = cat.byPrint[code] || code;
+      const known = cat.byBase[base];
+      if (!known && unknown.indexOf(code) < 0) unknown.push(code);
+      if (known && code !== base) variants[base] = code;
+      const seen = byCode.get(base);
+      if (seen) { seen.n += n; return; }
+      const rec = {
+        code: base,
+        // A name from the import is a fallback for a card the snapshot has not got
+        // yet - never an override of one it has.
+        name: (known && known.name) || e.name || base,
+        n, hue: (known && known.hue) || '#9aa6c8',
+        prints: (known && known.prints) || [[code, '?']],
+      };
+      byCode.set(base, rec);
+      deck.push(rec);
+    });
+    if (!deck.length) return this.setState({ busy: null, notice: 'noCards', error: null });
+    // A single card imported on its own is named after the card, not "Imported deck".
+    const name = label || (deck.length === 1 ? deck[0].name : 'Imported deck');
     this.setState({
-      deck: entries.map(e => ({
-        code: e.code, name: e.name || e.code, n: e.n, hue: hue(e.code),
-        prints: [[e.code, 'C']],
-      })),
-      variants: {}, discarded: {}, fromPulls: false,
-    }, () => this.openDeck(label));
+      deck, variants, discarded: {}, fromPulls: false, fromCards: !!(opts && opts.fromCards),
+      busy: null, error: null,
+      deckSource: source || null, unknown, notice: unknown.length ? 'unknownCodes' : null,
+    }, () => this.openDeck(name));
+  }
+
+  // Palify sends no CORS headers on anything (docs/PALIFY-API.md), so deck and
+  // profile pages are read through the Worker, which parses them into JSON.
+  async getJSON(path) {
+    if (!ART_PROXY) throw new Error('No proxy is configured, so Palify pages cannot be read from the browser - see docs/WORKER.md.');
+    const r = await fetch(ART_PROXY.replace(/\/$/, '') + path, { mode: 'cors' });
+    const body = await r.text();
+    let j = null;
+    try { j = JSON.parse(body); } catch (e) {}
+    if (!r.ok) {
+      const err = new Error((j && j.error) || ('the deck proxy answered HTTP ' + r.status));
+      err.status = r.status;
+      throw err;
+    }
+    // A 200 that is not JSON is a broken proxy, not an empty deck. An older Worker
+    // relays Palify's RSC payload unparsed (it starts `0:{` or `1:"$S`), and reading
+    // that as "no cards in this deck" sends the user hunting for a problem with
+    // their deck. Say which side is wrong.
+    if (!j || typeof j !== 'object') {
+      const err = new Error(/^\s*\d+:/.test(body)
+        ? 'the proxy relayed Palify\u2019s page unparsed, which means it is running an older build \u2014 redeploy worker/ (docs/WORKER.md)'
+        : 'the proxy answered with something that is not JSON');
+      err.status = 0;
+      throw err;
+    }
+    return j;
+  }
+
+  loadDeck(id, fallbackName) {
+    const uuid = String(id).toLowerCase();
+    this.setState({ busy: 'deck', error: null, notice: null, importError: null });
+    Promise.all([this.getJSON('/deck/' + uuid), this.catalogue()])
+      .then(([j]) => {
+        if (!j || !j.cards || !j.cards.length) return this.importFailed('Palify shows no cards in that deck, so there is nothing to bake.');
+        this.setDeck(j.cards, j.name || fallbackName || 'Palify deck', 'palify.org/decks/' + uuid.slice(0, 8));
+      })
+      .catch(e => this.importFailed(e && e.status === 404
+        ? 'Palify has no public deck at that link. A private deck never comes through a URL \u2014 export it from Palify and drop the file in.'
+        : 'That deck could not be read \u2014 ' + ((e && e.message) || 'the request failed') + '.'));
+  }
+
+  loadProfile(handle) {
+    this.setState({ busy: 'profile', error: null, notice: null, importError: null, handle });
+    Promise.all([this.getJSON('/profile/' + handle), this.catalogue()])
+      .then(([j]) => {
+        if (!j || !j.decks || !j.decks.length) return this.setState({ busy: null, stage: 'input', profile: null, notice: 'noPublic' });
+        this.setState({ busy: null, stage: 'picker', profile: j, error: null, notice: null }, () => this.reveal('[data-rp="picker"]'));
+      })
+      .catch(e => this.importFailed(e && e.status === 404
+        ? 'There is no Palify profile at /u/' + handle + '.'
+        : 'That profile could not be read \u2014 ' + ((e && e.message) || 'the request failed') + '.'));
+  }
+
+  // A written list: a file's contents, or codes typed into the box.
+  async importText(text, label, source) {
+    this.setState({ busy: 'read', error: null, notice: null, importError: null });
+    try {
+      const [{ parseDeckList }] = await Promise.all([import('./web/decklist.js'), this.catalogue()]);
+      const { deck } = parseDeckList(text);
+      this.setDeck(deck, label || this.listName(text) || null, source);
+    } catch (e) {
+      this.importFailed('That list could not be read \u2014 ' + ((e && e.message) || 'the file would not open') + '.');
+    }
+  }
+
+  readFile(file) {
+    if (!file) return;
+    const stem = file.name.replace(/\.[^.]+$/, '');
+    Promise.resolve(file.text ? file.text() : new Response(file).text())
+      .then(t => this.importText(t, this.listName(t) || stem, file.name))
+      .catch(e => this.importFailed('That file could not be read (' + ((e && e.message) || 'unknown error') + ').'));
+  }
+
+  // Palify's .txt export opens with `# <deck name> (<n> cards)`, and that name is
+  // better than the filename. Only the first comment line is read.
+  listName(text) {
+    const m = /^\s*#\s*(\S.*?)\s*(?:\(\s*\d+\s*cards?\s*\))?\s*$/m.exec(String(text || '').split(/\r?\n/)[0] || '');
+    return m ? m[1] : '';
+  }
+
+  // A typed card code is a deck of one - the smallest import there is. Several,
+  // separated by commas or new lines, are a deck of several. Palify art URLs carry
+  // a code too, and pasting one is an obvious thing to try.
+  codesFrom(v) {
+    const url = /palify\.org\/cards?\/(?:w\d+\/)?([A-Za-z][A-Za-z0-9]{1,5}-[0-9]{1,4}[A-Za-z]{0,4})(?:\.webp)?/i.exec(v);
+    if (url) return url[1].toUpperCase();
+    const parts = v.split(/[,;\n]+/).map(x => x.trim()).filter(Boolean);
+    const one = /^(?:\d+\s*[x*]?\s+)?[A-Za-z][A-Za-z0-9]{1,5}-[0-9]{1,4}[A-Za-z]{0,4}$/;
+    return parts.length && parts.every(x => one.test(x)) ? parts.join('\n') : null;
+  }
+
+  // Search the committed snapshot, never Palify: 150 cards are already on disk, so
+  // finding a card costs no request, hits no rate limit and works offline. Matches
+  // on name or code; a name that starts with the query outranks one that merely
+  // contains it, which outranks a code match.
+  findCards(q) {
+    const needle = String(q || '').trim().toLowerCase();
+    if (!this.cat || needle.length < 2) return [];
+    const cat = this.cat, hits = [];
+    Object.keys(cat.byBase).forEach(code => {
+      const c = cat.byBase[code];
+      const at = c.name.toLowerCase().indexOf(needle);
+      const byCode = code.toLowerCase().indexOf(needle) === 0 || cat.byPrint[needle.toUpperCase()] === code;
+      if (at < 0 && !byCode) return;
+      hits.push({ code, card: c, rank: at === 0 ? 0 : at > 0 ? 1 : 2, at: at < 0 ? 1e9 : at });
+    });
+    hits.sort((a, b) => a.rank - b.rank || a.at - b.at || a.code.localeCompare(b.code));
+    return hits.slice(0, 6);
+  }
+
+  // The catalogue is fetched on the first keystroke rather than at mount - most
+  // visitors paste a deck link and never open the finder.
+  searchCards = (q) => {
+    this.setState({ cardQ: q });
+    if (!this.cat) this.catalogue().then(() => this.forceUpdate());
+  };
+
+  // The finder fills a basket, it does not import on click. Someone reaching for
+  // "one card by name" nearly always wants a handful - so picks accumulate and the
+  // deck is whatever they chose, however many that is.
+  //
+  // A pick is keyed by PRINTING, so two arts of the same card can both sit in the
+  // basket; setDeck then merges them onto the base card the way every other import
+  // does, because a row bakes exactly one printing. picksNote says so on screen
+  // rather than letting the deck review look like it lost a card.
+  pickTotal(picks) { return (picks || this.state.picks).reduce((t, p) => t + p.n, 0); }
+
+  addPick(base, card, code, rarity) {
+    this.setState(st => {
+      if (this.pickTotal(st.picks) >= MAX_DECK) return null;
+      const picks = st.picks.slice();
+      const at = picks.findIndex(p => p.code === code);
+      if (at < 0) picks.push({ code, base, name: card.name, hue: card.hue, rarity, n: 1 });
+      else picks[at] = { ...picks[at], n: picks[at].n + 1 };
+      return { picks };
+    });
+  }
+
+  bumpPick(code, d) {
+    this.setState(st => {
+      if (d > 0 && this.pickTotal(st.picks) >= MAX_DECK) return null;
+      const picks = st.picks
+        .map(p => (p.code === code ? { ...p, n: p.n + d } : p))
+        .filter(p => p.n > 0);
+      return { picks };
+    });
+  }
+
+  importPicks = () => {
+    const picks = this.state.picks;
+    if (!picks.length) return;
+    const n = this.pickTotal(picks);
+    const uniq = new Set(picks.map(p => p.base)).size;
+    this.setState({ cardQ: '', picks: [] });
+    // One card keeps its own name (setDeck does that); several are the user's own
+    // selection, not a deck anyone published.
+    this.setDeck(picks.map(p => ({ code: p.code, n: p.n })),
+      uniq === 1 && n === 1 ? null : 'Chosen cards',
+      n + (n === 1 ? ' card by name' : ' cards by name'),
+      { fromCards: true });
+  };
+
+  // A soul deck is only ever offered where it makes sense to bake a second object:
+  // never for ripped pulls, and never for a handful of cards picked by name - both
+  // are "give me these cards", not "build me a deck".
+  noSoul(s) { return s.fromPulls || s.fromCards; }
+
+  // Everything a bake reads, as one string. `ready` means "this exact deck is built
+  // and sitting in this.out" - change a printing, a quantity, a discard, the label,
+  // the back or the soul choice and the finished file no longer matches the screen.
+  // Without this the second click on a changed deck silently re-downloaded the old
+  // package, which is indistinguishable from the change not working.
+  //
+  // Per kind, because each export reads a different part of the screen: the card
+  // back owes nothing to the deck list, and the main deck owes nothing to the soul
+  // count. The back's zoom/rotate/pan are deliberately absent - they are
+  // preview-only and never reach bakeDeck, so they cannot change the output.
+  exportSig(s, kept, kind) {
+    const soul = (kind === 'soul' || kind === 'both') && !s.soulSkipped && !this.noSoul(s)
+      ? s.soulCode + 'x' + s.soulCount : '-';
+    const main = kind === 'soul' || kind === 'back'
+      ? '-' : kept.map(r => this.sel(r.key) + ':' + r.qtyN).join(',');
+    return [kind, s.deckLabel, s.backSrc, soul, main].join('|');
+  }
+
+  importFailed(message) {
+    this.setState({ busy: null, notice: 'importFailed', importError: message, error: null });
   }
   // Thumbnails go through the proxy too when one is configured: it edge-caches them,
   // so Palify is hit once per image globally instead of once per viewer. It also makes
@@ -977,6 +1328,22 @@ class Component extends DCLogic {
     this.forceUpdate();
   };
   isWide(code) { return !!(this.wide && this.wide[code]); }
+
+  // Landscape art is turned clockwise into its portrait box - the same turn the atlas
+  // bake makes (ROT = 90 in web/compose.js), so a card looks on the site the way it
+  // will look in the deck. The turn has to happen on a landscape-shaped element:
+  // object-fit runs at layout, before the transform, so an <img> stretched over the
+  // portrait box has already been cropped to a half-width centre strip by the time
+  // rotate() spins it - which is what `rotate(90deg) scale(1.4)` used to show, a
+  // zoomed sliver rather than a card. Lay the image out at the box's own dimensions
+  // swapped instead (every card box here is 1:1.4) and rotate about the centre.
+  // 141/72 rather than 140/71.4 is overscan: the boxes are not all exactly 1:1.4, and
+  // a percent of slack is cheaper than a transparent hairline down one edge.
+  face(code) {
+    return this.isWide(code)
+      ? 'position:absolute;left:50%;top:50%;width:141%;height:72%;object-fit:cover;transform:translate(-50%,-50%) rotate(90deg)'
+      : 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+  }
 
   w() { return this.weights || WEIGHTS; }
 
@@ -1104,7 +1471,7 @@ class Component extends DCLogic {
         rowStyle: 'display:flex;gap:15px;padding:12px;border-radius:16px;transition:all .15s;border:1px ' + (dis ? 'dashed rgba(150,170,230,.16)' : 'solid rgba(150,170,230,.11)') + ';background:' + (dis ? 'rgba(255,255,255,.008)' : 'rgba(255,255,255,.022)') + (dis ? ';opacity:.45' : ''),
         thumbWrap: 'position:relative;width:82px;height:115px;flex:none;border-radius:9px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,rgba(30,26,52,.9),#141a3a)',
         thumbStripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + r.hue + '33 0 7px, transparent 7px 14px)',
-        imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (wide ? ';transform:rotate(90deg) scale(1.4)' : ''),
+        imgStyle: this.face(sel),
         dot: 'width:7px;height:7px;border-radius:50%;background:' + r.hue,
         showKeep: s.fromPulls,
         keepLabel: dis ? 'Discarded' : 'Keep',
@@ -1146,22 +1513,28 @@ class Component extends DCLogic {
     }));
   }
 
+  // Everything the box accepts, in one place. Nothing here fakes a load: each
+  // branch either produces a real deck or reports why it could not.
   detect = () => {
     const v = this.state.input.trim();
     if (!v) return this.setState({ error: 'empty', notice: null });
-    if (/palify\.org\/u\/([\w.\-]+)/i.test(v)) {
-      const h = v.match(/palify\.org\/u\/([\w.\-]+)/i)[1];
-      if (/new|empty/i.test(h)) return this.setState({ stage: 'input', handle: h, error: null, notice: 'noPublic', gen: null });
-      return this.setState({ stage: 'picker', handle: h, error: null, notice: null }, () => this.reveal('[data-rp="picker"]'));
-    }
-    if (/palify\.org\/decks?\/[0-9a-f-]{6,}/i.test(v)) return this.openDeck();
-    if (/^\s*\d+\s*x?\s/i.test(v)) return this.openDeck();
+    let m;
+    if ((m = /palify\.org\/u\/([\w.\-]+)/i.exec(v))) return this.loadProfile(m[1]);
+    if ((m = /palify\.org\/decks?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(v))) return this.loadDeck(m[1]);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return this.loadDeck(v);
+    const codes = this.codesFrom(v);
+    if (codes) return this.importText(codes, null, codes.split('\n').length + (codes.indexOf('\n') < 0 ? ' card by code' : ' cards by code'));
+    if (/^\s*\d+\s*x?\s/i.test(v) || /\n/.test(v)) return this.importText(v, null, 'pasted list');
     this.setState({ error: /palify\.org/i.test(v) ? 'unknown' : 'notlink' });
   };
 
   openDeck = (label) => {
     this.writeCache();
-    const patch = { stage: 'deck', step: 1, error: null, notice: null, imgBudget: 6 };
+    // A new deck cannot inherit the last one's finished export - drop it here
+    // rather than letting the export screen offer someone else's package.
+    this.out = null;
+    this.outSig = null;
+    const patch = { stage: 'deck', step: 1, error: null, imgBudget: 6, ready: false, gen: null, staleExport: false };
     if (typeof label === 'string') patch.deckLabel = label;
     this.setState(patch, () => this.reveal('[data-rp="review"]'));
     if (this.iq) clearInterval(this.iq);
@@ -1197,22 +1570,27 @@ class Component extends DCLogic {
 
   async startGen(kind) {
     const st = this.state;
-    // second click on a finished export is the download, not another bake
-    if (st.ready && st.genKind === kind && this.out && this.out.kind === kind) return this.saveOut();
+    const rows = this.rows(st).filter(r => !r.discarded);
+    const sig = this.exportSig(st, rows, kind);
+    // A second click on a finished export is the download, not another bake - but
+    // only while the deck on screen is still the deck that was baked. Otherwise the
+    // download would hand over the previous package.
+    if (st.ready && st.genKind === kind && this.out && this.out.kind === kind && this.outSig === sig)
+      return this.saveOut();
 
-    this.setState({ genKind: kind, ready: false, gen: { pct: 2, failed: false } });
+    this.setState({ genKind: kind, ready: false, staleExport: false, gen: { pct: 2, failed: false } });
     this.out = null;
+    this.outSig = null;
     const slug = (st.deckLabel || 'deck').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'deck';
 
     try {
-      const rows = this.rows(st).filter(r => !r.discarded);
       const main = rows.map(r => ({ code: this.sel(r.key), n: r.qtyN }));
       // Every Soul printing is the same card with different art, and a Palify deck
       // never carries one - so the soul deck is one chosen code times a count, baked
       // into its own package. See docs/PALIFY-API.md.
       const soul = [{ code: st.soulCode, n: st.soulCount }];
       const wantsMain = kind !== 'soul';
-      const wantsSoul = (kind === 'soul' || kind === 'both') && !st.soulSkipped && !st.fromPulls;
+      const wantsSoul = (kind === 'soul' || kind === 'both') && !st.soulSkipped && !this.noSoul(st);
       if (kind === 'soul' && !wantsSoul) throw new Error('There is no soul deck to export \u2014 it was skipped.');
       if (wantsMain && !main.length) throw new Error('This deck has no cards to export.');
 
@@ -1287,6 +1665,7 @@ class Component extends DCLogic {
         }
         this.out = { kind, files };
       }
+      this.outSig = sig;
 
       const bytes = this.out.files.reduce((t, f) => t + f.blob.size, 0);
       const mb = b => (b / 1048576).toFixed(2) + ' MB';
@@ -1300,7 +1679,10 @@ class Component extends DCLogic {
         gen: { pct: 100, failed: false }, ready: true, outSize: bytes,
         sizeMain: mainMB || st.sizeMain, sizeSoul: soulMB || st.sizeSoul,
       });
-      this.saveOut();                              // first bake downloads straight away
+      // First bake downloads straight away - unless the deck changed while it was
+      // baking, in which case the file is already out of date and the render-time
+      // check is about to drop it.
+      if (this.exportSig(this.state, this.rows(this.state).filter(r => !r.discarded), kind) === sig) this.saveOut();
     } catch (e) {
       this.setState({ gen: { pct: this.state.gen ? this.state.gen.pct : 40, failed: true }, genError: String((e && e.message) || e) });
     }
@@ -1309,9 +1691,24 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state, sheetGrid = { c: 10, r: 7 };
     const rows = this.rows(s);
+    const found = this.findCards(s.cardQ);
+    const picksTotal = this.pickTotal(s.picks);
+    const picksFull = picksTotal >= MAX_DECK;
+    const picksMerge = new Set(s.picks.map(p => p.base)).size < s.picks.length;
     const kept = rows.filter(r => !r.discarded);
     const total = kept.reduce((t, r) => t + r.qtyN, 0);
     const hasSoul = !s.soulSkipped;
+    // A finished export is only a download while it still matches the deck on
+    // screen. Anything the bake reads changing - a printing, a quantity, a discard,
+    // the back, the soul choice - drops the built file and turns the button back
+    // into Generate, because handing over the previous package looks exactly like
+    // the change having done nothing. Deferred out of render: this is a state
+    // change noticed while rendering, and it cannot loop (ready goes false).
+    if (s.ready && this.outSig !== this.exportSig(s, kept, s.genKind)) {
+      this.out = null;
+      this.outSig = null;
+      Promise.resolve().then(() => this.setState({ ready: false, gen: null, staleExport: true }));
+    }
     const pct = s.gen ? s.gen.pct : 0;
     const imgTotal = Math.max(1, rows.length);
     const imgDone = Math.min(imgTotal, Math.max(0, Math.round(((pct - 10) / 50) * imgTotal)));
@@ -1347,7 +1744,7 @@ class Component extends DCLogic {
       tearPct: Math.round((s.torn ? 1 : s.tear) * 100) + '%',
       tearHintWrapStyle: 'display:flex;flex-direction:column;align-items:center;gap:11px;transition:opacity .3s ease;opacity:' + (s.lifting ? '0' : '1'),
       tearHintStyle: "font:600 14px/1 'Figtree',sans-serif;color:#dbe2f5" + (s.torn ? '' : ';animation:rp-bob 2.4s ease-in-out infinite'),
-      tearHint: s.torn ? 'Opening\u2026' : s.tear >= 0.55 ? 'Let go to open it' : s.tear > 0.08 ? 'Keep tearing\u2026' : 'Drag across the top of the pack to tear it',
+      tearHint: s.torn ? 'Opening\u2026' : s.tear >= 0.55 ? 'Let go to open it' : s.tear > 0.08 ? 'Keep tearing\u2026' : 'Drag across the pack to tear it open',
       packBodyStyle: 'position:absolute;left:0;width:250px;height:444px;overflow:hidden;z-index:2;pointer-events:none;top:83px'
         + ';transition:transform .5s cubic-bezier(.25,.9,.3,1),opacity .42s ease .06s'
         + ';transform:translateY(' + (s.torn ? '118px' : '0px') + ') scale(' + (s.lifting ? '.97' : '1') + ')'
@@ -1389,13 +1786,20 @@ class Component extends DCLogic {
               + ');box-shadow:' + sh + ';transition:' + tr + ';z-index:' + (3 - i) + ';opacity:' + op + ';transform:' + tf;
           })(),
           stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + ((back ? '#9aa6c8' : p.hue || '#9aa6c8') + (back ? '1a' : '33')) + ' 0 7px, transparent 7px 14px)',
-          imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (!back && p.code && this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+          imgStyle: this.face(back ? '' : p.code),
           shade: 'position:absolute;inset:0;pointer-events:none;background:' + (back ? 'rgba(4,7,18,.55)' : 'linear-gradient(rgba(4,7,18,0) 55%, rgba(4,7,18,.5))')
         };
       }),
-      swipeZoneStyle: 'position:absolute;left:0;right:0;top:0;height:92px;cursor:' + (s.tearDrag ? 'grabbing' : 'grab') + ';touch-action:none;user-select:none;-webkit-user-drag:none;z-index:5',
+      // The grab area is the whole pack plus a margin, not the top strip. The
+      // strip is 83px of a 527px pack, so aiming at it was the hard part of the
+      // tear; a drag anywhere on the pack now tears it, and the strip stays the
+      // thing that visibly comes off. The overhang covers the drop shadow, where
+      // people aim. Nothing else in the pack box takes pointer events, so this
+      // sits on top of all of it safely - and it stops at the pack's bottom edge
+      // so the hint and the "or click to open" button below stay clickable.
+      swipeZoneStyle: 'position:absolute;left:-16px;right:-16px;top:-16px;bottom:0;cursor:' + (s.tearDrag ? 'grabbing' : 'grab') + ';touch-action:none;user-select:none;-webkit-user-drag:none;z-index:5',
       tearStart: e => {
-        if (this.tearRef || s.torn) return;
+        if (this.tearRef || s.torn || !this.armDrag(e)) return;
         this.tearRef = { x: e.clientX };
         this.setState({ tearDrag: true });
         const mv = ev => {
@@ -1408,6 +1812,7 @@ class Component extends DCLogic {
           window.removeEventListener('pointerup', up);
           window.removeEventListener('pointercancel', up);
           this.tearRef = null;
+          this.grabbing = false;
         };
         // Let go of the top and the pack opens: strip flies off, body slides, cards rise.
         const up = () => {
@@ -1441,7 +1846,7 @@ class Component extends DCLogic {
       advanceLabel: s.revealIdx + 1 < s.pack.length ? 'or reveal all ' + (s.pack.length - s.revealIdx) + ' cards' : 'or click to finish',
       revealAreaStyle: 'position:relative;width:420px;height:470px;display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-drag:none;cursor:' + (s.cardDrag ? 'grabbing' : 'grab'),
       cardStart: e => {
-        if (this.state.cardOut || this.state.hold || this.cardRef) return;
+        if (this.state.cardOut || this.state.hold || this.cardRef || !this.armDrag(e)) return;
         this.cardRef = { x: e.clientX };
         this.setState({ cardDrag: true });
         const mv = ev => { if (this.cardRef) this.setState({ cardDX: ev.clientX - this.cardRef.x }); };
@@ -1449,6 +1854,7 @@ class Component extends DCLogic {
           window.removeEventListener('pointermove', mv);
           window.removeEventListener('pointerup', up);
           window.removeEventListener('pointercancel', up);
+          this.grabbing = false;
           if (!this.cardRef) return;
           this.cardRef = null;
           const dx = this.state.cardDX;
@@ -1461,7 +1867,7 @@ class Component extends DCLogic {
       },
       nextPack: () => this.setState(st => ({ packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: this.rollPack(), revealIdx: 0, cardDX: 0, cardOut: 0, celebrate: null, packsLeft: st.packsLeft < 1 ? 1 : st.packsLeft, batch: st.packsLeft < 1 ? 1 : st.batch })),
       nextPackLabel: 'Rip another pack',
-      importPulls: () => { this.setState({ fromPulls: true, deckLabel: 'My pulls', imgBudget: 60 }); this.openDeck('My pulls'); },
+      importPulls: () => { this.setState({ fromPulls: true, fromCards: false, deckLabel: 'My pulls', imgBudget: 60, notice: null, deckSource: null }); this.openDeck('My pulls'); },
       importPullsLabel: 'Import my pulls (' + s.binder.length + ')',
       imgFail: this.fail,
       gauge: this.gauge,
@@ -1471,30 +1877,92 @@ class Component extends DCLogic {
       submit: this.detect,
       onDragOver: e => { e.preventDefault(); if (!s.dropHot) this.setState({ dropHot: true }); },
       onDragLeave: () => this.setState({ dropHot: false }),
-      onDrop: e => { e.preventDefault(); this.setState({ dropHot: false, input: (e.dataTransfer.files[0] && e.dataTransfer.files[0].name) || 'deck.txt' }); this.openDeck(); },
+      onDrop: e => {
+        e.preventDefault();
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        this.setState({ dropHot: false, input: (f && f.name) || '' });
+        if (f) this.readFile(f);
+        else this.importFailed('Nothing arrived with that drop \u2014 drag the .txt or .csv file itself.');
+      },
       pickFile: () => {
-        const i = document.createElement('input'); i.type = 'file'; i.accept = '.txt,.csv';
-        i.onchange = () => { this.setState({ input: i.files[0] ? i.files[0].name : 'deck.txt' }); this.openDeck(); };
+        const i = document.createElement('input'); i.type = 'file'; i.accept = '.txt,.csv,text/plain,text/csv';
+        i.onchange = () => { this.setState({ input: i.files[0] ? i.files[0].name : '' }); this.readFile(i.files[0]); };
         i.click();
       },
       dropZoneStyle: 'padding:18px;border-radius:22px;border:1px solid ' + (s.dropHot ? 'rgba(163,207,216,.6)' : 'rgba(150,170,230,.14)') + ';background:' + (s.dropHot ? 'rgba(163,207,216,.07)' : 'rgba(7,11,23,.35)') + ';transition:all .15s',
-      examples: [
-        { kind: 'deck', sample: 'palify.org/decks/f2dd143c\u2026', use: () => this.setState({ input: 'https://palify.org/decks/f2dd143c-8e6f-4142-87d2-051195185f96', error: null }, this.openDeck) },
-        { kind: 'profile', sample: 'palify.org/u/dalek', use: () => this.setState({ input: 'https://palify.org/u/dalek', error: null }, () => this.detect()) },
-        { kind: 'file', sample: 'kindling-rush.txt', use: () => this.setState({ input: 'kindling-rush.txt', error: null }, this.openDeck) }
-      ],
+      cardQ: s.cardQ,
+      onCardQ: e => this.searchCards(e.target.value),
+      // Cards chosen by name and printing go into a basket, not straight into a
+      // deck of one: the deck is however many the user picked. The rest of the flow
+      // (card back, bake) is unchanged - only the soul deck is dropped, see noSoul().
+      found: found.map(h => ({
+        code: h.code,
+        name: h.card.name,
+        typeLabel: [h.card.color, h.card.type].filter(Boolean).join(' \u00b7 ') || 'Card',
+        img: this.img(h.card.prints[0][0]),
+        imgStyle: this.face(h.card.prints[0][0]),
+        stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + h.card.hue + '33 0 6px, transparent 6px 12px)',
+        prints: h.card.prints.map(pr => ({
+          label: pr[1],
+          title: picksFull ? 'The deck is full at ' + MAX_DECK + ' cards' : 'Add ' + pr[0] + ' (' + pr[1] + ')',
+          add: () => this.addPick(h.code, h.card, pr[0], pr[1]),
+          dot: 'width:6px;height:6px;border-radius:50%;background:' + (RARITY_HUE[pr[1]] || '#9aa6c8'),
+          style: "display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:9px;transition:all .12s;border:1px solid rgba(150,170,230,.16);background:rgba(255,255,255,.03);color:#c3cbe4;font:600 10.5px/1 'JetBrains Mono',monospace;cursor:" + (picksFull ? 'not-allowed;opacity:.45' : 'pointer')
+        }))
+      })),
+      showFinder: found.length > 0,
+
+      // The basket. Picks are keyed by printing; setDeck merges two printings of one
+      // card onto the base card (one row bakes one printing), and picksNote says so
+      // before the deck review looks like it swallowed a card.
+      hasPicks: s.picks.length > 0,
+      picksLabel: picksTotal + (picksTotal === 1 ? ' card' : ' cards') + (picksFull ? ' \u00b7 full' : ''),
+      picks: s.picks.map(p => ({
+        code: p.code, name: p.name, qty: p.n + '\u00d7',
+        meta: p.code + ' \u00b7 ' + p.rarity,
+        img: this.img(p.code),
+        imgStyle: this.face(p.code),
+        stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 6px, transparent 6px 12px)',
+        minus: () => this.bumpPick(p.code, -1),
+        plus: () => this.bumpPick(p.code, 1),
+        remove: () => this.setState(st => ({ picks: st.picks.filter(x => x.code !== p.code) })),
+        plusStyle: "width:30px;height:30px;border-radius:8px;border:0;background:transparent;color:#b0b3ea;font:600 16px/1 'Figtree',sans-serif;cursor:" + (picksFull ? 'not-allowed;opacity:.4' : 'pointer')
+      })),
+      picksNote: picksFull
+        ? 'That is the whole 10 \u00d7 7 sheet \u2014 ' + MAX_DECK + ' cards is as many as one deck object holds.'
+        : picksMerge
+          ? 'Two printings of the same card are baked as one card with one art \u2014 the last printing picked wins.'
+          : 'Add as many as you like, then import them as one deck. No soul deck is offered for cards picked this way.',
+      importPicksLabel: 'Import ' + picksTotal + (picksTotal === 1 ? ' card' : ' cards'),
+      importPicks: this.importPicks,
+      clearPicks: () => this.setState({ picks: [] }),
+      finderEmpty: s.cardQ.trim().length >= 2 && !found.length,
+      finderEmptyText: this.cat
+        ? 'No card in the snapshot matches \u201c' + s.cardQ.trim() + '\u201d. Try part of a name \u2014 Elizabee, Katress \u2014 or a code like BP01-053.'
+        : 'Loading the card list\u2026',
+      submitLabel: s.busy === 'profile' ? 'Reading\u2026' : s.busy ? 'Loading\u2026' : 'Load',
+      submitStyle: "padding:0 34px;border-radius:16px;border:0;background:" + (s.busy ? 'rgba(169,171,238,.45)' : '#a9abee')
+        + ";color:#1a2038;font:600 15px/1 'Figtree',sans-serif;cursor:" + (s.busy ? 'progress' : 'pointer')
+        + ';transition:all .15s;white-space:nowrap',
       error: !!s.error,
-      errorTitle: s.error === 'empty' ? 'Nothing to convert yet' : s.error === 'unknown' ? 'That Palify page isn\u2019t a deck or a profile' : 'That doesn\u2019t look like a Palify link',
-      errorBody: s.error === 'empty' ? 'Paste a deck link, a profile link, or drop a file exported from Palify.' : s.error === 'unknown' ? 'ResoPal reads deck pages (/decks/\u2026) and profile pages (/u/\u2026). If the deck is private, no URL will work \u2014 export it from Palify and drop the file in.' : 'ResoPal only reads public Palify decks. If your deck lives somewhere else, export it as .txt or .csv and drop it here.',
+      errorTitle: s.error === 'empty' ? 'Nothing to convert yet' : s.error === 'unknown' ? 'That Palify page isn\u2019t a deck or a profile' : 'That isn\u2019t a deck link, a card code or a list',
+      errorBody: s.error === 'empty' ? 'Paste a deck link, a profile link or a card code \u2014 or drop a file exported from Palify.' : s.error === 'unknown' ? 'ResoPal reads deck pages (/decks/\u2026) and profile pages (/u/\u2026). If the deck is private, no URL will work \u2014 export it from Palify and drop the file in.' : 'A card code on its own works too \u2014 BP01-053, or 2x BP01-053. For a whole deck, paste its Palify link or drop the exported .txt / .csv here.',
 
       showPicker: s.stage === 'picker',
-      handle: s.handle,
-      pickerCountLabel: '3 public',
-      profileDecks: [
-        { name: 'Kindling Rush', count: 50, meta: 'f2dd143c \u00b7 updated 2 days ago', faces: ['BP01-001', 'BP01-002', 'BP01-006', 'BP01-011'] },
-        { name: 'Terra Wall (TD02 base)', count: 50, meta: '9a71ce02 \u00b7 updated last week', faces: ['TD02-005', 'BP01-081', 'BP01-004', 'BP01-007'] },
-        { name: 'Sparkit Tempo \u2014 draft', count: 44, meta: '4bb0f19d \u00b7 updated 3 weeks ago', faces: ['BP01-008', 'BP01-009', 'BP01-010', 'BP01-012'] }
-      ].map(d => ({ ...d, faces: d.faces.map(c => ({ src: this.img(c), code: c })), pick: this.openDeck })),
+      handle: (s.profile && s.profile.title) || s.handle,
+      pickerCountLabel: (s.profile ? s.profile.decks.length : 0) + ' public',
+      // A profile page carries each deck's name, size and colour split - but no card
+      // codes, so the row shows the colour bar Palify itself draws rather than four
+      // faces we would have to invent or spend a deck fetch each to learn.
+      profileDecks: ((s.profile && s.profile.decks) || []).map(d => ({
+        name: d.name,
+        count: d.total === null ? '' : d.total + (d.total === 1 ? ' card' : ' cards'),
+        meta: d.id.slice(0, 8) + (d.colors.length ? ' \u00b7 ' + d.colors.map(c => c.color).join(' / ') : ''),
+        colors: (d.colors.length ? d.colors : [{ color: 'Colorless', pct: 100 }]).map(c => ({
+          style: 'width:' + c.pct + '%;background:' + (COLOR_HUE[c.color] || '#cfc7a8')
+        })),
+        pick: () => this.loadDeck(d.id, d.name)
+      })),
 
       showReview: s.stage === 'deck',
       reviewStepNo: '02',
@@ -1509,18 +1977,20 @@ class Component extends DCLogic {
         dotB: 'width:8px;height:8px;border-radius:50%;background:' + st.b,
         load: () => this.loadStarter(st.set, st.name)
       })),
-      deckTotal: total,
+      // One card is a deck now - a single code is a valid import - so nothing here
+      // may read "1 cards".
+      deckSize: total + (total === 1 ? ' card' : ' cards'),
       uniqueCount: kept.length,
-      deckSource: s.fromPulls ? s.packCount + (s.packCount === 1 ? ' pack ripped' : ' packs ripped') : s.input.indexOf('palify.org') >= 0 ? 'palify.org/decks/f2dd143c' : s.input || 'deck.txt',
-      cacheLabel: cached ? cached + ' card images cached today' : 'loading art gently \u00b7 a few at a time',
+      deckSource: s.fromPulls ? s.packCount + (s.packCount === 1 ? ' pack ripped' : ' packs ripped') : s.deckSource || s.input || 'deck list',
+      cacheLabel: cached ? cached + (cached === 1 ? ' card image cached today' : ' card images cached today') : 'loading art gently \u00b7 a few at a time',
       allBase: () => this.setState({ variants: {} }),
       cards: rows,
-      reviewNextNote: s.fromPulls ? 'Nothing is generated yet. Next: the card back.' : 'Nothing is generated yet. Next: soul deck, then the card back.',
-      confirmReview: () => s.fromPulls
+      reviewNextNote: this.noSoul(s) ? 'Nothing is generated yet. Next: the card back.' : 'Nothing is generated yet. Next: soul deck, then the card back.',
+      confirmReview: () => this.noSoul(s)
         ? this.setState({ step: 3 }, () => this.reveal('[data-rp="back"]'))
         : this.setState({ step: 2 }, () => this.reveal('[data-rp="soul"]')),
 
-      showSoul: s.stage === 'deck' && s.step >= 2 && !s.fromPulls,
+      showSoul: s.stage === 'deck' && s.step >= 2 && !this.noSoul(s),
       soulStepNo: '03',
       atSoul: s.step === 2,
       souls: SOULS.map((code, i) => ({
@@ -1542,10 +2012,13 @@ class Component extends DCLogic {
       confirmSoul: () => this.setState({ step: 3 }, () => this.reveal('[data-rp="back"]')),
 
       showBack: s.stage === 'deck' && s.step >= 3,
-      backStepNo: s.fromPulls ? '03' : '04',
-      exportStepNo: s.fromPulls ? '04' : '05',
+      backStepNo: this.noSoul(s) ? '03' : '04',
+      exportStepNo: this.noSoul(s) ? '04' : '05',
       atBack: s.step === 3,
       backSrc: s.backSrc,
+      backScopeNote: this.noSoul(s) || s.soulSkipped
+        ? 'This back is used for every card in the deck.'
+        : 'This back is used for every card in both decks.',
       backImgStyle: 'position:absolute;left:50%;top:50%;width:118%;transform:translate(-50%,-50%) translate(' + s.ox + 'px,' + s.oy + 'px) scale(' + s.zoom + ') rotate(' + s.rot + 'deg);transform-origin:center;user-select:none;pointer-events:none',
       gridOpacity: s.dragging ? '1' : '0',
       backModeLabel: s.backCustom ? 'custom back' : 'official default back',
@@ -1570,12 +2043,28 @@ class Component extends DCLogic {
       showExport: s.stage === 'deck' && s.step >= 4,
       exportGridStyle: 'display:grid;gap:22px;margin-top:22px;grid-template-columns:' + (s.vw < 1080 ? 'minmax(0,1fr)' : (this.props.exportLayout ?? 'hero') === 'pair' ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1.12fr) minmax(0,.88fr)'),
 
-      hasSoul: hasSoul && !s.fromPulls,
+      hasSoul: hasSoul && !this.noSoul(s),
+      // Set the moment a built export stops matching the deck on screen, so the
+      // panel says why the button went back to "Generate".
+      staleExport: s.staleExport && !s.gen,
+      staleExportNote: 'The deck changed since the last export \u2014 generate again to get a file that matches it.',
       mainFileName: slug + '.resonitepackage',
       mainSize: s.sizeMain || '18.4 MB',
       soulFileName: slug + '-Soul.resonitepackage',
       soulSize: s.sizeSoul || '4.2 MB',
       soulThumb: this.img(s.soulCode),
+      // The main deck's tile shows the deck's first card - index 0 is the top of
+      // the stack (docs/BOOSTER.md), and it is the one card every deck is
+      // guaranteed to have. The soul tile beside it has always shown its own art,
+      // so a permanently empty tile here read as a broken image.
+      hasMainThumb: kept.length > 0,
+      mainThumb: kept.length ? kept[0].img : '',
+      mainThumbCode: kept.length ? kept[0].selected : '',
+      mainThumbStyle: kept.length ? kept[0].imgStyle : 'display:none',
+      // rows() already builds the card's own stripe; reuse it so the tile matches
+      // the card's colour the way every other thumbnail on the page does.
+      mainThumbStripe: kept.length ? kept[0].thumbStripe
+        : 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, rgba(221,156,156,.22) 0 6px, rgba(221,156,156,0) 6px 12px)',
       mainBtnLabel: s.ready && s.genKind === 'package' ? 'Download \u2193' : s.gen && !s.gen.failed && s.genKind === 'package' ? 'Building\u2026' : 'Generate',
       mainBtnStyle: btn('#a9abee', '#1a2038', 'transparent') + '',
       generateMain: () => this.startGen('package'),
@@ -1659,7 +2148,7 @@ class Component extends DCLogic {
       pips: Array.from({ length: s.pack.length || 7 }).map((x, i) => ({
         style: 'width:' + (i === s.revealIdx ? '22px' : '7px') + ';height:7px;border-radius:99px;transition:all .2s;background:' + (i < s.revealIdx ? '#a4d4ba' : i === s.revealIdx ? '#a9abee' : 'rgba(150,170,230,.22)')
       })),
-      startOver: () => { if (this.timer) clearInterval(this.timer); this.setState({ stage: 'input', step: 0, input: '', gen: null, ready: false, error: null, variants: {}, notice: null, fromPulls: false, sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
+      startOver: () => { if (this.timer) clearInterval(this.timer); this.out = null; this.outSig = null; this.setState({ stage: 'input', step: 0, input: '', cardQ: '', picks: [], gen: null, ready: false, staleExport: false, error: null, variants: {}, notice: null, fromPulls: false, fromCards: false, deck: null, deckSource: null, profile: null, busy: null, importError: null, unknown: [], sizeMain: null, sizeSoul: null, outSize: 0, discarded: {}, binder: [], packCount: 0, packStage: 'sealed', tear: 0, torn: false, lifting: false, pack: [], batch: 1, packsLeft: 1, deckLabel: 'Kindling Rush' }); this.glide(0); }
     };
     const cur = s.pack[s.revealIdx];
     if (cur) {
@@ -1669,7 +2158,7 @@ class Component extends DCLogic {
         revealFace: this.img(cur.code, 'w512'),
         revealStripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + cur.hue + '38 0 9px, transparent 9px 18px)',
         revealCode: cur.code,
-        revealFaceStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(cur.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+        revealFaceStyle: this.face(cur.code),
         revealCardStyle: (() => {
           const out = s.cardOut, dx = out ? out * 520 : s.cardDX, rot = out ? out * 26 : s.cardDX / 20;
           return 'position:relative;width:288px;height:402px;cursor:grab;touch-action:none;user-select:none;border-radius:16px;z-index:2'
@@ -1688,7 +2177,7 @@ class Component extends DCLogic {
           code: p.code, img: this.img(p.code, i === 0 ? 'w512' : 'w256'),
           style: 'position:absolute;width:288px;height:402px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:linear-gradient(150deg,#1d2340,#141a3a);z-index:' + (1 - i) + ';pointer-events:none;transform:translate(' + (i + 1) * 6 + 'px,' + (i + 1) * 8 + 'px) scale(' + (1 - (i + 1) * 0.018).toFixed(3) + ');box-shadow:0 14px 30px rgba(4,7,18,.5)',
           stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 9px, transparent 9px 18px)',
-          imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+          imgStyle: this.face(p.code),
           shade: 'position:absolute;inset:0;background:rgba(4,7,18,' + (0.3 + i * 0.22).toFixed(2) + ')'
         })),
         haloStyle: (() => {
@@ -1706,7 +2195,7 @@ class Component extends DCLogic {
         burst: cel && cel.tier >= 1 ? Array.from({ length: [0, 14, 30, 52][cel.tier] }).map((x, i) => {
           const n = [0, 14, 30, 52][cel.tier], a = (i / n) * Math.PI * 2, d = 130 + Math.random() * (100 + cel.tier * 70);
           const c = [hue, '#e3c893', '#a3cfd8', '#c2a3e2', '#dd9c9c', '#a4d4ba'][i % 6], big = i % 3 === 0;
-          return { style: '--tx:' + Math.round(Math.cos(a) * d) + 'px;--ty:' + Math.round(Math.sin(a) * d) + 'px;--tr:' + Math.round(Math.random() * 540 - 270) + 'deg;position:absolute;width:' + (big ? 13 : 8) + 'px;height:' + (big ? 5 : 8) + 'px;border-radius:2px;background:' + c + ';z-index:1;animation:rp-burst ' + (1.15 + (i % 5) * 0.16 + cel.tier * 0.12).toFixed(2) + 's cubic-bezier(.2,.7,.4,1) ' + ((i % 9) * 0.035).toFixed(2) + 's both' };
+          return { style: '--tx:' + Math.round(Math.cos(a) * d) + 'px;--ty:' + Math.round(Math.sin(a) * d) + 'px;--tr:' + Math.round(Math.random() * 540 - 270) + 'deg;position:absolute;pointer-events:none;width:' + (big ? 13 : 8) + 'px;height:' + (big ? 5 : 8) + 'px;border-radius:2px;background:' + c + ';z-index:1;animation:rp-burst ' + (1.15 + (i % 5) * 0.16 + cel.tier * 0.12).toFixed(2) + 's cubic-bezier(.2,.7,.4,1) ' + ((i % 9) * 0.035).toFixed(2) + 's both' };
         }) : []
       });
     }
@@ -1718,7 +2207,7 @@ class Component extends DCLogic {
       outer: 'position:relative;width:112px;height:157px',
       wrap: 'position:absolute;inset:0;border-radius:11px;overflow:hidden;border:1px solid ' + ((this.w().glow.indexOf(p.rarity) >= 0) ? (RARITY_HUE[p.rarity] || '#9aa6c8') : 'rgba(255,255,255,.12)') + ';background:linear-gradient(150deg,#2a2340,#141a3a);box-shadow:' + (s.celebrate && s.celId && p.id === s.celId ? '0 0 0 2px ' + (RARITY_HUE[p.rarity] || '#9aa6c8') + ',0 12px 30px rgba(4,7,18,.6)' : 'none'),
       stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 8px, transparent 8px 16px)',
-      imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : ''),
+      imgStyle: this.face(p.code),
       badge: 'position:absolute;top:4px;right:4px;padding:3px 7px;border-radius:6px;background:rgba(7,11,23,.88);font:700 9px/1.3 \'JetBrains Mono\',monospace;color:' + (RARITY_HUE[p.rarity] || '#9aa6c8')
     }));
     const bg = {};
@@ -1730,7 +2219,7 @@ class Component extends DCLogic {
         wrap: 'position:relative;width:60px;height:84px;border-radius:7px;overflow:hidden;border:1px solid ' + ((this.w().glow.indexOf(p.rarity) >= 0) ? (RARITY_HUE[p.rarity] || '#9aa6c8') : 'rgba(255,255,255,.1)') + ';background:linear-gradient(150deg,#2a2340,#141a3a)',
         stripe: 'position:absolute;inset:0;background-image:repeating-linear-gradient(115deg, ' + p.hue + '33 0 6px, transparent 6px 12px)',
         code: p.code,
-        imgStyle: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover' + (this.isWide(p.code) ? ';transform:rotate(90deg) scale(1.4)' : '')
+        imgStyle: this.face(p.code)
       };
     });
     const tally = {};
@@ -1739,6 +2228,43 @@ class Component extends DCLogic {
       label: tally[r] + ' ' + r,
       style: 'padding:5px 9px;border-radius:8px;border:1px solid ' + (RARITY_HUE[r] || '#9aa6c8') + '55;color:' + (RARITY_HUE[r] || '#9aa6c8') + ";font:600 10px/1 'JetBrains Mono',monospace;white-space:nowrap"
     }));
+    // Import outcomes reuse the bottom bar: a failed read has to say what failed and
+    // what to do next, never fall back to a deck nobody asked for.
+    if (s.notice === 'importFailed' || s.notice === 'noCards') {
+      const empty = s.notice === 'noCards';
+      Object.assign(vals, {
+        barPct: '100%',
+        barAccent: '#dfa2ab',
+        barBorder: 'rgba(216,162,171,.45)',
+        barIconBg: 'rgba(216,162,171,.14)',
+        barIcon: '!',
+        barTitle: empty ? 'No cards in that list' : 'That deck could not be imported',
+        barDetail: s.input || 'import',
+        barNote: empty
+          ? 'Nothing in it looked like a card code. A line is `2x Elizabee \u2013 Queen of the Flower Garden [BP01-053]`, `2x BP01-053`, `BP01-053`, or `2,BP01-053,name` \u2014 comments start with #.'
+          : (s.importError || 'The import failed.'),
+        barActions: [
+          { label: 'Try another link', go: () => { this.setState({ notice: null, importError: null, input: '' }); this.glide(0); }, style: btn('transparent', '#9aa6c8', 'rgba(150,170,230,.28)') },
+          { label: 'Import .txt / .csv', go: vals.pickFile, style: btn('rgba(216,162,171,.14)', '#eed6da', 'rgba(216,162,171,.45)') }
+        ]
+      });
+    }
+    if (s.notice === 'unknownCodes') {
+      const list = s.unknown.slice(0, 6).join(', ') + (s.unknown.length > 6 ? ' \u2026' : '');
+      Object.assign(vals, {
+        barPct: '100%',
+        barAccent: '#e3c893',
+        barBorder: 'rgba(227,200,147,.42)',
+        barIconBg: 'rgba(227,200,147,.14)',
+        barIcon: '?',
+        barTitle: s.unknown.length + (s.unknown.length === 1 ? ' code isn\u2019t in the card snapshot' : ' codes aren\u2019t in the card snapshot'),
+        barDetail: list,
+        barNote: 'They are kept in the deck exactly as written, with whatever name the list gave them \u2014 nothing here invents card data. If the art will not load, the code is probably a typo; if the set is new, the snapshot needs regenerating with tools/fetch-pool.mjs.',
+        barActions: [
+          { label: 'Got it', go: () => this.setState({ notice: null }), style: btn('rgba(227,200,147,.14)', '#e6d5b0', 'rgba(227,200,147,.45)') }
+        ]
+      });
+    }
     if (s.notice === 'noPublic') {
       Object.assign(vals, {
         barPct: '100%',

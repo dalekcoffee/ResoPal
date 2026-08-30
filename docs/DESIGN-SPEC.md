@@ -38,7 +38,7 @@ Everything lives on one continuously-revealing page. Sections appear below one a
 
 - Fixed, 18px from top, centered, max-width 1180px, z-index 60.
 - `padding: 12px 16px 12px 20px`, `border-radius: 22px`, `background: rgba(13,19,38,.86)`, `backdrop-filter: blur(14px)`, `border: 1px solid rgba(150,170,230,.16)`, `box-shadow: 0 18px 44px rgba(2,5,16,.6)`.
-- Left: 32×32px logo tile (`border-radius:10px`, `linear-gradient(150deg,#a9abee,#a8d3dc)`, containing an 11px rotated 45° navy square), then wordmark "ResoPal" (Newsreader 600 19px) over "PALWORLD TCG → RESONITE" (JetBrains Mono 500 9.5px, `letter-spacing:.13em`, `#69769c`, uppercase).
+- Left: 32×32px logo disc (`assets/logo.svg`, `border-radius:50%`, `object-fit:contain` — the mark carries its own gold rim, so it gets no tile ring behind it), then wordmark "ResoPal" (Newsreader 600 19px) over "PALWORLD TCG → RESONITE" (JetBrains Mono 500 9.5px, `letter-spacing:.13em`, `#69769c`, uppercase).
 - Credits block (hidden below 1180px viewport): "Built on" eyebrow + "Deck Maker by **Ukilop** · art by **Palify**" (Palify is a link to palify.org).
 - Mode switch: 2 pills in a `rgba(7,11,23,.6)` track — "Import a deck" / "Rip a pack". Active: `background:#a9abee; color:#1a2038; font-weight:600`. Inactive: transparent, `#9aa6c8`, weight 500.
 - "resrec:///" copy button + "Start over" button. Both plain slate: `border:1px solid rgba(150,170,230,.18)`, `background:rgba(255,255,255,.03)`, `color:#9aa6c8`. On copy, the glyph text swaps to "copied ✓" in `#a4d4ba` and the border goes `rgba(164,212,186,.5)` for 1.8s. Below 1180px the label collapses, leaving only the glyph (keep the `title`/`aria-label`).
@@ -66,15 +66,16 @@ Card shell used by every section: `border-radius:28px`, `border:1px solid rgba(1
 
 Section header pattern (all sections): 34×34px step number tile (`border-radius:11px`, `background:rgba(160,162,220,.16)`, `border:1px solid rgba(160,162,220,.42)`, `color:#b0b3ea`, JetBrains Mono 600 13px) + **big serif title** (Newsreader 400 25px/1.2) with **small description below** (Figtree 400 13.5px/1.5, `#8e9ac0`, `margin-top:9px`).
 
-- Title "Your deck" / desc "Paste a public deck URL, or upload a file for a private one."
+- Title "Your deck" / desc "Paste a public deck URL, a profile URL, or a card code — or upload a file for a private deck."
 - Drop zone wrapper: `padding:18px`, `border-radius:22px`, `background:rgba(7,11,23,.35)`. On dragover: border `rgba(163,207,216,.6)`, background `rgba(163,207,216,.07)`.
-- Eyebrow "PUBLIC DECK — PASTE THE URL" (JetBrains Mono 600 10.5px, `letter-spacing:.13em`, `#8e9ac0`).
+- Eyebrow "PUBLIC DECK, PROFILE OR CARD CODE" (JetBrains Mono 600 10.5px, `letter-spacing:.13em`, `#8e9ac0`).
 - Input: 58px tall, `border-radius:16px`, `background:rgba(7,11,23,.72)`, `border:1px solid rgba(150,170,230,.2)`, Figtree 400 15px. Placeholder is the **full** URL including `https://` (no separate prefix chip — that caused double-https on paste).
-- Submit button: label **"Load"**, `padding:0 34px`, `border-radius:16px`, `background:#a9abee`, `color:#1a2038`, Figtree 600 15px. Hover `#b8baf4`.
+- Submit button: label **"Load"**, `padding:0 34px`, `border-radius:16px`, `background:#a9abee`, `color:#1a2038`, Figtree 600 15px. Hover `#b8baf4`. While a fetch is in flight it reads "Loading…" / "Reading…" at 45% opacity with `cursor:progress` — a paste that reaches across the network must never look inert.
 - "OR" divider, then eyebrow "PRIVATE DECK — UPLOAD THE FILE" and a dashed row: 40×40 "TXT" tile (`rgba(163,207,216,.12)`, border `rgba(163,207,216,.3)`, `#a3cfd8`), copy "Drop a .txt or .csv exported from Palify" + "Private decks can't be read from a URL.", and a "Choose file" button in the same cyan.
+- Second "OR" divider, then eyebrow "INDIVIDUAL CARDS — SEARCH BY NAME": a 50px input (`Elizabee, Katress, BP01-053…`) that searches the committed snapshot from two characters up. Up to 6 result rows, each a 44×62 thumbnail, the card's name, `CODE · Colour · Type`, and one chip per printing labelled by rarity. A query with no match gets a dashed row saying so; nothing silently imports.
+- **The printing chip adds to a basket, it does not import.** Someone reaching for cards by name nearly always wants several, so picks accumulate in a "CARDS TO IMPORT" tray below the results: one row per pick (38×53 thumb, name, `CODE · RARITY`, a −/qty/+ stepper and a `×` remove), a "Clear" button, and an "Import N cards" primary button. The deck is however many were picked. The tray stops at **70 cards** — the template's 10 × 7 sheet — greying the add chips and saying so. Picks are keyed by *printing*, so two arts of one card can both be chosen; the import then merges them onto the base card (a row bakes one printing) and the tray warns before it happens.
 - **Starter decks row**: "Don't have a deck?" + two buttons — "Trial deck — Red / Blue" (TD01, dots `#dd9c9c`/`#9dc2dd`) and "Trial deck — Green / Purple" (TD02, dots `#a3ccae`/`#c2a3e2`) — plus a right-aligned link "Browse community decks on Palify ↗".
-- "Accepts" example chips (deck / profile / file) that fill the input and submit.
-- Error state: `border:1px solid rgba(216,162,171,.34)`, `background:rgba(216,162,171,.08)`, 26px "!" tile, title `#eed6da`, body `#bda3a8`, and an "Upload a file instead" action. Three messages: empty, "That Palify page isn't a deck or a profile", "That doesn't look like a Palify link" (body: "ResoPal only reads public Palify decks…").
+- Error state: `border:1px solid rgba(216,162,171,.34)`, `background:rgba(216,162,171,.08)`, 26px "!" tile, title `#eed6da`, body `#bda3a8`, and an "Upload a file instead" action. Three messages: empty, "That Palify page isn't a deck or a profile", "That isn't a deck link, a card code or a list" (body names the card-code form). Import failures that happen after a fetch — a missing deck, a proxy that answers wrongly — use the bottom bar instead, and always say which side went wrong.
 
 ### 3. Pick a deck (step 02, profile URLs only)
 
@@ -91,30 +92,34 @@ Section header pattern (all sections): 34×34px step number tile (`border-radius
 - Hint bar + "Reset all to base art" button.
 - Two-column grid of card rows (`gap:10px`). Each row: 82×115 thumb (striped underlay in the card's hue at 20% + art on top, selected code label at the bottom) and, on the right: quantity (mono 700 15px), hue dot, code, then name (Figtree 600 13.5px), then rarity variant chips.
 - Variant chips: selected = `border:1px solid rgba(160,162,220,.7)`, `background:rgba(160,162,220,.18)`, `#e8ecfa`; unselected = `rgba(150,170,230,.16)` border, `#8e9ac0`. Each carries a rarity-colored dot. **Base printing is selected by default.**
-- Landscape (Structure) cards: art is rotated `rotate(90deg) scale(1.4)` and gets an oat ↻ badge + "Printed sideways — rotated on bake." Crucially, **the rotation decision is made from the loaded image's real aspect ratio** (`naturalWidth > naturalHeight * 1.05`), never from metadata — metadata-driven rotation produced wrong-looking cards.
+- Landscape (Structure) cards: art is turned clockwise into the portrait box and gets an oat ↻ badge + "Printed sideways — rotated on bake." Crucially, **the rotation decision is made from the loaded image's real aspect ratio** (`naturalWidth > naturalHeight * 1.05`), never from metadata — metadata-driven rotation produced wrong-looking cards.
+- **How the turn is applied matters as much as which way it goes.** Every card face on the site goes through `face(code)`, which either fills the box or, for landscape art, lays the `<img>` out at the box's dimensions *swapped* (`width:141%;height:72%`, centred) and rotates it about its centre. Rotating an image that already fills the portrait box does not work: `object-fit` crops at layout time, before the transform runs, so the browser has thrown away everything outside a half-width centre strip by the time `rotate()` spins it — which is what the old `rotate(90deg) scale(1.4)` showed. See SITE-REVIEW §6.
 - **Art loads in waves**: 6 cards initially, +2 every 260ms, `loading="lazy" decoding="async"` — deliberately gentle on Palify.
 - In pull-import mode each row also gets a **Keep / Discarded** toggle (sage when keeping, dashed rose when discarded; discarded rows go `opacity:.45`, dashed border, and drop out of the totals).
 
-### 5. Soul deck (step 03, deck import only — never for pulls)
+### 5. Soul deck (step 03, deck import only — never for pulls or cards picked by name)
 
 - Purple-tinted shell: `border:1px solid rgba(194,163,226,.24)`, `background:linear-gradient(180deg, rgba(38,24,60,.8), rgba(22,17,42,.86))`.
 - Title "Soul deck" / desc "Every Soul is the same card — just pick the art." Plus explanatory line that it exports as its own .resonitepackage.
 - 8 art thumbs (96×134). Selected: `2px solid #c2a3e2`, `translateY(-3px)`, check badge. **Art 2 (index 1) is the default selection**; order is preserved.
 - Copies stepper (− / value / +, 1–20, default 10).
 - "Skip — main deck only" toggle; when skipped the body goes `opacity:.32; pointer-events:none; filter:saturate(.4)`.
+- The step is **not offered at all** for pull imports or for cards picked by name in the finder: both are "give me these cards", not "build me a deck", and a second object nobody asked for is noise. Those flows renumber to 01–04 and the export screen drops the soul row and the "Generate and download both" button.
 
 ### 6. Card back (step 04, or 03 for pulls)
 
 - Title "Card back" / desc "Trim it here, so it can't be wrong in-world."
 - Left: 300px-wide preview at `aspect-ratio:0.7156` (1024×1463), `border-radius:16px`, draggable to pan. A 3×3 rule-of-thirds grid fades in while dragging. Caption: "1024 × 1463 · ratio 0.7156" and "official default back" / "custom back".
 - Right: "Upload your own back" / "Use default"; Scale (0.6–2.6×) and Rotate (−180–180°) sliders; −90° / +90° / Re-centre buttons.
-- A plain note: "This back is used for every card in both decks." (There is deliberately **no** per-deck back option.)
+- A plain note: "This back is used for every card in both decks." — "…in the deck." where there is no soul deck (skipped, pulls, or cards picked by name). (There is deliberately **no** per-deck back option.)
 
 ### 7. Choose how to import (step 05, or 04 for pulls)
 
 Shared header, then a two-column grid `minmax(0,1.12fr) minmax(0,.88fr)` (stacks to one column below 1080px).
 
 **Path A — Automatic (recommended).** Elevated shell: `border:1px solid rgba(160,162,220,.4)`, `background:linear-gradient(170deg, rgba(42,46,80,.88), rgba(18,24,46,.9))`, plus a radial accent orb. Badges: oat "RECOMMENDED" pill (`#e3c893` on navy text) + "AUTOMATIC". Title Newsreader 400 31px "Export for Resonite". One row per file (main deck; soul deck if present, purple-tinted with a "SEPARATE OBJECT" tag) each with filename · size and a Generate button. Below: a full-width **"Generate and download both"** button (only when a soul deck exists).
+
+**A finished export belongs to one exact deck.** The built file is kept with a signature of everything the bake read — printings, quantities, discards, deck name, card back, and the soul choice where the kind bakes one. While it matches, the button reads "Download ↓" and a second click just saves the file again. The moment anything in it changes, the file is dropped, the button goes back to "Generate", and an amber note says "The deck changed since the last export — generate again to get a file that matches it." Without this the download silently handed over the previous package, which is indistinguishable from the change having done nothing.
 
 **Path B — Manual, in-game.** Deliberately **neutral** (same slate shell as other sections, no gold) so it doesn't out-compete Path A. Badge: outlined "MANUAL, IN-GAME". Title "Card sheet only". Two download buttons (front.webp, back.webp) in plain slate. Then three big copyable numbers — **Columns 10 / Rows 7 / Total N** (mono 500 54px, `#f2f5ff`; on copy the tile border turns `#a4d4ba` and the hint reads "copied ✓"). Then the Deck Maker resrec link in a `#05080f` code block with a copy button, and six in-world steps.
 
@@ -164,7 +169,7 @@ Fixed bottom, max-width 1180px, `border-radius:22px`, `background:rgba(13,19,38,
 
 ## Interactions & Behavior
 
-- **Progressive reveal**: sections mount as `step` advances (0 input → 1 review → 2 soul → 3 back → 4 export). Pull imports skip soul entirely (review jumps straight to step 3) and renumber the visible step badges 01–04.
+- **Progressive reveal**: sections mount as `step` advances (0 input → 1 review → 2 soul → 3 back → 4 export). Pull imports and cards picked by name skip soul entirely (review jumps straight to step 3) and renumber the visible step badges 01–04.
 - **Entry animation**: newly revealed sections use `rp-rise` (`.45s cubic-bezier(.2,.7,.3,1)`, opacity 0→1 + `translateY(14px)→0`).
 - **Auto-scroll**: custom rAF tween to `element.top - 120px`. Duration `min(700, 240 + |distance| * 0.5)`ms, ease-in-out-quad. Do not rely on `scrollTo({behavior:'smooth'})`.
 - **URL routing**: `/u/<handle>` → deck picker; `/decks/<uuid>` → straight to review; a pasted decklist body → review; anything else → error.
@@ -187,6 +192,9 @@ deckLabel     string                      deck name (drives export filenames)
 variants      {cardKey: printCode}        chosen art per card
 discarded     {cardKey: bool}             pull keep/discard
 fromPulls     bool                        import came from pack ripping
+fromCards     bool                        import came from the card finder (no soul deck)
+picks         [{code, base, name, hue, rarity, n}]   the card finder's basket, pre-import
+staleExport   bool                        a built export was dropped because the deck changed
 soulCode      string  (default 'SOUL-001' = Art 2)
 soulCount     int     (default 10)
 soulSkipped   bool

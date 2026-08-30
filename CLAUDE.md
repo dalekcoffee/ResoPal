@@ -75,6 +75,13 @@ labelled as Structures. Verify against `palify.org/api/cards?set=<SET>`, or run
 `tools/check-codes.html`. `data/pool-*.json` is the committed snapshot everything else reads;
 regenerate it with `tools/fetch-pool.mjs`, never hand-edit a card code into it.
 
+**An import that fails must fail visibly.** The site shipped for a while with every import path -
+deck URL, profile URL, dropped file - doing nothing but switching screens, so the demo catalogue in
+`index.html` (`CARDS`) rendered as if it were the user's deck. `CARDS` is the pack ripper's demo
+pool and nothing else; a deck comes from `state.deck` or the import failed. Card names, colours and
+printings are resolved against `data/pool-*.json`, never carried over from whatever the source list
+claimed.
+
 **There is one pack roll, and it is in the Worker.** `worker/src/roll.js`, over
 `data/pack-weights.json` + `data/pool-<set>.json`. The site's local roll is an offline fallback
 over the same two files, not a second implementation. A browser roll is one devtools breakpoint

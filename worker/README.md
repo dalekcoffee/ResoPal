@@ -23,16 +23,23 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 | `/api/pull` | roll booster packs — see `../docs/PULL-API.md` |
 | `/api/deck` | a committed deck list, in the same records |
 | `/api/resolve` | **a pasted palify deck link or decklist**, in the same records |
-| `/deck/<uuid>` | raw RSC flight payload for a deck page |
-| `/profile/<handle>` | raw RSC flight payload for a profile page |
+| `/deck/<uuid>` | a deck page, parsed: `{id, name, author, total, cards:[{code,name,n}]}` |
+| `/profile/<handle>` | a profile page, parsed: `{handle, title, decks:[{id,name,total,colors}]}` |
 
 `/api/resolve` is the one route that also accepts **POST**, because ProtoFlux cannot put a 2 KB
 decklist in a query string. The body is whatever the user pasted; `src/resolve.js` works out
 whether that was a deck link, a bare deck id or a list, and every code is checked against Palify's
 own catalogue before it is served. See `../docs/PULL-API.md`.
 
-`/deck` and `/profile` return the payload **unparsed**. `/api/resolve` is the parsed form of the
-first of those; these two stay for looking at what Palify actually returns when the format changes.
+`/deck` and `/profile` read Palify's RSC flight payload and parse it here, in
+`src/flight.js` — the format is undocumented and will change without warning, and when it does the
+fix should be one Worker deploy rather than a new front end on a static host. Add `?raw=1` to
+either route to get the payload untouched; that is how you re-derive the parser next time.
+
+Two things they will not do: guess, and trust the status line. A payload that no longer parses is a
+`502`, never a plausible wrong deck — and because Palify answers a missing or private deck with
+HTTP **200** carrying Next.js's own 404 payload, "not found" is detected in the body and returned
+as a `404`.
 
 ## Setup A — the Cloudflare dashboard (no CLI)
 

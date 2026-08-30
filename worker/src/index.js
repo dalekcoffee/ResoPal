@@ -14,6 +14,7 @@
  * player's devtools nor the in-world tool can reach.
  */
 import { weights, poolBP01, decks } from './data.js';
+import { parseDeck, parseProfile, isNotFound } from './flight.js';
 import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
 import { sniff, parseFlight, parseDeckList, expand, MAX_CARDS } from './resolve.js';
 
@@ -346,19 +347,34 @@ async function resolve(request, url, h, ctx, input) {
  * Palify deck and profile pages are Next.js routes, not an API. The only
  * machine-readable form is the RSC flight payload, requested with `RSC: 1`.
  *
- * This returns that payload as-is. The parser belongs here rather than in the
- * browser - the format is undocumented and will change without warning, and when
- * it does you want to fix one Worker, not ship a new front end - but it has to be
- * written against a real response first. Fetch this route once and build from what
- * it actually returns.
+ * The payload is fetched here and parsed here (see ./flight.js), so the browser
+ * gets clean JSON. The format is undocumented and will change without warning;
+ * when it does, the fix is one Worker deploy rather than a new front end on a
+ * static host.
+ *
+ * `?raw=1` returns the payload untouched - that is how you re-derive the parser
+ * the next time Palify reshapes it.
  */
-async function flight(path, h, maxAge) {
+async function flight(path, h, maxAge, parse, raw) {
   const upstream = await fetch(`${UPSTREAM}${path}`, {
     headers: { 'RSC': '1', 'accept': 'text/x-component', 'user-agent': 'ResoPal/1.0 (+https://resopal.dalek.coffee)' },
   });
   if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `upstream ${upstream.status} for ${path}`, h);
-  return new Response(upstream.body, {
-    headers: { ...h, 'content-type': 'text/plain; charset=utf-8', 'cache-control': `public, max-age=${maxAge}` },
+  const text = await upstream.text();
+  if (raw) {
+    return new Response(text, {
+      headers: { ...h, 'content-type': 'text/plain; charset=utf-8', 'cache-control': `public, max-age=${maxAge}` },
+    });
+  }
+  // Palify serves a missing page as 200 + Next's 404 payload, so the check is on
+  // the body, not the status.
+  if (isNotFound(text)) return fail(404, `no such page ${path}`, h);
+  const data = parse(text);
+  // A payload we cannot read is an error, never a guess. Inventing a deck here is
+  // exactly the failure CLAUDE.md's "never invent card data" is about.
+  if (!data) return fail(502, `could not read ${path} - Palify's page format changed`, h);
+  return new Response(JSON.stringify(data), {
+    headers: { ...h, 'content-type': 'application/json', 'cache-control': `public, max-age=${maxAge}` },
   });
 }
 
@@ -392,14 +408,18 @@ export default {
       return image(request, ctx, decodeURIComponent(m[1]).replace(/\.webp$/i, '').toUpperCase(),
         url.searchParams.get('w') || '1024', h);
 
+    const raw = url.searchParams.get('raw') === '1';
+
     if ((m = p.match(/^\/deck\/([^/]+)$/))) {
       if (!UUID.test(m[1])) return fail(400, 'bad deck id', h);
-      return flight(`/decks/${m[1]}`, h, 300);            // decks get edited
+      const id = m[1].toLowerCase();
+      return flight(`/decks/${id}`, h, 300, (t) => parseDeck(t, id), raw);   // decks get edited
     }
 
     if ((m = p.match(/^\/profile\/([^/]+)$/))) {
       if (!HANDLE.test(m[1])) return fail(400, 'bad handle', h);
-      return flight(`/u/${m[1]}`, h, 300);
+      const handle = m[1];
+      return flight(`/u/${handle}`, h, 300, (t) => parseProfile(t, handle), raw);
     }
 
     return fail(404, 'no such route', h);

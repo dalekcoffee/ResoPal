@@ -23,8 +23,11 @@ image pixels and a cross-origin image taints the canvas. `docs/WORKER.md` explai
 needed; `worker/README.md` is the setup. `data/art/` holds the TD02 trial deck as a same-origin
 fallback, so that deck still builds if the Worker is unreachable.
 
-Not built yet: pasting a Palify deck or profile URL. The Worker's `/deck` and `/profile` routes
-return the raw RSC payload; the parser has to be written against a real response.
+Pasting a Palify deck or profile URL works too, through the same Worker: `/deck/<uuid>` and
+`/profile/<handle>` fetch the page's RSC payload, parse it (`worker/src/flight.js`) and return
+clean JSON. Card codes are accepted as well — `BP01-053`, or `2x BP01-053` — so a single card is a
+valid import. Cards can also be searched for by name and collected into a basket, which imports as a
+deck of exactly the cards picked (up to the sheet's 70).
 
 ## How it works
 
@@ -41,7 +44,8 @@ contract, the package format, and several non-obvious fixes that are easy to und
 ```
 index.html      the site - served at resopal.dalek.coffee via GitHub Pages
 support.js      runtime the front end is built on
-assets/         logo.png (the mark, used as favicon and in-world), DefaultBack.png, pack-bp01.png
+assets/         logo.svg (the mark; logo.png is a 512x512 render of it for social cards and
+                Apple touch icons - re-render, never redraw), DefaultBack.png, pack-bp01.png
 data/
   template.resonitepackage  the stripped Deck Maker template the site patches
   art/            card art the bake can read same-origin
