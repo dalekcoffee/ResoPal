@@ -78,6 +78,38 @@ wrote into that same file (so member order cannot be wrong). It works.
 
 ## Next step
 
+**Drag `booster/out/ResoPal_DeckProbe.resonitepackage` into Resonite and look at it.**
+Three cards off the real template, three real TD01 codes, art URLs written at build time,
+no ProtoFlux. It isolates the one open variable in the per-card-material finding above:
+
+| what you see | what it means |
+|---|---|
+| each card shows its own card, right way up | the remap works — the deck path is open |
+| each card shows a sliver, or the wrong crop | the offset formula is wrong |
+| every card shows the same art | the materials did not actually split |
+| no art at all | the URL/loading path, not the remap — compare against the panel |
+
+Rebuild it with `RKL=… npm run build:deck-probe` in `booster/`, verify with
+`npm run test:deck-probe`. `cards=` picks the codes, and every one is checked against
+`data/pool-*.json` before it is used.
+
+If it works, the shape of the real thing is: ship a trimmed deck template inside the panel,
+one front material and one texture per card slot with its cell's ST baked in, and let the
+existing spawn loop write `CARD/url` per card exactly as it already does for loose cards.
+Two things still need answering before that is a plan:
+
+- **Landscape cards will be sideways.** 26 of 158 printings are landscape and Palify serves
+  them already-rotated; the browser bake rotates them into the cell, and `_Tex_ST` cannot —
+  scale and offset can flip an axis but not swap them. Either the Worker serves a rotated
+  variant for those codes, or the site publishes 26 pre-rotated 512px images and the Worker
+  redirects to them. The `landscape` list in each `data/pool-*.json` is authoritative.
+- **How the deck gets trimmed to N in-world.** Ukilop already built the hook: each card's
+  buffer slot carries a `DestroyProxy` pointing at that card's `/Assets` driver proxy, so
+  destroying a card takes its flux with it, and the deck's layout is driven from
+  `ChildrenCount` and `IndexOfChild` rather than a baked count.
+
+## The card back, on the loose-card path
+
 Add the back **one variable at a time**, verifying each in-world before the next. The
 planned first test — built, not yet shipped — was a single static card with **different art
 on each face**, so which side shows which answers the facing question by looking:
@@ -105,10 +137,38 @@ players holding decks drawn from the same 178 printings share the same textures,
 eight bespoke atlases are eight different images sharing nothing. The atlas wins only on
 draw calls, which is an argument for the deck object, not for baking sheets per import.
 
-**A Ukilop deck cannot be textured per card.** Each card owns its mesh with its atlas cell
-baked into the UVs — measured: 52 cards, 52 distinct meshes, one shared material. Card
-slot *i* shows cell *i*, always. So an imported deck needs an atlas laid out in that deck's
-order, which is what the browser bake produces and what nothing else can.
+**~~A Ukilop deck cannot be textured per card.~~ Superseded 2026-08-30 — it can.** The
+measurement behind this was right and the conclusion was wrong, so read both. Each card does
+own its mesh with its atlas cell baked into the UVs: 52 cards, 52 distinct meshes, and the
+three material slots on every card's `MeshRenderer` — edge / **front** / back, matching the
+mesh's three submeshes and the deck's own `Deck/Material*` reference variables — are shared
+by all of them. Card slot *i*'s front UVs really do cover cell *i* and nothing else.
+
+What that misses is that a material can move the cell. `UnlitMaterial.TextureScale` and
+`.TextureOffset` reach the shader as `_Tex_ST` (`UnlitMaterial.UpdateMaterial` →
+`MaterialUpdateWriter.UpdateST` → `float4(scale, offset)`), sampled Unity-style at
+`uv * scale + offset` — so a cell can be blown back up to the whole of a texture:
+
+```
+card i sits at col = i % 10, row = floor(i / 10) of the 10×7 grid
+  TextureScale  = (10, 7)
+  TextureOffset = (-col, -(6 - row))
+```
+
+Give card *i* its **own** front material and its **own** `StaticTexture2D` at that ST, and it
+shows its own full-size card art with no atlas anywhere. The edge and back materials stay
+shared. Everything per-card is a build-time constant, so **no ProtoFlux is involved in the
+picture at all** — the only thing left for the graph to do is what it already does for the
+loose-card path: write a URL string per card.
+
+Measured, not argued: `booster/meshx.mjs` decodes each card mesh's MeshX blob and reads
+submesh 1's UV bounds. Card 0 came back at u [0, 0.1] v [0.857, 1]; card 51 at u [0.1, 0.2]
+v [0.143, 0.286] — col 1, row 5, exactly. `booster/test-deck-probe.mjs` asserts the shipped
+ST against those bounds rather than re-deriving it from the index, and a deliberately
+flipped V offset fails it.
+
+**Not yet drag-tested.** `booster/build-deck-probe.mjs` builds the three-card probe that
+settles it; see "Next step".
 
 **The Worker cannot bake one.** 8192² RGBA is 256 MiB against a 128 MB ceiling, and the
 grid is fixed at 10×7 by the meshes, so even a 7-card pack needs a full sheet. At a

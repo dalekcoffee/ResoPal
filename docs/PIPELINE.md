@@ -142,6 +142,41 @@ Rows 7 / Total 70 fills the grid) and trim down per deck.
 `typeof x === 'number'` is false and a numeric edit silently no-ops. Assign a plain JS number and
 BSON re-serializes it correctly. This cost a build; it will bite the browser port the same way.
 
+### An id is declared under five different key spellings
+
+Counting ids is how the trim's reference counting and every "zero dangling references" check
+works, and a scan that only knows `ID` gets the answer badly wrong. In the stock template:
+
+| key | count | where |
+|---|---|---|
+| `ID` | 38220 | components and every sync field |
+| `persistent-ID` | 3347 | a component's persistence flag |
+| `Persistent-ID` | 2084 | **slots** — note the capital |
+| `ParentReference` | 2084 | slots, one per `Persistent-ID` |
+| `<name>-ID` | ~90 | a type's private fields: `_shader-ID`, `_unlit-ID`, `_unlitBillboard-ID`, `__legacyZWrite-ID`, `__legacyActiveUserRootOnly-ID` … |
+
+So the rule is **`ID`, `ParentReference`, or anything ending `-ID`** declares; every other
+guid-shaped value is a reference. `tools/credits.mjs` already knew about three of the five.
+
+Under that rule `data/template.resonitepackage` has **zero dangling references and zero
+duplicate declarations** — which is what makes it usable as an oracle, and why
+`booster/test-deck-probe.mjs` asserts the rule against the stock template before it asserts
+anything with it. Under the naive `ID`-only rule the same file reads as 4259 dangling.
+
+This is not academic: cloning a `UnlitMaterial` while remapping only `ID` and `persistent-ID`
+left every copy sharing the original's `_unlit-ID` and `_unlitBillboard-ID`. The package
+encoded cleanly and had no dangling references — the duplicate-id check is the only thing
+that saw it.
+
+### The stripped template is not internally complete, on purpose
+
+`tools/strip_template.mjs` drops payloads but leaves the document untouched, so
+`data/template.resonitepackage` ships **six `@packdb:///` references with no blob** (the
+placeholder atlas, the placeholder back, four fallback fonts) and two blobs the manifest does
+not list. The bake fills those in. A check that demands zero missing blobs therefore fails on
+a perfectly good package — compare a derived package against the template's own numbers
+rather than against zero.
+
 ## Verification that must pass before shipping a package
 
 Every one of these is cheap and each has caught a real bug:

@@ -5,7 +5,9 @@
   "description": "In-world ResoPal panel: a UIX panel whose buttons fetch a deck or a booster pull and lay the cards out in front of you.",
   "scripts": {
     "build": "node build-panel.mjs",
-    "test": "node verify-classpaths.mjs && node test-panel.mjs"
+    "test": "node verify-classpaths.mjs && node test-panel.mjs",
+    "build:deck-probe": "node build-deck-probe.mjs",
+    "test:deck-probe": "node test-deck-probe.mjs"
   },
   "dependencies": {
     "bson": "^7.2.0",

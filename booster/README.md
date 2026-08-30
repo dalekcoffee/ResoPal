@@ -193,6 +193,40 @@ art.
   and simulated against real responses, but whether Resonite rewires a duplicated slot's
   ProtoFlux the way this design assumes is the one thing only a drag-test settles.
 
+## The deck probe
+
+`build-deck-probe.mjs` is a separate, tiny artifact that answers one question: **can a Ukilop
+deck card show its own image, with no atlas?** `docs/HANDOFF.md` had that recorded as settled
+in the negative; it is not. A card's front UVs cover one atlas cell, but
+`UnlitMaterial.TextureScale`/`.TextureOffset` reach the shader as `_Tex_ST` and sample at
+`uv * scale + offset`, so the cell can be scaled back up to the whole of a per-card texture:
+
+```
+card i at col = i % 10, row = floor(i / 10) of the 10x7 grid
+  TextureScale  = (10, 7)      TextureOffset = (-col, -(6 - row))
+```
+
+```bash
+cd booster
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe    # cards=TD01-001,... to pick
+RKL=/path/to/Resonite-Knowledge-Library npm run test:deck-probe
+```
+
+It patches `data/template.resonitepackage`: trim to N, then give each card its own
+`StaticTexture2D` and its own front material at that ST, cloned from the template's own
+front material so the member set cannot be wrong. Edge and back stay shared. **No ProtoFlux
+at all** — the art URLs are written at build time, so the only thing being tested is the
+remap.
+
+`meshx.mjs` is why the test is worth anything. It decodes the MeshX blob behind each card's
+`StaticMesh` and reads submesh 1's UV bounds, and the test asserts the ST the package
+actually carries maps those bounds onto the unit square — geometry, not the builder's own
+arithmetic restated. Flipping one offset's sign fails it.
+
+What it does **not** answer: landscape cards (26 of 158 printings; `_Tex_ST` can flip an axis
+but not swap two, so they will be sideways until the Worker serves a rotated variant), and
+whether Resonite accepts the file at all. Only a drag-test settles the second.
+
 ## Why this is not the deck object
 
 The deck's cards share **one atlas texture** with the per-card UVs baked into the mesh,
