@@ -192,6 +192,8 @@ const T = {
   TextField: UIX + 'TextField',
   TextEditor: FE + 'TextEditor',
   SizeDriver: FE + 'TextureSizeDriver',
+  Snapper:     FE + 'Snapper',
+  Swizzle:     FE + 'Float2ToFloat3SwizzleDriver',
   Canvas: UIX + 'Canvas',
   Rect: UIX + 'RectTransform',
   Image: UIX + 'Image',
@@ -466,7 +468,7 @@ const cardMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: cardTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',
 });
-const cardMesh = comp(T.QuadMesh, { Size: V2(CARD_W, CARD_H), DualSided: true, UseVertexColors: false });
+const cardMesh = comp(T.QuadMesh, { Size: V2(CARD_W, CARD_H), DualSided: false, UseVertexColors: false });
 const cardRenderer = comp(T.MeshRenderer, {
   Mesh: cardMesh.id, Materials: pf.list([cardMat.id]), MaterialPropertyBlocks: [],
   ShadowCastMode: 'On', SortingOrder: I(0),
@@ -493,10 +495,74 @@ const cardUri = comp(T.ToUri, { Input: cardSrc.id });
 const cardDrive = comp(T.UriDrive, { Value: cardUri.id });
 const cardDriveProxy = comp(T.UriDriveProxy, { Node: cardDrive.id, Path: [], Drive: cardTexture.f.URL });
 
+// ── the card back ────────────────────────────────────────────────────────────
+// The same image for every Palworld card, so it ships INSIDE the package rather
+// than being fetched. Fetching it would mean either a second host-access prompt
+// (a different origin from the card art) or another route on the Worker, and the
+// point of a back face is that it is just there.
+//
+// A texture asset needs its `Metadata/<hash>.bitmap` sidecar as well as the
+// bytes - the engine reads width/height/format from it, not from the file. The
+// field name really is misspelled `assetIdenfitier`; see docs/PIPELINE.md.
+const backBytes = new Uint8Array(await readFile(path.join(import.meta.dirname, '..', 'assets', 'DefaultBack.png')));
+const BACK_HASH = createHash('sha256').update(backBytes).digest('hex');
+const pngSize = (b) => ({ width: (b[16]<<24)|(b[17]<<16)|(b[18]<<8)|b[19], height: (b[20]<<24)|(b[21]<<16)|(b[22]<<8)|b[23] });
+const backDims = pngSize(backBytes);
+const backMeta = Buffer.from(JSON.stringify({
+  ...backDims, mipMapCount: 1, baseFormat: 'png', isCorrupted: false, metadataVersion: 5,
+  assetIdenfitier: BACK_HASH, bitsPerPixel: 32, channelCount: 4, colorData: 'Color', alphaData: 'Alpha',
+  invalidPixelCount: 0,
+}));
+
+const backTexture = comp(T.Texture, {
+  URL: `@packdb:///${BACK_HASH}`, Uncompressed: false, DirectLoad: false, ForceExactVariant: false,
+  PreferredProfile: 'sRGB', MipMapBias: D(0), IsNormalMap: false,
+  WrapModeU: 'Clamp', WrapModeV: 'Clamp', PowerOfTwoAlignThreshold: D(0.05),
+  CrunchCompressed: true, MipMaps: true, KeepOriginalMipMaps: false, MipMapFilter: 'Box', Readable: false,
+});
+const backMat = comp(T.Unlit, {
+  TintColor: C([1, 1, 1, 1]), Texture: backTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
+  UseVertexColors: false, ZWrite: 'Auto',
+});
+const backMesh = comp(T.QuadMesh, { Size: V2(CARD_W, CARD_H), DualSided: false, UseVertexColors: false });
+const backRenderer = comp(T.MeshRenderer, {
+  Mesh: backMesh.id, Materials: pf.list([backMat.id]), MaterialPropertyBlocks: [],
+  ShadowCastMode: 'On', SortingOrder: I(0),
+});
+// The back is a child rotated a half turn about Y, a hair behind the front, so
+// the two faces do not z-fight. Turning the card over shows the back, which is
+// what a card does - no flip button, no toggle, no state to get out of step.
+const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, -0.0004]);
+backFace.Rotation.Data = [D(0), D(1), D(0), D(0)];
+
+// ── the card as a physical object ────────────────────────────────────────────
+// A collider is what makes a card touchable and grabbable; without one it is a
+// picture hanging in the air. Its size follows the quad rather than being fixed,
+// because TextureSizeDriver rewrites that quad for landscape cards - a fixed
+// collider would be the wrong shape for the 19 landscape cards in BP01.
+const cardCollider = comp(T.BoxCollider, {
+  Offset: V3(0, 0, 0), Type: 'Static', Mass: D(1),
+  CharacterCollider: false, IgnoreRaycasts: false, Size: V3(CARD_W, CARD_H, 0),
+});
+// X, Y and Z are INDICES into the float2, not axis names: 0 is x, 1 is y, and -1
+// is out of range, which the class's own OnAwake uses to mean zero. So the
+// collider follows the quad in width and height and stays flat - the same shape
+// the panel's own canvas collider uses.
+const cardColliderSize = comp(T.Swizzle, {
+  Source: cardMesh.f.Size, Target: cardCollider.f.Size, X: I(0), Y: I(1), Z: I(-1),
+});
+const cardGrab = comp(T.Grabbable, { Scalable: false, ReparentOnRelease: true, PreserveUserSpace: true });
+// Keyword "Card" is what a deck's receiver surface looks for. Nothing uses it
+// yet - the deck holder is the next piece - but a card that cannot be recognised
+// as a card would have to be rebuilt to join one.
+const cardSnapper = comp(T.Snapper, { Keywords: pf.list(['Card']) });
+
 const cardTemplate = slot('card', [
   cardVarSpace.comp, cardUrlVar.comp, cardTexture.comp, cardMat.comp,
   cardMesh.comp, cardRenderer.comp, cardSize.comp,
+  cardCollider.comp, cardColliderSize.comp, cardGrab.comp, cardSnapper.comp,
 ], [0, 0, 0], [
+  backFace,
   slot('CARD/url -> texture', [cardSrc.comp, cardSrcRef.comp], [0, 0, 0]),
   slot('as a Uri', [cardUri.comp], [COL, 0, 0]),
   slot('drive the texture URL', [cardDrive.comp, cardDriveProxy.comp], [COL * 2, 0, 0]),
@@ -999,7 +1065,7 @@ const root = slot('ResoPal', [
 const res = await pf.exportPackage({
   name: 'ResoPal Panel',
   root, assets,
-  embeddedAssets: [{ hash: FONT_HASH, bytes: fontBytes }],
+  embeddedAssets: [{ hash: FONT_HASH, bytes: fontBytes }, { hash: BACK_HASH, bytes: backBytes, metadata: backMeta }],
   outPath: path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage'),
   version: '2026.6.24.835',
   typeVersions: TYPE_VERSIONS,

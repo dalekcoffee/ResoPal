@@ -309,6 +309,48 @@ check('the variable is CARD/url, in its own CARD space',
 check('which is not the panel space, so a write cannot land on the panel',
   String(hasT('DynamicVariableSpace')?.d.SpaceName?.Data) !== 'ResoPal');
 
+// A card you cannot pick up is a picture hanging in the air. These three are what
+// make it an object: something to hit, something to grab, and a keyword a deck's
+// receiver surface can recognise.
+for (const t of ['BoxCollider', 'Grabbable', 'Snapper'])
+  check(`it is a real object: ${t}`, !!hasT(t));
+check('and a deck can recognise it as a card',
+  (hasT('Snapper')?.d.Keywords?.Data || []).some((k) => String(k?.Data ?? k) === 'Card'));
+
+// The collider follows the quad instead of being a fixed rectangle, because
+// TextureSizeDriver rewrites that quad for landscape cards - BP01 has 19, and a
+// portrait collider on a landscape card is a hit area hanging off both ends.
+{
+  const sw = hasT('Float2ToFloat3SwizzleDriver')?.d;
+  check('the collider tracks the quad, not a fixed size',
+    !!sw && byField.get(sw.Source?.Data)?.comp.id === hasT('QuadMesh')?.d.ID &&
+    byField.get(byField.get(sw.Target?.Data) ? sw.Target.Data : '')?.comp.id === hasT('BoxCollider')?.d.ID);
+}
+
+// A back face, so turning a card over shows a card back rather than the front
+// mirrored. It is a child rotated a half turn, not a texture swap: no toggle, no
+// state, nothing that can get out of step with which way the card is facing.
+{
+  const back = (tmpl?.Children || []).find((c) => nm(c) === 'back');
+  const bComps = (back?.Components?.Data || []).map((c) => short(TYPES[num(c.Type)]));
+  check('the card has a back face', !!back);
+  for (const t of ['QuadMesh', 'UnlitMaterial', 'StaticTexture2D', 'MeshRenderer'])
+    check(`the back carries its own ${t}`, bComps.includes(t));
+  const rot = (back?.Rotation?.Data || []).map(num);
+  check('turned a half turn about Y', Math.abs(rot[1] ?? 0) === 1 && Math.abs(rot[3] ?? 1) < 1e-6);
+  check('and set back from the front so the faces do not z-fight',
+    Math.abs((back?.Position?.Data || []).map(num)[2] ?? 0) > 0);
+  check('the front is single-sided, or the back would never be seen',
+    hasT('QuadMesh')?.d.DualSided?.Data === false);
+  // The back is the same image for every card, so it ships in the package - a
+  // fetched back means a second host-access prompt on a different origin.
+  const backUrl = String((back?.Components?.Data || [])
+    .find((c) => short(TYPES[num(c.Type)]) === 'StaticTexture2D')?.Data.URL?.Data ?? '');
+  check('the back image ships inside the package', backUrl.startsWith('@packdb:///'));
+  const backHash = backUrl.replace('@packdb:///', '');
+  check('and its bytes are in the manifest', record.assetManifest.some((a) => a.hash === backHash));
+}
+
 // Landscape cards render landscape with no ProtoFlux at all: the driver reads
 // the loaded texture's own pixel size.
 const sizeDrv = hasT('TextureSizeDriver')?.d;
