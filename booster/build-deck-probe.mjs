@@ -41,6 +41,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { addCredits } from '../tools/credits.mjs';
 import { trimToCards } from '../tools/trim.mjs';
+import { asUrl } from './urlmarker.mjs';
 
 // The FrDT/BSON codec is the Knowledge Library's, not this repo's - the same one
 // build-panel.mjs takes its ProtoFlux encoder from, found the same way.
@@ -216,8 +217,18 @@ CODES.forEach((code, i) => {
   const { scale, offset, col, row } = cellRemap(i);
 
   // Its own texture, straight off the image proxy at the in-world width.
+  // `asUrl` is not cosmetic - a `Sync<Uri>` value is `@` + the url, and without
+  // the marker the field loads as null. See urlmarker.mjs; it cost a drag-test.
   const tex = cloneEntry(frontTex);
-  tex.Data.URL.Data = `${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}`;
+  tex.Data.URL.Data = asUrl(`${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}`);
+  // The atlas texture is `Repeat`, which is right when every UV is interior to a
+  // sheet. A per-card texture is sampled to the very edge of [0,1], so bilinear
+  // filtering reaches past it and Repeat wraps to the opposite side - a one-pixel
+  // bleed on all four edges, and the card's rounded corners are transparent, so
+  // what wraps in is opaque art landing where the cutout should be. The panel's
+  // card texture clamps for the same reason.
+  tex.Data.WrapModeU.Data = 'Clamp';
+  tex.Data.WrapModeV.Data = 'Clamp';
   doc.Assets.push(tex);
 
   // Its own material: same everything, pointed at that texture, with the cell

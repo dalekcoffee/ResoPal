@@ -223,6 +223,12 @@ remap.
 actually carries maps those bounds onto the unit square — geometry, not the builder's own
 arithmetic restated. Flipping one offset's sign fails it.
 
+One thing it already answered the hard way: **a `Sync<Uri>` value is `@` + the url.** The
+first build wrote a bare `https://…` and every card came back blank in-world with a null
+`URL` — the load throws and the field is left null, with no error anywhere. `urlmarker.mjs`
+holds the rule, both suites gate it, and `graft-url-markers.mjs` repaired the same bug in the
+packed panel (whose logo url had never loaded) without rebuilding it.
+
 What it does **not** answer: landscape cards (26 of 158 printings; `_Tex_ST` can flip an axis
 but not swap two, so they will be sideways until the Worker serves a rotated variant), and
 whether Resonite accepts the file at all. Only a drag-test settles the second.

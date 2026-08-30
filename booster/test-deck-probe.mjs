@@ -18,6 +18,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import JSZip from 'jszip';
 import { readMeshX, submeshUVBounds } from './meshx.mjs';
+import { scanUrlFields } from './urlmarker.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const decodeMjs = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
@@ -117,9 +118,12 @@ for (let i = 0; i < cardSlots.length; i++) {
 
   check(`card ${i}: edge and back materials untouched`,
     mats[0] !== mats[FRONT_SLOT] && mats[2] !== mats[FRONT_SLOT] && mats.length === 3);
-  check(`card ${i}: art is an http url at the in-world width`,
-    /^https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(String(tex?.Data?.URL?.Data ?? '')),
+  check(`card ${i}: art is a marked http url at the in-world width`,
+    /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(String(tex?.Data?.URL?.Data ?? '')),
     String(tex?.Data?.URL?.Data));
+  check(`card ${i}: its texture clamps rather than repeats`,
+    tex?.Data?.WrapModeU?.Data === 'Clamp' && tex?.Data?.WrapModeV?.Data === 'Clamp',
+    `${tex?.Data?.WrapModeU?.Data}/${tex?.Data?.WrapModeV?.Data}`);
   check(`card ${i}: front face is Cutout at 0.72`,
     mat.Data.BlendMode.Data === 'Cutout' && Math.abs(num(mat.Data.AlphaCutoff.Data) - 0.72) < 1e-9,
     `${mat.Data.BlendMode.Data} @ ${num(mat.Data.AlphaCutoff.Data)}`);
@@ -207,6 +211,16 @@ check('adds no packdb reference without a blob', added(here.missingBlob, base.mi
 check('adds no blob the manifest does not list', added(here.unlisted, base.unlisted).length === 0,
   added(here.unlisted, base.unlisted).slice(0, 3).join(', '));
 check('the manifest lists nothing that is not there', here.ghosts.size === 0, [...here.ghosts].slice(0, 3).join(', '));
+
+// A Sync<Uri> value is `@` + the url. Without the marker the field loads as null,
+// which is exactly how three blank cards got shipped. The stock template carries
+// 62 of these and misses none, so it is the oracle for the rule as well.
+const urls = scanUrlFields(doc), baseUrls = scanUrlFields(srcDoc);
+check('the stock template marks every url it has', baseUrls.unmarked.length === 0 && baseUrls.marked.length > 0,
+  `${baseUrls.marked.length} marked, ${baseUrls.unmarked.length} unmarked`);
+check('every url field carries its @ marker', urls.unmarked.length === 0,
+  urls.unmarked.slice(0, 3).map((u) => `${u.field}=${u.value}`).join(', '));
+note(`${urls.marked.length} url fields, all marked`);
 check('assetUri resolves to a present blob', here.blobs.has(mainHash));
 note(`${here.packdb.size} packdb references over ${here.blobs.size} blobs` +
   ` (${base.missingBlob.size} placeholders the bake fills in, inherited)`);

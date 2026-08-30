@@ -41,6 +41,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
 import { memberOrder, isFluxNode, haveSource } from './members.mjs';
+import { asUrl } from './urlmarker.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -386,7 +387,7 @@ function bar(name, h, tint, content, size, color, extra = []) {
 }
 
 const logoTex = asset(T.Texture, {
-  URL: LOGO, Uncompressed: false, DirectLoad: false, ForceExactVariant: false,
+  URL: asUrl(LOGO), Uncompressed: false, DirectLoad: false, ForceExactVariant: false,
   PreferredProfile: 'sRGB', MipMapBias: D(0), IsNormalMap: false,
   WrapModeU: 'Clamp', WrapModeV: 'Clamp', PowerOfTwoAlignThreshold: D(0.05),
   CrunchCompressed: true, MipMaps: true, KeepOriginalMipMaps: false, MipMapFilter: 'Box', Readable: false,

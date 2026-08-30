@@ -87,7 +87,8 @@ no ProtoFlux. It isolates the one open variable in the per-card-material finding
 | each card shows its own card, right way up | the remap works — the deck path is open |
 | each card shows a sliver, or the wrong crop | the offset formula is wrong |
 | every card shows the same art | the materials did not actually split |
-| no art at all | the URL/loading path, not the remap — compare against the panel |
+| blank fronts, null `URL` on the texture | the `@` marker again — it was missing in the first build |
+| blank fronts, URL present | the image did not fetch: host access, or the proxy |
 
 Rebuild it with `RKL=… npm run build:deck-probe` in `booster/`, verify with
 `npm run test:deck-probe`. `cards=` picks the codes, and every one is checked against
@@ -107,6 +108,33 @@ Two things still need answering before that is a plan:
   buffer slot carries a `DestroyProxy` pointing at that card's `/Assets` driver proxy, so
   destroying a card takes its flux with it, and the deck's layout is driven from
   `ChildrenCount` and `IndexOfChild` rather than a baked count.
+
+## Writing the art in, and whether it stays
+
+The importer cannot bake URLs at build time — the codes arrive over the wire — so it must
+**drive** each card's `StaticTexture2D.URL`, which is also the only way an image ever gets
+into a material: there is no ProtoFlux node that turns bytes into a texture. `AttachTexture2D`
+attaches the component; the URL is still what you set. So "fetch it and write it into the
+material" *is* the URL drive, and the panel already runs it per card:
+
+```
+CARD/url (string) -> ObjectValueSource -> StringToAbsoluteURI -> ObjectFieldDrive -> StaticTexture2D.URL
+```
+
+That path is proven in-world and, being a live `Uri` rather than a serialized string, is
+immune to the `@` bug that blanked the static probe. Ship each deck card slot with that
+mechanism and its own material/texture, and the spawn loop's only new job is writing one
+string per card.
+
+**Whether the art then persists is genuinely open.** A texture referenced by an `http` URL is
+not embedded the way the browser bake embeds its atlas, so a saved deck may depend on the
+Worker forever. `AssetUploadTask` can be initialised from a URL (`http`/`https`/`ftp`), which
+suggests saving to inventory gathers and uploads it — but the gathering step lives in
+`FrooxEngine.Store`, which is not in the decompile, so the library cannot answer it.
+
+**Settle it in-world, not in the source.** Save an imported deck to inventory, restart, and
+spawn it with the Worker unreachable (or just watch whether the URLs come back as `resdb`).
+That is a two-minute test and it beats decompiling an assembly nobody has.
 
 ## The card back, on the loose-card path
 
@@ -167,8 +195,13 @@ v [0.143, 0.286] — col 1, row 5, exactly. `booster/test-deck-probe.mjs` assert
 ST against those bounds rather than re-deriving it from the index, and a deliberately
 flipped V offset fails it.
 
-**Not yet drag-tested.** `booster/build-deck-probe.mjs` builds the three-card probe that
-settles it; see "Next step".
+**Drag-tested 2026-08-30, and the answer is not in yet.** The probe imported and gave three
+real cards with the stock backs, but every front was blank: the `StaticTexture2D` had a
+**null URL**. That was not the remap and not a Resonite limitation — the probe wrote
+`https://…` into a `Sync<Uri>` without the DataTree's `@` marker, so the load threw and the
+field came out null. See `docs/PIPELINE.md`, "A URL field is `@` + the URL". Fixed, along
+with the same bug in the panel's logo, and both test suites now gate it. **The remap itself
+is still unproven in-world** — that is what the rebuilt probe is for.
 
 **The Worker cannot bake one.** 8192² RGBA is 256 MiB against a 128 MB ceiling, and the
 grid is fixed at 10×7 by the meshes, so even a 7-card pack needs a full sheet. At a

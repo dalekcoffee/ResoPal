@@ -142,6 +142,45 @@ Rows 7 / Total 70 fills the grid) and trim down per deck.
 `typeof x === 'number'` is false and a numeric edit silently no-ops. Assign a plain JS number and
 BSON re-serializes it correctly. This cost a build; it will bite the browser port the same way.
 
+### A URL field is `@` + the URL, and without the `@` it loads as null
+
+The single highest-value fact in this document. `Elements.Core/DataTreeValue.cs`:
+
+```
+UpdateValue(Uri url)  ->  Value = "@" + url.ToString()
+IsURL                 ->  Value is string, Length > 1, [0] == '@' && [1] != '@'
+ExtractURL()          ->  throws "DataTreeValue isn't an URL" unless IsURL,
+                          then returns new Uri(text.Substring(1))
+```
+
+So `@` is the DataTree's **type tag for a `Uri`**, not decoration — that is how a
+`Sync<Uri>` is told apart from a `Sync<string>` in a format where both are strings. A plain
+string that really does begin with `@` is escaped by doubling it (`PreprocessString`), which
+is why `IsURL` checks `[1] != '@'`.
+
+Write a URL without the marker and `Extract<Uri>` throws, the load swallows it, **the field
+ends up null and the asset silently never loads**. No error in-world, no error in the
+package: it validates, it round-trips byte-identical, every reference resolves.
+
+This cost a drag-test. The deck probe wrote `https://…/img/TD01-001?w=512` straight into
+`StaticTexture2D.URL`; in-world all three cards were blank with a null URL. The same bug was
+already sitting in the panel, where `build-panel.mjs` wrote the logo URL unmarked — so the
+panel's logo mark has never loaded.
+
+The stock Deck Maker export carries **62 URL values and marks every one**, which makes it the
+oracle. `booster/urlmarker.mjs` holds the rule and both test suites assert it.
+
+The rule has to be narrow. A ProtoFlux request node also has a field called `URL`, but it
+holds a *reference* to the node feeding it; and a plain string field that happens to contain
+a URL — the panel's `ResoPal/url` variable, or the `ValueObjectInput<string>` behind each
+button — is a string and must **not** be marked. So: a field named `URL`, whose value is a
+string that is not a GUID.
+
+**None of this applies to a URL set at runtime.** ProtoFlux hands the field a live `Uri`
+object (`StringToAbsoluteURI` → `ObjectFieldDrive`), which never goes through DataTree string
+parsing. That is exactly why the panel's driven card art works and a statically authored one
+did not — and why an importer should drive the URL rather than bake it.
+
 ### An id is declared under five different key spellings
 
 Counting ids is how the trim's reference counting and every "zero dangling references" check
