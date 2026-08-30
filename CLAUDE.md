@@ -4,6 +4,13 @@ Read `docs/PIPELINE.md` before changing anything that touches a deck package. It
 whose reasons are not visible from the code, several of which have been re-broken by someone
 "cleaning up" the thing that looked redundant.
 
+## Picking this up
+
+Read `docs/HANDOFF.md` first. It records where the in-world panel stands, the one open
+bug and everything already ruled out about it, and the fact that the shipped panel is a
+hand-packed file the builder does not reproduce — a change ships by grafting into it, not
+by rebuilding over it.
+
 ## What this is
 
 A static site (`index.html`, GitHub Pages, resopal.dalek.coffee) that turns a Palworld TCG deck
