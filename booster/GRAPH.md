@@ -1,6 +1,6 @@
 # Reading the graph
 
-**One canvas, about 118 nodes, four zones.** Unpack `Flux - control` and you have the
+**One canvas, 124 nodes, four zones.** Unpack `Flux - control` and you have the
 whole thing. There is no second canvas any more: the 514-node decoder canvas is gone,
 because cards are no longer pre-baked. See "How the cards work" below.
 
@@ -86,9 +86,23 @@ trunk relay ─▶ StartAsyncTask ─TaskStart─▶ GET_String ──▶ Conten
                                                          │ OnResponse / OnError / OnDenied
 "ResoPal/import" ─▶ StartAsyncTask ─▶ POST_String ───────┤
                        (body: the paste field's Text)    ▼
-                                              three relay stubs, one per outcome,
+                                              four relay stubs, one per outcome,
                                               each into its own -> ResoPal/event write
 ```
+
+**Each request has its own "answered" band**, because a single shared one could only read
+one of the two `StatusCode` fields — and it read the fetch's, so a pasted import announced
+whatever the last fetch returned, or `HTTP 0` on a panel that had never fetched at all.
+The other two outcomes, *did not answer* and *was refused*, say a fixed string and are
+shared.
+
+**Answering has two jobs and a continuation only goes one place**: say so on the event
+line, and hand the body to zone 3. The report comes first and carries on into the landing
+write — on `OnSuccess`, `OnNotFound` **and** `OnFailed`, so a panel that cannot write its
+own event line still imports the deck. An earlier build fanned this through a `Sequence`
+and a refactor moved the wire, which orphaned zone 3 entirely: the writes had no trigger,
+and the loop never ran. `test-panel.mjs` now fails the build on any operation nothing
+runs, and on this link specifically.
 
 **There is no host-access gate, on purpose.** `WebRequestBase.RunAsync` calls
 `Engine.Security.RequestAccessPermission(host, port, HostAccessScope.HTTP, "Web Request
@@ -113,7 +127,7 @@ URL, so the request is well-formed even before any press.
 ### 3 · unpack the response into cards
 
 ```
-OnResponse ─▶ write  body := Content ─▶ write rest := Content ─▶ DestroySlotChildren(Cards)
+-> ResoPal/event ─▶ write body := Content ─▶ write rest := Content ─▶ DestroySlotChildren(Cards)
                                                                          │
                                                           StartAsyncTask ─┘
                                                                  │ TaskStart
@@ -211,7 +225,14 @@ slot, comes up visible.
   clamping rather than JavaScript's.
 - **The loop terminates**, asserted structurally rather than assumed.
 - **Order of operations inside one pass.**
-- **The graph stays under 120 nodes** — the inspectability budget.
+- **The graph stays under 130 nodes** — the inspectability budget.
+- **The graph fits in one screenful** — 16 × 11 units. It once measured 25.2 × 12.6 at
+  3.9% occupancy, with 2.6-unit voids inside a zone; it is 13.6 × 8.4 at 10.8% now.
+- **Comment zones sit side by side with a gap, and none overlaps its neighbour.**
+  Compacting the graph pushed two rectangles into each other, which reads in-world as one
+  zone with a stray title, so both sprawl and overlap fail the build.
+- **Each request reports its own status code**, and **a response both reports itself and
+  starts the unpack.**
 - **Every way a request can end reports on the event line.**
 - **The HTTP status code reaches that line.**
 - **Comment zones are disjoint and every one is titled.**
@@ -220,8 +241,11 @@ slot, comes up visible.
   as unconnected: each sat in the lane between the receiver and the write it fed. A
   constant is a leaf — nothing wires into it — so a wire touching one can only be an
   accident of position. Wires crossing a node that *has* inputs read as what they are, two
-  wires crossing; those are counted and capped rather than failed. **The count is currently
-  zero**, held there by three habits worth keeping: a producer four columns from its
+  wires crossing; those are counted and capped rather than failed — **14 against a budget of
+  30**. The check follows reference **lists** as well as single refs: a `FormatString`'s
+  `Parameters` and a `Sequence`'s `Calls` are the wires that fan, so they travel furthest,
+  and they were invisible to this check until they were not. Three habits keep the count
+  down: a producer four columns from its
   consumers gets a relay tap beside them; a reference node is duplicated rather than wired
   across a zone (two components and no wire at all); and the loop's return runs three
   corners — down its own column, along a row below everything, back up the left edge —

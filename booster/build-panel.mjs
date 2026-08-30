@@ -262,10 +262,12 @@ function slot(name, components = [], pos = [0, 0, 0], children = [], tag = null,
   };
 }
 
-// Layout units. The reference canvas runs ~0.28 rows x 0.30 cols with constants
-// hugging their consumer at dx 0.225 (pretty-flux section 2 and 5), so a column
-// of 0.60 and a row of 0.30 clears a node box with room for the pipe.
-const COL = 0.60, ROW = 0.30;
+// Layout units. A node visual is about 0.30 x 0.15, and the reference canvas
+// runs ~0.30 cols x 0.28 rows - so neighbouring nodes very nearly abut. An
+// earlier build used 0.60 columns "to leave room for the pipe" and unpacked into
+// something 25 units wide with 4% of its grid occupied: a wall of empty sky with
+// wires crossing it. Space is for where a wire has to pass, not a default.
+const COL = 0.36, ROW = 0.26;
 const NODE_HALF_W = 0.15, NODE_HALF_H = 0.075;
 
 function node(name, classpath, fields = {}, pos = [0, 0, 0]) {
@@ -538,8 +540,8 @@ BUTTONS.forEach((b, i) => {
 // request node ever runs, with nothing anywhere to say so. This write lives
 // here rather than in the event column because a wire from the write column all
 // the way across to that column would run straight through zone 2.
-const failText = strIn('text: could not set ResoPal/url', 'could not set ResoPal/url', [COL * 3.0, -ROW * 12, 0]);
-const failPath = strIn('name: ResoPal/event', 'ResoPal/event', [COL * 3.0, -ROW * 13, 0]);
+const failText = strIn('text: could not set ResoPal/url', 'could not set ResoPal/url', [COL * 2.0, -ROW * 12, 0]);
+const failPath = strIn('name: ResoPal/event', 'ResoPal/event', [COL * 2.0, -ROW * 13, 0]);
 const failSay = node('a write failed -> say so', T.WriteVar, {
   Target: null, Path: failPath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: failText.id,
 }, [COL * 4.2, -ROW * 12, 0]);
@@ -570,7 +572,7 @@ controlZones.push(around('1 · a button picks what to ask for', buttonNodes));
 // Both requests are AsyncActionNodes, so each is entered through its own
 // StartAsyncTask; an ordinary impulse cannot run one and the chain would stop
 // with no error at all.
-const ZX = COL * 5.2;
+const ZX = COL * 5.8;   // zone 1 ends near 4.2 columns, and a zone needs a gap
 const urlNode = strIn('the URL to fetch', BUTTONS[2].url, [ZX + COL * 0.5, ROW * 2, 0]);
 const urlDriver = comp(T.VarDriver, { VariableName: 'ResoPal/url', Target: urlNode.f.Value, DefaultValue: BUTTONS[2].url });
 urlNode.slot.Components.Data.push(urlDriver.comp);
@@ -589,17 +591,17 @@ const dUrl = drive('drive the URL readout', 'str', urlTrunk.id, null, [ZX + COL 
 const pasteSrc = comp(T.StrSource, { Source: null });
 const pasteRef = comp(T.StrSourceRef, { Reference: null });
 pasteSrc.comp.Data.Source.Data = pasteRef.id;
-const pasteNode = { slot: slot('what you pasted', [pasteSrc.comp, pasteRef.comp], [ZX + COL * 0.5, -ROW * 20, 0]),
-  id: pasteSrc.id, pos: [ZX + COL * 0.5, -ROW * 20, 0] };
-const resolveConst = strIn('url: /api/resolve', RESOLVE, [ZX + COL * 0.5, -ROW * 18, 0]);
-const resolveUri = node('resolve URL -> Uri', T.ToUri, { Input: resolveConst.id }, [ZX + COL * 1.5, -ROW * 18, 0]);
-const mediaConst = strIn('media type', 'text/plain', [ZX + COL * 0.5, -ROW * 22, 0]);
+const pasteNode = { slot: slot('what you pasted', [pasteSrc.comp, pasteRef.comp], [ZX + COL * 0.5, -ROW * 9.5, 0]),
+  id: pasteSrc.id, pos: [ZX + COL * 0.5, -ROW * 9.5, 0] };
+const resolveConst = strIn('url: /api/resolve', RESOLVE, [ZX + COL * 0.5, -ROW * 8, 0]);
+const resolveUri = node('resolve URL -> Uri', T.ToUri, { Input: resolveConst.id }, [ZX + COL * 1.5, -ROW * 8, 0]);
+const mediaConst = strIn('media type', 'text/plain', [ZX + COL * 0.5, -ROW * 11, 0]);
 const post = node('POST what you pasted', T.Post, {
   URL: resolveUri.id, String: pasteNode.id, MediaType: mediaConst.id,
   Content: null, StatusCode: null, OnSent: null, OnResponse: null, OnError: null, OnDenied: null,
-}, [ZX + COL * 3.5, -ROW * 16, 0]);
+}, [ZX + COL * 3.5, -ROW * 6, 0]);
 const postAsync = node('run the POST asynchronously', T.StartAsync,
-  { TaskStart: post.id, OnStarted: null, OnFailed: null }, [ZX, -ROW * 16, 0]);
+  { TaskStart: post.id, OnStarted: null, OnFailed: null }, [ZX, -ROW * 6, 0]);
 importRecv.slot.Components.Data[0].Data.OnTriggered.Data = postAsync.id;
 
 // ── each request reports its own outcome ─────────────────────────────────────
@@ -608,53 +610,61 @@ importRecv.slot.Components.Data[0].Data.OnTriggered.Data = postAsync.id;
 // everything in between. Each outcome gets a stub beside the request, then its
 // own three-column band: the write on the right, its inputs combed into the
 // column beside it, one per row.
-// The three stubs share one COLUMN, one row apart, right of both requests. A
-// fan to three targets stacked in a column dives fast enough to clear the
-// nearer ones; a fan to three targets on the same ROW passes straight through
-// them. Each stub then runs level into its own band, and every band keeps its
-// inputs on the two rows below its stub, so no other stub's run crosses one.
-const EVX = ZX + COL * 5;
+//
+// The stubs share one tight COLUMN, four rows apart, right of both requests. A
+// fan to targets stacked in a column dives fast enough to clear the nearer ones;
+// a fan to targets on the same ROW passes straight through them. Each stub then
+// runs LEVEL into its own write, so that run is a straight line half a row above
+// everything the write reads, and no band's run ever crosses another band.
+const EVX = ZX + COL * 5.6;
 const eventNodes = [];
 function outcome(name, band, extra) {
-  const y = -ROW * (4 + band * 4);
+  const y = -ROW * 4 * band;
+  const sx = EVX + COL * 5;
   const stub = node(name, T.FlowRelay, { Next: null }, [EVX, y, 0]);
-  const path = strIn('name: ResoPal/event', 'ResoPal/event', [EVX + COL * 1.5, y - ROW, 0]);
-  const value = extra(EVX + COL * 1.5, y);
+  const path = strIn('name: ResoPal/event', 'ResoPal/event', [sx - COL, y - ROW * 1.5, 0]);
+  const value = extra(sx, y);
   const say = node('-> ResoPal/event', T.WriteVar, {
     Target: null, Path: path.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: value.id,
-  }, [EVX + COL * 3.5, y, 0]);
+  }, [sx, y, 0]);
   stub.slot.Components.Data[0].Data.Next.Data = say.id;
   eventNodes.push(stub, path, say);
-  return stub;
+  return { stub, say };
 }
-const says = (text) => (x, y) => {
-  const c = strIn(`text: ${text}`, text, [x + COL, y - ROW * 2, 0]);
+const says = (text) => (sx, y) => {
+  const c = strIn(`text: ${text}`, text, [sx - COL * 2, y - ROW * 1.5, 0]);
   eventNodes.push(c);
   return c;
 };
-// The HTTP code is the one that matters most: GET_String writes an exception
-// into Content only on a TRANSPORT failure, so a 404 is a perfectly successful
-// request whose body is not cards. Without the code the status line quietly
-// shows the first 64 characters of an error page.
-const okStub = outcome('a request answered', 0, (x, y) => {
-  // StatusCode is a named OUTPUT, addressed by its FIELD id. The node's own
-  // component id is a different thing entirely and would read as nothing.
-  const cast = node('the HTTP code as text', T.StatusCast, { Input: get.f.StatusCode }, [x, y - ROW * 3, 0]);
-  const tmpl = strIn('text: response received - HTTP {0}', 'response received - HTTP {0}', [x, y - ROW * 2, 0]);
-  const fmt = node('fill in the code', T.Format, { Format: tmpl.id, Parameters: pf.list([cast.id]) }, [x + COL, y - ROW * 2, 0]);
+// Each request reports its OWN status code. A single shared band could only read
+// one of the two StatusCode fields, and it read the GET's: a pasted import would
+// have announced whatever the last fetch returned, or "HTTP 0" on a panel that
+// had never fetched anything at all.
+//
+// StatusCode is a named OUTPUT, addressed by its FIELD id. The node's own
+// component id is a different thing entirely and would read as nothing.
+const answered = (label, band, codeField) => outcome(label, band, (sx, y) => {
+  const tmpl = strIn('text: response received - HTTP {0}', 'response received - HTTP {0}', [sx - COL * 4, y - ROW * 1.5, 0]);
+  const cast = node('the HTTP code as text', T.StatusCast, { Input: codeField }, [sx - COL * 4, y - ROW * 2.5, 0]);
+  const fmt = node('fill in the code', T.Format, { Format: tmpl.id, Parameters: pf.list([cast.id]) }, [sx - COL * 3, y - ROW * 2, 0]);
   eventNodes.push(cast, tmpl, fmt);
   return fmt;
 });
-const errStub = outcome('a request did not answer', 1, says('network error - no answer from the host'));
+const getOk = answered('the fetch answered', 0, get.f.StatusCode);
+const postOk = answered('the import answered', 1, post.f.StatusCode);
+const errStub = outcome('a request did not answer', 2, says('network error - no answer from the host')).stub;
 // The request node asks for host access itself, so its OnDenied is the only
 // place a refusal appears at all. Unwired it is a dead end, and the panel looks
 // exactly like a button that did nothing.
-const refuseStub = outcome('a request was refused', 2, says('host access refused'));
+const refuseStub = outcome('a request was refused', 3, says('host access refused')).stub;
+get.slot.Components.Data[0].Data.OnResponse.Data = getOk.stub.id;
+post.slot.Components.Data[0].Data.OnResponse.Data = postOk.stub.id;
 for (const req of [get, post]) {
   const d = req.slot.Components.Data[0].Data;
-  d.OnResponse.Data = okStub.id;
   d.OnError.Data = errStub.id;
   d.OnDenied.Data = refuseStub.id;
+  // OnResponse lands on that request's own "answered" band, and the write there
+  // carries on into the unpack - see the landing writes below.
 }
 
 const requestNodes = [urlNode, urlTrunk, apiUri, get, getAsync, dUrl,
@@ -671,10 +681,10 @@ controlZones.push(around('2 · ask resopal, and say what came back', requestNode
 //
 // `rest` and `body` are DataModelObjectFieldStore locals: the node IS the value,
 // the +Store proxy beside it holds it.
-const SX = COL * 20;
-const at = (col, row) => [SX + col * COL, -row * ROW * 1.6, 0];
+const SX = COL * 19.2;   // zone 2's event writes end near 18.2 columns
+const at = (col, row) => [SX + col * COL, -row * 0.30, 0];
 
-const restStore = proxyNode('rest of the response', T.Store, T.StoreProxy, {}, at(-1.2, 3));
+const restStore = proxyNode('rest of the response', T.Store, T.StoreProxy, {}, at(-1.2, 4));
 const bodyStore = proxyNode('the whole response', T.Store, T.StoreProxy, {}, at(-0.6, -1));
 // Seed both with an empty string rather than leaving the Sync<string> at null.
 // Nothing reads them before the first response, but a local that is "" behaves
@@ -703,6 +713,20 @@ function landing(name, contentField, row) {
 }
 const [getBody, getRest] = landing('GET', get.f.Content, 1);
 const [postBody, postRest] = landing('POST', post.f.Content, 2);
+// Answering has TWO jobs - say so on the event line, and hand the body to the
+// unpack - and a continuation only goes one place. Rather than fan through a
+// Sequence, the report comes first and CARRIES ON into the landing write: the
+// event write's three outcomes all continue there, so a panel that cannot write
+// its own event line still imports the deck. Losing this link is what orphaned
+// the whole zone once - the writes below had no trigger at all and the loop
+// never ran, which is why `test-panel.mjs` now fails the build on an operation
+// nothing runs.
+for (const [ok, land] of [[getOk, getBody], [postOk, postBody]]) {
+  const d = ok.say.slot.Components.Data[0].Data;
+  d.OnSuccess.Data = land.id;
+  d.OnNotFound.Data = land.id;
+  d.OnFailed.Data = land.id;
+}
 const clear = node('remove the last import', T.ClearKids,
   { Instance: cardsNode.id, PreserveAssets: false, SendDestroyingEvent: true, Next: null }, at(4, 0));
 const loopAsync = node('the loop is asynchronous', T.StartAsync,
@@ -727,7 +751,7 @@ const newline = strIn('a newline', '\n', at(0, R + 3));
 const nlAt = node('where the record ends', T.IndexOf,
   { Str: restTap.id, Part: newline.id, StartIndex: null, SearchFromEnd: null, ComparisonMode: null }, at(1, R + 3));
 const nlTrunk = intRelay('that offset, three ways', nlAt.id, at(2, R + 3));
-const shortest = intIn('shortest sane record', 8, at(2.6, R + 5));
+const shortest = intIn('shortest sane record', 8, at(2.6, R + 6.5));
 // One condition covers both ways the loop can be done: IndexOfString returns -1
 // when there is no newline left, and a record too short to be a URL is junk.
 // So `nl > 8` is "there is another record and it is plausible", and the
@@ -736,7 +760,7 @@ const another = node('another record?', T.IntGt, { A: nlTrunk.id, B: shortest.id
 const gate = node('another record ? spawn : done', T.If,
   { Condition: another.id, OnTrue: null, OnFalse: null }, at(2, R));
 
-const zero = intIn('from the start', 0, at(3.17, R + 3.25));
+const zero = intIn('from the start', 0, at(3.6, R + 3.25));
 const record = node('this record', T.Substr,
   { Str: restTap.id, StartIndex: zero.id, Length: nlTrunk.id }, at(4, R + 4));
 const artUrl = node('trimmed to the art URL', T.Trim, { A: record.id }, at(5, R + 4));
@@ -815,12 +839,12 @@ controlZones.push(around('3 · unpack the response into cards', spawnNodes));
 
 // Zone 4: the readouts. Three lines on the panel, all driven straight from this
 // graph, so a failure is legible without opening the flux at all.
-const RX = SX + COL * 18;
+const RX = SX + COL * 14.5;   // zone 3 ends near 13.5 of its own
 const bodyTrunk = strRelay('response -> readout', bodyStore.id, [RX, 0, 0]);
 const bodyLen = node('response length', T.StrLen, { A: bodyTrunk.id }, [RX + COL, ROW * 1.5, 0]);
 const zeroLen = intIn('0', 0, [RX + COL, ROW * 2.5, 0]);
 const gotAny = node('did anything come back?', T.IntGt, { A: bodyLen.id, B: zeroLen.id }, [RX + COL * 2, ROW * 0.5, 0]);
-const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX, -ROW * 3, 0]);
+const recWidth = intIn(`record width (${RECORD_WIDTH})`, RECORD_WIDTH, [RX - COL * 0.4, -ROW * 3, 0]);
 const zeroStart = intIn('first record starts at 0', 0, [RX, -ROW * 4, 0]);
 const firstEnd = node('end of the first record', T.Substr,
   { Str: bodyTrunk.id, StartIndex: zeroStart.id, Length: recWidth.id }, [RX + COL, -ROW * 1.5, 0]);
@@ -830,7 +854,7 @@ const firstTrim = node('first record, trimmed', T.Trim, { A: firstEnd.id }, [RX 
 // comes out of OnTrue, trimmed like a record. Without a placeholder here the
 // drive writes "" over the caption the panel ships with and the line goes blank
 // before anything has even been pressed.
-const readyText = strIn('text: Ready', 'Ready — pick a deck, or paste a palify link', [RX + COL * 2, ROW * 1.5, 0]);
+const readyText = strIn('text: Ready', 'Ready — pick a deck, or paste a palify link', [RX + COL * 3, ROW * 1.5, 0]);
 const statusMsg = node('status: first card, else the error, else Ready', T.StrPick,
   { Condition: gotAny.id, OnTrue: firstTrim.id, OnFalse: readyText.id }, [RX + COL * 3, 0, 0]);
 
@@ -851,11 +875,11 @@ controlZones.push(around('4 · what the panel shows you', readoutNodes));
 // reason the request outcomes are reported beside the requests.
 const doneStub = node('no records left', T.FlowRelay, { Next: null }, at(0.4, R + 14));
 gate.slot.Components.Data[0].Data.OnFalse.Data = doneStub.id;
-const doneText = strIn('text: all cards placed', 'all cards placed', at(2, R + 15));
-const donePath = strIn('name: ResoPal/event', 'ResoPal/event', at(2, R + 16));
+const doneText = strIn('text: all cards placed', 'all cards placed', at(2, R + 15.8));
+const donePath = strIn('name: ResoPal/event', 'ResoPal/event', at(2, R + 16.8));
 const doneSay = node('-> ResoPal/event', T.WriteVar, {
   Target: null, Path: donePath.id, OnNotFound: null, OnSuccess: null, OnFailed: null, Value: doneText.id,
-}, at(3, R + 15));
+}, at(4, R + 15));
 doneStub.slot.Components.Data[0].Data.Next.Data = doneSay.id;
 spawnNodes.push(doneStub, doneText, donePath, doneSay);
 controlNodes.push(doneStub, doneText, donePath, doneSay);

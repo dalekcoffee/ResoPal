@@ -296,8 +296,37 @@ for (const [id, c] of comps) {
   }
 }
 
+// ── orphans ──────────────────────────────────────────────────────────────────
+// Every operation must have something that RUNS it. This is the check that was
+// missing when a refactor moved `GET_String.OnResponse` onto the event stub and
+// took the unpack chain's only trigger with it: the graph still validated, the
+// wires were all type-correct, and in-world a third of the canvas sat there with
+// nothing driving it.
+//
+// A continuation only goes ONE place, so an impulse output that has to do two
+// things needs a Sequence. Losing that is silent.
+const runnable = new Set();
+for (const [id, c] of comps) if (isOperation(c.type)) runnable.add(id);
+const driven = new Set();
+for (const [, c] of comps) {
+  const kinds = memberKinds(c.type);
+  for (const [k, v] of Object.entries(c.data)) {
+    if (kinds.get(k) !== 'impulse') continue;
+    const d = v && typeof v === 'object' ? v.Data : null;
+    for (const t of Array.isArray(d) ? d.map((e) => (e && typeof e === 'object' ? e.Data : e)) : [d])
+      if (typeof t === 'string') driven.add(t);
+  }
+}
+// Entry points run themselves: an event source is what starts a chain.
+const ENTRY = /DynamicImpulseReceiver|ButtonEvents|OnStart|OnLoaded|Update$|SecondsTimer|SlotChildrenEvents|OnDestroying|OnGrabbable/;
+for (const id of runnable) {
+  const c = comps.get(id);
+  if (ENTRY.test(shortName(c.type))) continue;
+  if (!driven.has(id)) problems.push([c.type, `nothing runs it - no impulse anywhere points at this node (a continuation only goes one place; use a Sequence to fan one)`]);
+}
+
 for (const [cp, why] of problems) { bad++; console.log(`  FAIL ${cp}\n         ${why}`); }
 console.log(bad
   ? `\n${bad} problem(s) across ${checked} types`
-  : `\nall ${checked} types exist, satisfy their constraints, declare their members in order, wire impulses to operations and data to values, and every async node runs in an async context`);
+  : `\nall ${checked} types exist, satisfy their constraints, declare their members in order, wire impulses to operations and data to values, have something that runs them, and every async node runs in an async context`);
 process.exitCode = bad ? 1 : 0;

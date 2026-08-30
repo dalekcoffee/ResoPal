@@ -435,6 +435,52 @@ check('a card that will not take its art says so instead of stopping silently',
   evtWritesEarly().some((w) => arg(setUrl, 'OnNotFound') === w.id && arg(setUrl, 'OnFailed') === w.id));
 check('and runs inside a StartAsyncTask', compsOfType('StartAsyncTask').length >= 3);
 check('the previous import is cleared first', compsOfType('DestroySlotChildren').length === 1);
+// The bug this missed: a refactor moved OnResponse onto the event stub and took
+// the unpack chain's only trigger with it. Every operation must have something
+// that runs it.
+const IMPULSE_ANY = ['Next', 'OnSuccess', 'OnWritten', 'OnTrue', 'OnFalse', 'TaskStart', 'OnTriggered',
+  'OnResponse', 'OnError', 'OnDenied', 'OnNotFound', 'OnFailed', 'OnStarted'];
+const drivenIds = new Set();
+for (const c of byComp.values())
+  for (const f of IMPULSE_ANY.concat(['Calls'])) {
+    const d = arg(c, f);
+    for (const t of Array.isArray(d) ? d.map((e) => (e && typeof e === 'object' ? e.Data : e)) : [d])
+      if (typeof t === 'string') drivenIds.add(t);
+  }
+const OPS = /^(ContinuationRelay|Sequence|If|StartAsyncTask|DelayUpdates|DuplicateSlot|DestroySlotChildren|SetLocalPosition|GET_String|POST_String|WriteDynamicObjectVariable<string>)$/;
+const orphans = [...byComp.values()].filter((c) =>
+  (OPS.test(short(c.type)) || /^ObjectWrite</.test(String(c.type).replace(/^.*Nodes\./, ''))) && !drivenIds.has(c.id));
+check('nothing in the graph sits there with no impulse running it', orphans.length === 0,
+  orphans.map((c) => `${slotOf.get(c.id) ? nm(slotOf.get(c.id)) : '?'} «${short(c.type)}»`).join(', '));
+// Answering has two jobs, and a continuation only goes one place. Each request
+// lands on its own "answered" band, and that event write CARRIES ON into the
+// landing write on all three of its outcomes - so the deck still imports even if
+// the event line itself will not take a value.
+{
+  const linked = ['GET_String', 'POST_String'].map((t) => {
+    const req = compsOfType(t)[0];
+    const stub = byComp.get(arg(req, 'OnResponse'));
+    if (!stub || short(stub.type) !== 'ContinuationRelay') return false;
+    const say = byComp.get(arg(stub, 'Next'));
+    if (!say || !String(say.type).includes('WriteDynamicObjectVariable')) return false;
+    const land = ['OnSuccess', 'OnNotFound', 'OnFailed'].map((f) => arg(say, f));
+    // `short` splits on '.', and ObjectWrite's own generic argument is a dotted
+    // classpath, so the short name of an ObjectWrite is the tail of its ARGUMENT.
+    return land.every((x) => typeof x === 'string' && x === land[0]) &&
+      /^ObjectWrite</.test(String(byComp.get(land[0])?.type ?? '').replace(/^.*Nodes\./, ''));
+  });
+  check('a response both reports itself and starts the unpack', linked.every(Boolean),
+    `GET ${linked[0]}, POST ${linked[1]}`);
+}
+// One shared "answered" band could only read ONE of the two StatusCode fields,
+// and it read the fetch's: a pasted import announced whatever the last fetch
+// returned, or "HTTP 0" on a panel that had never fetched at all.
+{
+  const casts = compsOfType('ValueToObjectCast<HttpStatusCode>');
+  const codes = ['GET_String', 'POST_String'].map((t) => compsOfType(t)[0].data.StatusCode?.ID);
+  check('each request reports its OWN status code',
+    codes.every((f) => f && casts.some((c) => arg(c, 'Input') === f)), `${casts.length} casts`);
+}
 
 // ── behaviour: run the loop the way the runtime would ───────────────────────
 globalThis.caches = { default: { match: async () => null, put: async () => {} } };
@@ -558,13 +604,21 @@ const terminals = [
   ...writes.flatMap((w) => ['OnNotFound', 'OnFailed'].map((f) => [`URL write ${f}`, arg(w, f)])),
   [`the loop finishing`, arg(loopGate, 'OnFalse')],
 ];
-// A terminal may pass through one ContinuationRelay stub on the way - that is
-// the house style for a branch, and it is what keeps the column routable.
-const hop = (id) => {
+// A terminal reaches its event write through at most a couple of hops: a
+// ContinuationRelay stub (the house style for a branch) or a Sequence, which is
+// how one impulse does two things - OnResponse both reports and starts the
+// unpack, and a continuation only goes one place.
+const reachesEvent = (id, depth = 0) => {
+  if (typeof id !== 'string' || depth > 4) return false;
+  if (evtIds.has(id)) return true;
   const c = byComp.get(id);
-  return c && short(c.type) === 'ContinuationRelay' ? arg(c, 'Next') : id;
+  if (!c) return false;
+  if (short(c.type) === 'ContinuationRelay') return reachesEvent(arg(c, 'Next'), depth + 1);
+  if (short(c.type) === 'Sequence')
+    return (arg(c, 'Calls') || []).some((e) => reachesEvent(e && typeof e === 'object' ? e.Data : e, depth + 1));
+  return false;
 };
-const unreported = terminals.filter(([, id]) => !evtIds.has(hop(id)));
+const unreported = terminals.filter(([, id]) => !reachesEvent(id));
 check('every way the request can end reports on the event line', unreported.length === 0,
   [...new Set(unreported.map(([n]) => n))].join(', '));
 
@@ -596,7 +650,9 @@ const control = canvasSlots[0];
 check('named for what it is', nm(control).includes('control'));
 
 const nodesOf = (c) => (c.Children || []).filter((s) => nm(s) !== 'Meta: Comments');
-check('the whole graph is small enough to read', nodesOf(control).length <= 120, `${nodesOf(control).length} nodes`);
+// An inspectability budget, not a hard limit: past roughly this many nodes the
+// canvas stops being something a person can unpack and follow in one sitting.
+check('the whole graph is small enough to read', nodesOf(control).length <= 130, `${nodesOf(control).length} nodes`);
 
 // Comment zones: present, every one titled.
 {
@@ -609,6 +665,32 @@ check('the whole graph is small enough to read', nodesOf(control).length <= 120,
   check('every zone has a title', rects.length > 0 && rects.length === labels.length, `${rects.length} rects, ${labels.length} labels`);
   check('no title is blank', labels.every((l) => String(l.Data.Value?.Data ?? '').trim().length > 0));
   check('four zones, one per stage', rects.length === 4, String(rects.length));
+
+  // Spacing, gated rather than eyeballed. The complaint that started this was
+  // "the gaps between nodes is massive"; the graph measured 25.2 x 12.6 units at
+  // 3.9% occupancy, with 2.6-unit voids inside zones. Compaction then pushed two
+  // zone rectangles into each other, which reads in-world as one zone with a
+  // stray title. Both directions are failures, so both are checked.
+  const zones = rects.map((x) => x.Data.Value.Data.map((row) => row.map(num)))
+    .map((v) => ({ x: v[0][0], y: v[0][1], w: v[1][0], h: -v[1][1] }))
+    .sort((a, b) => a.x - b.x);
+  const gaps = zones.slice(1).map((z, i) => z.x - (zones[i].x + zones[i].w));
+  check('zones sit side by side without overlapping', gaps.every((g) => g > 0),
+    gaps.map((g) => g.toFixed(2)).join(', '));
+  check('and none is pushed away from its neighbour', gaps.every((g) => g < 0.6),
+    gaps.map((g) => g.toFixed(2)).join(', '));
+
+  const pts = nodesOf(control).map((sl) => (sl.Position.Data || []).map(num));
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+  // A budget, not a target: a graph that will not fit on a screen at a readable
+  // zoom is one the user has to pan around to follow.
+  check('the whole graph fits in one screenful', w <= 16 && h <= 11,
+    `${w.toFixed(2)} x ${h.toFixed(2)} units`);
+  const cells = new Set(pts.map(([x, y]) => `${Math.round(x / 0.36)},${Math.round(y / 0.30)}`)).size;
+  const span = (w / 0.36 + 1) * (h / 0.30 + 1);
+  console.log(`  note ${pts.length} nodes in ${w.toFixed(2)} x ${h.toFixed(2)} units, ` +
+    `${(100 * cells / span).toFixed(1)}% of the cells they span`);
 }
 
 // Nodes must clear a real node visual. The first build spaced them at about a
@@ -658,22 +740,32 @@ function throughNodes(canvasSlot) {
       return k !== 'Node' && typeof d === 'string' && byComp.has(d);
     });
   });
-  const offenders = [];
+  // A wire can be a single ref OR an entry in a ref LIST - `Sequence.Calls`,
+  // `FormatString.Parameters`. Only single refs were followed here, so the one
+  // kind of wire that fans (and therefore travels furthest) was the one kind
+  // this check could not see.
+  const targets = (v) => {
+    const d = v && typeof v === 'object' ? v.Data : null;
+    if (typeof d === 'string') return [d];
+    if (!Array.isArray(d)) return [];
+    return d.map((e) => (e && typeof e === 'object' ? e.Data : e)).filter((e) => typeof e === 'string');
+  };
+  const offenders = new Map();
   for (const from of placed)
     for (const id of from.ids) {
       const c = byComp.get(id);
       if (!c) continue;
-      for (const [, v] of Object.entries(c.data)) {
-        const d = v && typeof v === 'object' ? v.Data : null;
-        if (typeof d !== 'string' || !boxOf.has(d)) continue;
-        const to = boxOf.get(d);
-        if (to === from) continue;
-        for (const mid of placed)
-          if (mid !== from && mid !== to && hits(from, to, mid))
-            offenders.push({ leaf: isLeaf(mid), text: `${from.name} -> ${to.name} crosses ${mid.name}` });
-      }
+      for (const [, v] of Object.entries(c.data))
+        for (const d of targets(v)) {
+          if (!boxOf.has(d)) continue;
+          const to = boxOf.get(d);
+          if (to === from) continue;
+          for (const mid of placed)
+            if (mid !== from && mid !== to && hits(from, to, mid))
+              offenders.set(`${from.name} -> ${to.name} crosses ${mid.name}`, { leaf: isLeaf(mid), text: `${from.name} -> ${to.name} crosses ${mid.name}` });
+        }
     }
-  return offenders;
+  return [...offenders.values()];
 }
 // Two grades, because they are two different problems.
 //

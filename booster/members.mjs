@@ -166,7 +166,7 @@ export function memberKinds(classpath) {
       const [, decl, member] = m;
       if (kinds.has(member)) continue;
       kinds.set(member,
-        /^SyncRef<INodeOperation>$/.test(decl) ? 'impulse'
+        /^SyncRef(List)?<I(Sync)?NodeOperation>$/.test(decl) ? 'impulse'
           : /^SyncRef<INode(Object|Value)(Output|List|ListOutput)</.test(decl) ? 'data'
             : /^Node(Object|Value)Output</.test(decl) ? 'output' : 'sync');
     }

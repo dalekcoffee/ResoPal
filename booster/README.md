@@ -39,7 +39,7 @@ Three driven lines under the title tell you where things stand without opening t
   placed`. Every terminal impulse in the graph writes it, so "nothing happened" is not one
   of the things it can say.
 
-**Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** One canvas, ~118 nodes, four
+**Reading or debugging the graph: see [GRAPH.md](GRAPH.md).** One canvas, 124 nodes, four
 zones. [PRIOR-ART.md](PRIOR-ART.md) is what an existing, working in-world deck importer
 does differently, and which of those we took.
 
@@ -144,12 +144,12 @@ proves very little.
   of every URL write, and the loop running out of records.
 - **Encoding**: zero dangling references, zero unbound hooks, BSON round-trips
   byte-identical.
-- **Layout and pretty-flux**: one Moduprint canvas under 120 nodes, four comment zones,
-  titled and disjoint, no two nodes overlapping a node visual, no producer fanning past a
-  dozen consumers, relays actually feeding something, and **no wire running through a
-  constant** — a constant is a leaf, so a wire touching one can only be an accident of
-  position. Wires crossing a node that has inputs of its own are counted and capped instead;
-  the count is currently **zero**.
+- **Layout and pretty-flux**: one Moduprint canvas under 130 nodes inside 16 × 11 units,
+  four comment zones, titled, side by side with a gap and none overlapping, no two nodes
+  overlapping a node visual, no producer fanning past a dozen consumers, relays actually
+  feeding something, and **no wire running through a constant** — a constant is a leaf, so
+  a wire touching one can only be an accident of position. Wires crossing a node that has
+  inputs of its own are counted and capped instead: **14 against a budget of 30**.
 
 The evaluator models the decompiled nodes' own clamping — `Substring` returning `""` when
 the start runs past the end rather than throwing, `IndexOfString` returning −1 — not
