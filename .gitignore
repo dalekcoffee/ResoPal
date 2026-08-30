@@ -1,3 +1,6 @@
 
 # Build output: regenerate with `node worker/bundle.mjs`
 worker/dist/
+
+# Scratch probes: named _*.mjs by convention, never committed
+booster/_*.mjs
