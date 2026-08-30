@@ -251,7 +251,21 @@ slot, comes up visible.
   corners — down its own column, along a row below everything, back up the left edge —
   rather than one diagonal through every data row.
 
-## Two things that fail silently, and now cannot
+## Three things that fail silently, and now cannot
+
+**A classpath is a path, not a name.** `[ProtoFluxBindings]…Nodes.StartAsyncTask` shipped for
+three builds. There is no such class: the one that exists is
+`…Nodes.FrooxEngine.Async.StartAsyncTask`, three namespaces away, and it has the same three
+members in the same order — so the package encoded cleanly, validated with zero dangling
+references, and passed the async-context gate. In-world both request nodes and the entire spawn
+loop came up red with nothing able to run them, because no loader resolves the path we wrote.
+
+Every check was blind to it for the same reason: they all looked the class up by its **leaf
+name**, with `find -name StartAsyncTask.cs`, and a file three namespaces away answered. The rule
+now is that `[Asm]A.B.C` must have a file at `decompiled/Asm/A/B/C.cs` and nothing else counts —
+`verify-classpaths.mjs` fails the build otherwise, and `members.mjs` resolves by exact path
+before it will fall back to a search.
+
 
 **Members are emitted in the order the class declares them.** Not cosmetic. Written in the
 order the builder happened to list them, this package encoded cleanly, validated with zero

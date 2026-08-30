@@ -140,12 +140,40 @@ let bad = 0, checked = 0;
 const problems = [];
 console.log(`${path.basename(pkg)}  ${doc.Types.length} types`);
 
+// A class NAME existing somewhere is not the same as the classpath existing.
+// `[ProtoFluxBindings]...Nodes.StartAsyncTask` passed every check here for three
+// builds; the class it was answered with lives at
+// `...Nodes.FrooxEngine.Async.StartAsyncTask`, three namespaces away. No loader
+// resolves the path we wrote, so the request nodes and the whole spawn loop came
+// up red in-world with nothing able to run them - and the graph still validated,
+// still had zero dangling references, and still passed the async-context check,
+// because every one of those looked the class up by its leaf name too.
+//
+// `[Asm]A.B.C` lives at `decompiled/Asm/A/B/C.cs`. Nothing else counts.
+const namespaced = (classpath) => {
+  const m = /^\[([^\]]+)\](.+)$/.exec(String(classpath));
+  if (!m || !ASSEMBLIES.includes(m[1])) return true;      // not ours to place
+  const rest = m[2].split('+')[0].replace(/<.*$/, '');
+  return existsSync(path.join(DECOMPILED, m[1], ...rest.split('.')) + '.cs');
+};
+
 for (const classpath of doc.Types) {
   const t = parse(classpath);
   const decls = declared.get(t.name);
   checked++;
   if (!decls || !decls.length) {
     problems.push([classpath, 'no such class in the decompiled source']);
+    continue;
+  }
+  if (!namespaced(classpath)) {
+    const where = (() => {
+      try {
+        return execFileSync('find', [DECOMPILED, '-name', `${t.name}.cs`], { encoding: 'utf8' })
+          .split('\n').filter(Boolean).map((f) => f.replace(DECOMPILED + '/', '')).slice(0, 3).join(', ');
+      } catch { return '(nowhere)'; }
+    })();
+    problems.push([classpath,
+      `no class at THIS namespace - the name exists, but only at: ${where || '(nowhere)'}`]);
     continue;
   }
   if (!t.generic) continue;
@@ -328,5 +356,5 @@ for (const id of runnable) {
 for (const [cp, why] of problems) { bad++; console.log(`  FAIL ${cp}\n         ${why}`); }
 console.log(bad
   ? `\n${bad} problem(s) across ${checked} types`
-  : `\nall ${checked} types exist, satisfy their constraints, declare their members in order, wire impulses to operations and data to values, have something that runs them, and every async node runs in an async context`);
+  : `\nall ${checked} types exist at the namespace they name, satisfy their constraints, declare their members in order, wire impulses to operations and data to values, have something that runs them, and every async node runs in an async context`);
 process.exitCode = bad ? 1 : 0;

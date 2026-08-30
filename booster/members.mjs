@@ -35,7 +35,26 @@ const ALIAS = { persistent: null, updateOrder: null, EnabledField: null };
 const fileCache = new Map();
 const orderCache = new Map();
 
-function sourceFiles(name) {
+/**
+ * The file a classpath names, if one sits exactly where its namespace says.
+ *
+ * `[Asm]A.B.C` lives at `decompiled/Asm/A/B/C.cs`. Preferring this over a search
+ * by leaf name matters: `Nodes.StartAsyncTask` does not exist, but
+ * `Nodes.FrooxEngine.Async.StartAsyncTask` does, and a leaf-name search happily
+ * answers the first with the second - which is how a classpath that no loader
+ * could resolve passed every check and came up red in-world.
+ */
+function exactFile(classpath) {
+  const m = /^\[([^\]]+)\](.+)$/.exec(String(classpath));
+  if (!m) return null;
+  const rest = m[2].split('+')[0].replace(/<.*$/, '');
+  const f = path.join(DECOMPILED, m[1], ...rest.split('.')) + '.cs';
+  return existsSync(f) ? f : null;
+}
+
+function sourceFiles(name, classpath = null) {
+  const exact = classpath ? exactFile(classpath) : null;
+  if (exact) return [exact];
   if (fileCache.has(name)) return fileCache.get(name);
   let out = [];
   try {
@@ -45,6 +64,8 @@ function sourceFiles(name) {
   fileCache.set(name, out);
   return out;
 }
+
+export { exactFile };
 
 
 /**
@@ -103,7 +124,7 @@ export function memberOrder(classpath, kind = 'component') {
   let result = null;
   if (existsSync(DECOMPILED)) {
     const { name, nested } = parseClasspath(classpath);
-    for (const f of sourceFiles(name)) {
+    for (const f of sourceFiles(name, classpath)) {
       const names = switchIn(readFileSync(f, 'utf8'), nested);
       if (names) {
         result = names.map((n) => (n in ALIAS ? null : n)).map((n, i) => n ?? HEAD[kind][i]);

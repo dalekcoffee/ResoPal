@@ -102,7 +102,13 @@ const T = {
   // ResoPal. See booster/PRIOR-ART.md section 1.
   Get:         PB + 'FrooxEngine.Network.GET_String',
   If:          PB + 'If',
-  StartAsync:  PB + 'StartAsyncTask',
+  // NOT `Nodes.StartAsyncTask` - there is no such class. The one that exists is
+  // `Nodes.FrooxEngine.Async.StartAsyncTask`, and the wrong path cost three dead
+  // red nodes in-world: the requests and the loop had nothing that could run
+  // them. `verify-classpaths.mjs` was blind to it because it looked the class up
+  // by LEAF NAME, so a file three namespaces away answered for it. It now
+  // requires the file to sit exactly where the namespace says.
+  StartAsync:  PB + 'FrooxEngine.Async.StartAsyncTask',
   Post:        PB + 'FrooxEngine.Network.POST_String',
   // Spawning. DuplicateSlot copies the template slot AND the ProtoFlux inside
   // it, rewiring the copy's internal references - which is why one card

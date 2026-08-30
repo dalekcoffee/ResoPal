@@ -35,6 +35,14 @@ antialiased edge pixels straight leaves a white rim that survives the alpha cuto
 as well as `doc.Object`, because assets reference each other. Getting this wrong deleted `MainFont`
 and broke every button on the deck.
 
+**A classpath is a path, not a name.** `[Asm]A.B.C` must have a file at `decompiled/Asm/A/B/C.cs`
+and nowhere else will do. `...Nodes.StartAsyncTask` does not exist — the class is
+`...Nodes.FrooxEngine.Async.StartAsyncTask` — and the wrong path shipped three times because
+every check looked the class up by its **leaf name**, so a file three namespaces away answered
+for it. The package validated, had zero dangling references and passed the async-context gate;
+in-world the two requests and the whole spawn loop were red with nothing able to run them.
+`verify-classpaths.mjs` now requires the exact path.
+
 **A component's members must be emitted in the order the class declares them.** Read the order
 out of the class's own `GetSyncMember(int index)` switch — `booster/members.mjs` does. Written in
 whatever order the builder happened to list them, the panel encoded cleanly, validated with zero

@@ -103,6 +103,24 @@ Opens a browser to authorise. One time only.
 npx wrangler deploy
 ```
 
+**The deployed Worker can be older than this repo, and nothing here will tell you.** There is no
+CI: a route exists the moment it is committed and answers the moment it is deployed, and those
+are different moments. The symptom in-world is a panel that asks for host access, gets it, and
+then reads
+
+```
+{"error":"no such route"}          response received - HTTP NotFound
+```
+
+which is this Worker answering correctly that the deployed build has never heard of
+`/api/pull`. Check what is actually live before debugging anything else:
+
+```bash
+curl -s "https://resopal-proxy.<account>.workers.dev/api/pull?set=BP01&packs=1&format=fixed" | head -3
+```
+
+Seven lines of URLs means it is current; `{"error":"no such route"}` means deploy.
+
 That's the whole deploy. It prints a URL like:
 
 ```
