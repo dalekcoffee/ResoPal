@@ -340,6 +340,14 @@ check('and a deck can recognise it as a card',
   check('turned a half turn about Y', Math.abs(rot[1] ?? 0) === 1 && Math.abs(rot[3] ?? 1) < 1e-6);
   check('and set back from the front so the faces do not z-fight',
     Math.abs((back?.Position?.Data || []).map(num)[2] ?? 0) > 0);
+  // A QuadMesh faces float3.Backward. Single-sided and unrotated, the card shows
+  // its BACK to anyone standing where the panel faces and culls the front, which
+  // in-world looks exactly like art that never loaded.
+  const cardRot = (tmpl?.Rotation?.Data || []).map(num);
+  check('the card itself is turned to face outward',
+    Math.abs(cardRot[1] ?? 0) === 1 && Math.abs(cardRot[3] ?? 1) < 1e-6);
+  check('so the front and the back face opposite ways',
+    Math.abs(cardRot[1] ?? 0) === 1 && Math.abs(rot[1] ?? 0) === 1);
   check('the front is single-sided, or the back would never be seen',
     hasT('QuadMesh')?.d.DualSided?.Data === false);
   // The back is the same image for every card, so it ships in the package - a

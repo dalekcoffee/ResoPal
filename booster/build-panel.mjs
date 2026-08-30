@@ -532,7 +532,7 @@ const backRenderer = comp(T.MeshRenderer, {
 // The back is a child rotated a half turn about Y, a hair behind the front, so
 // the two faces do not z-fight. Turning the card over shows the back, which is
 // what a card does - no flip button, no toggle, no state to get out of step.
-const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, -0.0004]);
+const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, 0.0004]);
 backFace.Rotation.Data = [D(0), D(1), D(0), D(0)];
 
 // ── the card as a physical object ────────────────────────────────────────────
@@ -572,6 +572,14 @@ const cardTemplate = slot('card', [
 // card gives an inactive card, and nothing in the spawn chain turns it back on.
 // Hiding it behind an inactive parent keeps the template out of sight while the
 // copy, reparented under the active Cards slot, comes up visible.
+// A QuadMesh faces float3.Backward, and the front is single-sided now that there
+// is a real back - so an unrotated card presents its BACK to anyone standing
+// where the panel faces, and the front is culled, which reads in-world as a card
+// that never loaded. Turning the card itself a half turn puts the front outward
+// and the back behind it. The card's own children keep their relative facing, so
+// this is the only place the question is decided.
+cardTemplate.Rotation.Data = [D(0), D(1), D(0), D(0)];
+
 const templateSlot = slot('Card template', [], [0, -0.42, 0], [cardTemplate]);
 templateSlot.Active.Data = false;
 const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.42, 0]);
