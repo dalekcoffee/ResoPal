@@ -140,13 +140,16 @@ do not, see docs/PIPELINE.md).
 
 **The mechanism is built; the images are not generated yet.** Two halves:
 
-1. **`tools/rotate-landscape.html`** — a dependency-free browser tool, in the manner of
-   `tools/check-codes.html`. Serve the repo root over http (`python3 -m http.server 8000`,
-   which is already in the Worker's CORS allowlist), open it, press *Rotate all*: it checks
-   **every** code in `data/pool-*.json`, pulls each through `/img/?orig=1`, and turns the ones
-   that **measure** wider than tall **90° clockwise**, writing 256/512/1024 WebPs into a zip
-   laid out as `assets/rot/w<width>/<CODE>.webp`. Unzip at the repo root and commit. An extra
-   box takes codes from sets the snapshots do not cover.
+1. **`.github/workflows/rotate-landscape.yml`** — press *Run workflow* in the Actions tab.
+   It runs `tools/rotate-landscape.mjs`, which checks **every** code in `data/pool-*.json`,
+   **measures** each image, turns the ones wider than tall **90° clockwise** with sharp, writes
+   256/512/1024 WebPs to `assets/rot/w<width>/<CODE>.webp` and commits them. A `codes` input
+   takes extra codes from a set the snapshots do not cover, and it re-runs by itself whenever
+   a `data/pool-*.json` changes — which is exactly when a new set brings new landscape cards.
+
+   It runs there because the job needs three things at once: Palify's images, an image
+   library, and a checkout to commit into. A browser has the first, a cloud agent has the
+   third, a runner has all three.
 
    It shows each card **before and after, side by side**, on purpose: the rotation direction
    has been got wrong twice in this project and both times silently. Look at the pairs before
