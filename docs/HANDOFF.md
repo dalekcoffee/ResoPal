@@ -120,6 +120,66 @@ do not *all* share one URL rather than demanding they all differ.
 
 A 48-card deck is **1.8 MB** packaged, and pulls 24 distinct textures at `w=512`.
 
+## Landscape cards — why no in-world setting can fix it
+
+Confirmed in-world 2026-08-31: the 8 landscape printings in TD01 import wrong, squashed
+rather than rotated. Palify serves them **already landscape** (1024x732); the cell is
+portrait; nothing rotates them.
+
+**There is no material setting that can.** `TextureScale`/`TextureOffset` reach the shader as
+`_Tex_ST` and are applied as `uv * scale + offset` — per-axis scale and translate. A 90°
+rotation requires *swapping* u and v, which that form cannot express at any values (a negative
+scale mirrors, it does not transpose). Checked against the decompile: no FrooxEngine material
+carries a UV rotation, and `UnlitMaterial` has nothing beyond scale/offset for the main
+texture. Rotating the card slot instead is wrong — it turns the mesh, the bevel and the back
+with it, so the card sticks out of the stack sideways.
+
+So the rotation has to be **in the pixels**, which is exactly what the browser bake already
+does (`compose.js`, `ROT = 90`; `compose.py`, `Image.ROTATE_270` — they agree, the constants
+do not, see docs/PIPELINE.md).
+
+The shape of the fix, in order of preference:
+
+1. **Pre-rotate the 26 landscape printings once and serve them from the site**, with `/img/`
+   picking that upstream for those codes. The Worker still only moves bytes, so the invariant
+   holds. `landscape` in each `data/pool-*.json` is the authoritative list.
+2. A browser tool to generate them — `tools/check-codes.html` is the precedent for a
+   browser-side tool in this repo, and `web/compose.js` already has the rotation with the
+   direction constant that has been got wrong twice. Reuse it rather than re-deriving it.
+
+Not fixable from this container: it has no image tooling at all — no PIL, ImageMagick, ffmpeg
+or JS equivalent.
+
+## Getting the deck into the panel — the architecture, decided
+
+The probe work is upstream of the goal, not the goal. What it settled, each by one drag-test:
+the UV remap, the `@` marker, the drive chain, the card back, and the row arithmetic at real
+deck sizes. **The panel itself has not been touched** beyond the one-field logo graft — its
+buttons, its loop and its Moduprint layout are exactly as they were.
+
+What is left is the actual goal: the deck template inside the panel, and flux to fill it in.
+Two ways to do that, and the second is better:
+
+**Ship 70 cards and destroy the extras.** No surgery on Ukilop's deck, but it adds ~2.5 MB of
+meshes to the panel, needs trim flux that destroys 63 slots for a 7-card booster, caps a deck
+at 70, and keeps the per-card ST because card *i* keeps mesh *i*.
+
+**Make a card self-contained and duplicate it** — preferred. Each card's position flux lives
+in `/Assets/proxy_i`, outside the card, which is why `DuplicateSlot` alone was not enough.
+Move that proxy inside its own `buffer` slot at build time and the card becomes duplicable.
+Measured on proxy 0: of its 8 external references, **2 point into its own buffer subtree**
+(the card slot, and the `SmoothTransform.TargetPosition` it drives) — which `DuplicateSlot`
+rewires to the copy, exactly what is wanted — and **6 point at shared deck machinery**
+(`add/remove handling`, the `Cards` parent, shared constant sources) which it leaves alone,
+also exactly what is wanted.
+
+That buys: one card in the package instead of seventy, no trim flux, no 70-card cap, the same
+`DuplicateSlot` loop the panel already runs — and **one constant ST for every card**, since
+every duplicate shares the template card's mesh and therefore its cell.
+
+`DestroyProxy` on the buffer already points at that proxy, so destroying a card still takes
+its flux with it once the proxy is its child.
+
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
 exactly what the importer will do, minus the loop that writes the variable.
