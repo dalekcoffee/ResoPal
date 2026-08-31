@@ -78,21 +78,28 @@ wrote into that same file (so member order cannot be wrong). It works.
 
 ## Next step
 
-**Drag `booster/out/ResoPal_DeckProbe.resonitepackage` into Resonite and look at it.**
-Three cards off the real template, three real TD01 codes, art URLs written at build time,
-no ProtoFlux. It isolates the one open variable in the per-card-material finding above:
+**Drag the `mode=driven` probe in and look at it.** The remap is confirmed; what is
+unproven now is the *drive* inside a deck card. Same three cards, but each card's texture URL
+is null and driven from a `Card/url` variable through the panel's five-component chain —
+exactly what the importer will do, minus the loop that writes the variable.
 
 | what you see | what it means |
 |---|---|
-| each card shows its own card, right way up | the remap works — the deck path is open |
-| each card shows a sliver, or the wrong crop | the offset formula is wrong |
-| every card shows the same art | the materials did not actually split |
-| blank fronts, null `URL` on the texture | the `@` marker again — it was missing in the first build |
-| blank fronts, URL present | the image did not fetch: host access, or the proxy |
+| each card shows its own card | the drive works — only the loop is left |
+| every card shows the same art | the chain is cross-wired; see "Two bugs" above |
+| blank fronts | the drive did not resolve — check `Card/url` is set and the texture URL is being driven |
 
-Rebuild it with `RKL=… npm run build:deck-probe` in `booster/`, verify with
-`npm run test:deck-probe`. `cards=` picks the codes, and every one is checked against
-`data/pool-*.json` before it is used.
+```bash
+cd booster
+RKL=… npm run build:deck-probe                 # mode=driven is the default
+RKL=… npm run build:deck-probe mode=static     # the confirmed build, to isolate the remap again
+RKL=… npm run test:deck-probe
+```
+
+`cards=` picks the codes, and every one is checked against `data/pool-*.json` before it is
+used. `verify-classpaths.mjs` takes the package as an argument too — the stock template
+reports **26 problems across 177 types** (Ukilop's packed graph, which works in-world), and
+the probe reports the same 26 across 183, so compare the two rather than reading the count.
 
 If it works, the shape of the real thing is: ship a trimmed deck template inside the panel,
 one front material and one texture per card slot with its cell's ST baked in, and let the
@@ -109,7 +116,54 @@ Two things still need answering before that is a plan:
   destroying a card takes its flux with it, and the deck's layout is driven from
   `ChildrenCount` and `IndexOfChild` rather than a baked count.
 
-## Writing the art in, and whether it stays
+## Writing the art in
+
+**Settled 2026-08-31: the cards keep `http` URLs and nothing is embedded.** The owner's call,
+for two reasons that outrank the request count — every player's copy costs no storage, and
+the art is always served from a public CDN rather than redistributed inside an item. Resonite
+caches by URL, so eight players holding decks drawn from the same 178 printings share the
+same textures; that was already recorded below as why per-card textures beat an atlas.
+
+So there is nothing to download and nothing to bake. The importer's whole job is to put the
+right URL string on the right card, and the mechanism is the one the panel already runs:
+
+```
+Card/url (string) -> ObjectValueSource -> StringToAbsoluteURI -> ObjectFieldDrive -> StaticTexture2D.URL
+```
+
+This is also the **only** way an image ever gets into a material — there is no ProtoFlux node
+that turns bytes into a texture. `AttachTexture2D` attaches the component; the URL is still
+what you set. And because the drive hands the field a live `Uri` rather than a serialized
+string, it is immune to the `@` marker bug that blanked the first probe.
+
+`build-deck-probe.mjs mode=driven` builds exactly that, and it is what the current probe is.
+Per card, on the `Visual (Baked)` slot: its own `StaticTexture2D` (URL null, driven), its own
+`UnlitMaterial` at the cell's ST, a `Card/url` variable holding the URL as a **plain,
+unmarked string**, and the five-component chain above cloned from the panel.
+
+**Everything hangs off `Visual (Baked)`, never off `Card`.** The deck chains `GetChild` —
+eleven of them, three taking another `GetChild` as their instance — so it walks
+`Cards -> buffer -> Card` and those child orderings are load-bearing. `Visual (Baked)` is a
+leaf with no children, so nothing existing can depend on what it holds. The test asserts no
+card or buffer slot gained a child.
+
+## Two bugs the tests caught before Resonite could
+
+Both were invisible to every check that existed before, and both are the same shape: a
+reference that resolves perfectly and points at the wrong thing.
+
+**Cloning the chain slot by slot.** The three flux slots reference each other —
+`StringToAbsoluteURI.Input` comes from the `ObjectValueSource` on the previous slot. Cloned
+one at a time, each with its own id map, those cross-slot references kept the **donor's**
+ids; and since the deck's own ids occupy the same low range, they landed on real but
+unrelated components. Zero dangling references, valid package, wrong graph. Clone a group
+that references itself in **one** call.
+
+**And then cloning one slot twice in that call.** Passing the same donor slot twice to build
+both the container and the first chain slot gave both copies identical ids, because one map
+keyed by old id maps each to one new id. That one the duplicate-id check caught.
+
+## Whether the art stays (closed)
 
 The importer cannot bake URLs at build time — the codes arrive over the wire — so it must
 **drive** each card's `StaticTexture2D.URL`, which is also the only way an image ever gets
@@ -126,15 +180,12 @@ immune to the `@` bug that blanked the static probe. Ship each deck card slot wi
 mechanism and its own material/texture, and the spawn loop's only new job is writing one
 string per card.
 
-**Whether the art then persists is genuinely open.** A texture referenced by an `http` URL is
-not embedded the way the browser bake embeds its atlas, so a saved deck may depend on the
-Worker forever. `AssetUploadTask` can be initialised from a URL (`http`/`https`/`ftp`), which
-suggests saving to inventory gathers and uploads it — but the gathering step lives in
-`FrooxEngine.Store`, which is not in the decompile, so the library cannot answer it.
-
-**Settle it in-world, not in the source.** Save an imported deck to inventory, restart, and
-spawn it with the Worker unreachable (or just watch whether the URLs come back as `resdb`).
-That is a two-minute test and it beats decompiling an assembly nobody has.
+Deliberately not pursued. A deck depending on the Worker is the intended design, not a
+defect — see "Writing the art in" above. If that ever needs revisiting, the open question was
+whether saving to inventory gathers and uploads an `http` texture: `AssetUploadTask` can be
+initialised from a URL (`http`/`https`/`ftp`), but the gathering step lives in
+`FrooxEngine.Store`, which is not in the decompile. Settle it in-world rather than in the
+source — save a deck, restart, and see whether the URLs come back as `resdb`.
 
 ## The card back, on the loose-card path
 
@@ -195,7 +246,11 @@ v [0.143, 0.286] — col 1, row 5, exactly. `booster/test-deck-probe.mjs` assert
 ST against those bounds rather than re-deriving it from the index, and a deliberately
 flipped V offset fails it.
 
-**Drag-tested 2026-08-30, and the answer is not in yet.** The probe imported and gave three
+**Drag-tested and CONFIRMED 2026-08-31: the remap works in-world.** A three-card deck
+imported with each card showing its own art, right way up, from its own texture, with no
+atlas anywhere. The deferred "decks into a real Ukilop deck" task is unblocked.
+
+The first attempt failed and is worth keeping: The probe imported and gave three
 real cards with the stock backs, but every front was blank: the `StaticTexture2D` had a
 **null URL**. That was not the remap and not a Resonite limitation — the probe wrote
 `https://…` into a `Sync<Uri>` without the DataTree's `@` marker, so the load threw and the

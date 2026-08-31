@@ -208,9 +208,21 @@ card i at col = i % 10, row = floor(i / 10) of the 10x7 grid
 
 ```bash
 cd booster
-RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe    # cards=TD01-001,... to pick
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe                # driven, the default
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe mode=static    # confirmed in-world
 RKL=/path/to/Resonite-Knowledge-Library npm run test:deck-probe
 ```
+
+Two modes, and the difference is the point. **`mode=static`** writes each card's texture URL
+at build time: it proves the UV remap and nothing else, and it is **confirmed in-world**.
+**`mode=driven`** leaves the URL null and drives it from a `Card/url` variable through the
+five-component chain cloned out of the panel — which is what the importer needs, because card
+codes arrive over the wire and cannot be baked.
+
+Everything a driven card needs hangs off its **`Visual (Baked)`** slot, never off `Card`: the
+deck chains `GetChild` (eleven, three of them taking another `GetChild` as their instance) so
+it walks `Cards -> buffer -> Card`, and those child orderings are load-bearing. `Visual
+(Baked)` is a leaf with no children, so nothing can depend on what it holds.
 
 It patches `data/template.resonitepackage`: trim to N, then give each card its own
 `StaticTexture2D` and its own front material at that ST, cloned from the template's own

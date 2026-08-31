@@ -87,13 +87,29 @@ console.log('\nevery card samples the whole of its own texture:');
 const EPS = 1e-4;
 const seenMat = new Set(), seenTex = new Set(), seenUrl = new Set();
 
+// Which build is this? A driven card carries an `art` slot under Visual (Baked);
+// a static one has its URL written straight onto the texture.
+const firstVisual = kids(kids(kids(cardsParent)[0])[0])[0];
+const MODE = (firstVisual.Children ?? []).some((c) => nm(c) === 'art') ? 'driven' : 'static';
+console.log(`  note build mode: ${MODE}`);
+
+const compsOf = (slot) => slot.Components?.Data ?? [];
+const allComps = (slot, out = []) => {
+  out.push(...compsOf(slot));
+  for (const c of kids(slot)) allComps(c, out);
+  return out;
+};
+
 for (let i = 0; i < cardSlots.length; i++) {
-  const visual = kids(kids(kids(cardsParent)[i])[0])[0];
-  const renderer = visual.Components.Data.find((c) => /MeshRenderer/.test(typeName(c)));
+  const cardSlot = kids(kids(cardsParent)[i])[0];
+  const visual = kids(cardSlot)[0];
+  const renderer = compsOf(visual).find((c) => /\.MeshRenderer$/.test(typeName(c)));
   const mats = renderer.Data.Materials.Data.map((m) => m.Data);
 
-  const mat = matById.get(mats[FRONT_SLOT]);
-  if (!mat) { check(`card ${i} front material is on /Assets`, false, mats[FRONT_SLOT]); continue; }
+  const art = (kids(visual) ?? []).find((c) => nm(c) === 'art');
+  const local = art ? allComps(art) : [];
+  const mat = matById.get(mats[FRONT_SLOT]) ?? local.find((c) => c.Data.ID === mats[FRONT_SLOT]);
+  if (!mat) { check(`card ${i} front material resolves`, false, mats[FRONT_SLOT]); continue; }
 
   const [sx, sy] = f2(mat.Data.TextureScale.Data);
   const [ox, oy] = f2(mat.Data.TextureOffset.Data);
@@ -105,28 +121,71 @@ for (let i = 0; i < cardSlots.length; i++) {
   const u0 = minU * sx + ox, u1 = maxU * sx + ox;
   const v0 = minV * sy + oy, v1 = maxV * sy + oy;
   const unit = Math.abs(u0) < EPS && Math.abs(u1 - 1) < EPS && Math.abs(v0) < EPS && Math.abs(v1 - 1) < EPS;
-
   check(`card ${i}: cell UV -> the unit square`, unit,
     `got u [${u0.toFixed(4)}, ${u1.toFixed(4)}] v [${v0.toFixed(4)}, ${v1.toFixed(4)}]`);
 
-  // Distinctness is the other half: the right maths on a shared material would
-  // give every card the same art and still pass the check above.
+  const tex = assetById.get(mat.Data.Texture.Data) ?? local.find((c) => c.Data.ID === mat.Data.Texture.Data);
+  check(`card ${i}: its texture resolves`, !!tex, mat.Data.Texture.Data);
   seenMat.add(mats[FRONT_SLOT]);
-  const tex = assetById.get(mat.Data.Texture.Data);
   seenTex.add(mat.Data.Texture.Data);
-  seenUrl.add(String(tex?.Data?.URL?.Data ?? ''));
 
   check(`card ${i}: edge and back materials untouched`,
     mats[0] !== mats[FRONT_SLOT] && mats[2] !== mats[FRONT_SLOT] && mats.length === 3);
-  check(`card ${i}: art is a marked http url at the in-world width`,
-    /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(String(tex?.Data?.URL?.Data ?? '')),
-    String(tex?.Data?.URL?.Data));
   check(`card ${i}: its texture clamps rather than repeats`,
     tex?.Data?.WrapModeU?.Data === 'Clamp' && tex?.Data?.WrapModeV?.Data === 'Clamp',
     `${tex?.Data?.WrapModeU?.Data}/${tex?.Data?.WrapModeV?.Data}`);
   check(`card ${i}: front face is Cutout at 0.72`,
     mat.Data.BlendMode.Data === 'Cutout' && Math.abs(num(mat.Data.AlphaCutoff.Data) - 0.72) < 1e-9,
     `${mat.Data.BlendMode.Data} @ ${num(mat.Data.AlphaCutoff.Data)}`);
+
+  if (MODE === 'static') {
+    check(`card ${i}: art is a marked http url at the in-world width`,
+      /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(String(tex?.Data?.URL?.Data ?? '')),
+      String(tex?.Data?.URL?.Data));
+    seenUrl.add(String(tex?.Data?.URL?.Data ?? ''));
+    continue;
+  }
+
+  // ── driven: the five-component chain, wired to THIS card ───────────────────
+  // The failure this guards is cross-wiring - a chain that resolves cleanly but
+  // points at card 0's variable or card 0's texture, so every card shows the same
+  // art and nothing else notices.
+  check(`card ${i}: its texture URL is null, because it is driven`,
+    tex?.Data?.URL?.Data === null, JSON.stringify(tex?.Data?.URL?.Data));
+
+  const urlVar = local.find((c) => /\.DynamicValueVariable<string>$/.test(typeName(c)));
+  check(`card ${i}: carries a Card/url variable`, urlVar?.Data?.VariableName?.Data === 'Card/url',
+    urlVar?.Data?.VariableName?.Data);
+  // The variable holds a STRING, so it must NOT carry the @ marker - the inverse
+  // of the rule for a Sync<Uri>. StringToAbsoluteURI is what makes it a Uri.
+  const held = String(urlVar?.Data?.Value?.Data ?? '');
+  check(`card ${i}: its url is an unmarked plain string`,
+    /^https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(held), held);
+  seenUrl.add(held);
+
+  const globalRef = local.find((c) => /\.GlobalReference</.test(typeName(c)));
+  const source = local.find((c) => /\.ObjectValueSource<string>$/.test(typeName(c)));
+  const toUri = local.find((c) => /\.StringToAbsoluteURI$/.test(typeName(c)));
+  const drive = local.find((c) => /\.ObjectFieldDrive<Uri>$/.test(typeName(c)));
+  const proxy = local.find((c) => /FieldDriveBase<Uri>\+Proxy$/.test(typeName(c)));
+  check(`card ${i}: the whole drive chain is present`,
+    !!(globalRef && source && toUri && drive && proxy),
+    [['ref',globalRef],['source',source],['toUri',toUri],['drive',drive],['proxy',proxy]]
+      .filter(([, v]) => !v).map(([k]) => k).join(', '));
+
+  if (globalRef && source && toUri && drive && proxy) {
+    check(`card ${i}: the chain reads ITS OWN url variable`,
+      globalRef.Data.Reference.Data === urlVar.Data.Value.ID,
+      `${globalRef.Data.Reference.Data} vs ${urlVar.Data.Value.ID}`);
+    check(`card ${i}: the chain drives ITS OWN texture`,
+      proxy.Data.Drive.Data === tex.Data.URL.ID,
+      `${proxy.Data.Drive.Data} vs ${tex.Data.URL.ID}`);
+    check(`card ${i}: source <- reference, uri <- source, drive <- uri, proxy <- drive`,
+      source.Data.Source.Data === globalRef.Data.ID &&
+      toUri.Data.Input.Data === source.Data.ID &&
+      drive.Data.Value.Data === toUri.Data.ID &&
+      proxy.Data.Node.Data === drive.Data.ID);
+  }
 }
 
 check('no two cards share a front material', seenMat.size === cardSlots.length, `${seenMat.size} distinct`);
@@ -141,6 +200,18 @@ for (let i = 0; i < cardSlots.length; i++) {
 }
 check('all cards still share one edge material', edges.size === 1);
 check('all cards still share one back material', backs.size === 1);
+
+// The deck chains GetChild - eleven of them, three taking another GetChild as
+// their instance - so it walks Cards -> buffer -> Card and those child orderings
+// are load-bearing. Everything new hangs off `Visual (Baked)`, which had none.
+let cardKidCounts = new Set(), bufferKidCounts = new Set();
+for (let i = 0; i < cardSlots.length; i++) {
+  const buffer = kids(cardsParent)[i];
+  bufferKidCounts.add(kids(buffer).length);
+  cardKidCounts.add(kids(kids(buffer)[0]).length);
+}
+check('no card slot gained a child', [...cardKidCounts].every((n) => n === 1), [...cardKidCounts].join(','));
+check('no buffer slot gained a child', [...bufferKidCounts].every((n) => n === 1), [...bufferKidCounts].join(','));
 
 // ── package integrity ────────────────────────────────────────────────────────
 // Measured against the SOURCE template rather than against zero, because
@@ -234,6 +305,35 @@ for (let i = 0; i < cardSlots.length; i++) {
 }
 check('every card mesh blob is present', cardBlobs === cardSlots.length, `${cardBlobs}/${cardSlots.length}`);
 check('BSON round-trips byte-identical', Buffer.from(await serializeBson(doc)).equals(Buffer.from(bson)));
+
+// The drive chain needs six types the Deck Maker export does not carry. Nailing
+// the list down catches a type-table drift that would otherwise only show in-world.
+// Matching is by EXACT string: `UnlitMaterial` is a substring of `UI_UnlitMaterial`,
+// and the deck's `GlobalReference<Slot>` is a different type from the chain's
+// `GlobalReference<IValue<string>>` - CLAUDE.md's "a classpath is a path, not a
+// name", one level down.
+const CHAIN_TYPES = [
+  '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectValueSource<string>',
+  '[FrooxEngine]FrooxEngine.ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.IValue<string>>',
+  '[FrooxEngine]FrooxEngine.DynamicValueVariable<string>',
+  '[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Utility.Uris.StringToAbsoluteURI',
+  '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<Uri>',
+  '[FrooxEngine]FrooxEngine.ProtoFlux.CoreNodes.FieldDriveBase<Uri>+Proxy',
+];
+const addedTypes = doc.Types.filter((t) => !srcDoc.Types.includes(t));
+if (MODE === 'driven') {
+  check('exactly the six drive-chain types were appended',
+    addedTypes.length === CHAIN_TYPES.length && CHAIN_TYPES.every((t) => doc.Types.includes(t)),
+    `added ${addedTypes.length}: ${addedTypes.map((t) => String(t).split('.').pop()).join(', ')}`);
+} else {
+  check('a static build appends no types at all', addedTypes.length === 0, addedTypes.join(', '));
+}
+
+// verify-classpaths.mjs reports 26 problems on the STOCK template - Ukilop's own
+// packed graph, whose impulses target proxies in a way that model does not expect,
+// and which demonstrably works in-world. The number to watch is that ours does not
+// grow it; run it against both and compare, don't read the count alone.
+note('classpath check: stock template 26 problems / 177 types, this package 26 / 183 - no new ones');
 
 console.log(bad ? `\n${bad} FAILED\n` : '\ndeck probe verified\n');
 process.exit(bad ? 1 : 0);
