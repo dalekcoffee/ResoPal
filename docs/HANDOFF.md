@@ -184,7 +184,8 @@ Two ways to do that, and the second is better:
 meshes to the panel, needs trim flux that destroys 63 slots for a 7-card booster, caps a deck
 at 70, and keeps the per-card ST because card *i* keeps mesh *i*.
 
-**Make a card self-contained and duplicate it** — preferred. Each card's position flux lives
+**Make a card self-contained and duplicate it** — chosen, and built:
+`build-deck-probe.mjs selfcontained=1`. Each card's position flux lives
 in `/Assets/proxy_i`, outside the card, which is why `DuplicateSlot` alone was not enough.
 Move that proxy inside its own `buffer` slot at build time and the card becomes duplicable.
 Measured on proxy 0: of its 8 external references, **2 point into its own buffer subtree**
@@ -198,7 +199,16 @@ That buys: one card in the package instead of seventy, no trim flux, no 70-card 
 every duplicate shares the template card's mesh and therefore its cell.
 
 `DestroyProxy` on the buffer already points at that proxy, so destroying a card still takes
-its flux with it once the proxy is its child.
+its flux with it once the proxy is its child — Ukilop built the link, the move only shortens
+it. The pairing is read from that `DestroyProxy` rather than by index, because "`/Assets` order
+matches card order" is an assumption and the component is the fact.
+
+`test-deck-probe.mjs` simulates the duplication rather than trusting it: it collects every id
+DECLARED inside a card's buffer, then splits the subtree's references into those that follow a
+copy and those that stay shared. **67 follow, 11 stay** — and the two that decide whether this
+works at all are on the right side: the card slot `IndexOfChild` reads, and the
+`SmoothTransform.TargetPosition` the driver writes. The shared `Cards` parent stays shared.
+Getting that split wrong gives a deck whose cards all sit on top of each other.
 
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
