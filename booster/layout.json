@@ -1,0 +1,460 @@
+{
+ "$comment": "Node positions taken from the owner's own cleanup of the panel, decoded from ResoPal_Panel_Routed1DalekCleanup.resonitepackage. Keyed by slot name + classpath. build-panel.mjs applies these instead of its own placement; the router then plumbs relays around them. Relays are NOT captured - they are routing output, not layout.",
+ "positions": {
+  "CARD/url -> texture|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectValueSource<string>": [
+   0,
+   0,
+   0
+  ],
+  "as a Uri|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Utility.Uris.StringToAbsoluteURI": [
+   0.36,
+   0,
+   0
+  ],
+  "drive the texture URL|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<Uri>": [
+   0.72,
+   0,
+   0
+  ],
+  "url: deck/td01|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   0.885,
+   -0.0412,
+   0
+  ],
+  "name: ResoPal/url|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   0.39,
+   0.0187,
+   0
+  ],
+  "on press: deck/td01|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiver": [
+   0.945,
+   0.0937,
+   0
+  ],
+  "set ResoPal/url := deck/td01|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.WriteDynamicObjectVariable<string>": [
+   1.215,
+   0.0637,
+   0
+  ],
+  "url: deck/td02|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   0.855,
+   -0.2962,
+   0
+  ],
+  "on press: deck/td02|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiver": [
+   0.945,
+   -0.1612,
+   0
+  ],
+  "set ResoPal/url := deck/td02|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.WriteDynamicObjectVariable<string>": [
+   1.2,
+   -0.1912,
+   0
+  ],
+  "url: pack/1|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   0.855,
+   -0.5662,
+   0
+  ],
+  "on press: pack/1|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiver": [
+   0.945,
+   -0.4013,
+   0
+  ],
+  "set ResoPal/url := pack/1|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.WriteDynamicObjectVariable<string>": [
+   1.215,
+   -0.4462,
+   0
+  ],
+  "text: could not set ResoPal/url|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   1.425,
+   -0.7912,
+   0
+  ],
+  "name: ResoPal/event|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   1.44,
+   -0.6862,
+   0
+  ],
+  "a write failed -> say so|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.WriteDynamicObjectVariable<string>": [
+   1.785,
+   -0.6562,
+   0
+  ],
+  "on press: import|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Actions.DynamicImpulseReceiver": [
+   1.68,
+   -1.1662,
+   0
+  ],
+  "the URL to fetch|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   2.565,
+   -0.0112,
+   0
+  ],
+  "URL -> request + readout|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectRelay<string>": [
+   2.82,
+   -0.0112,
+   0
+  ],
+  "URL -> Uri|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Utility.Uris.StringToAbsoluteURI": [
+   3.12,
+   -0.0112,
+   0
+  ],
+  "GET the card list|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Network.GET_String": [
+   3.348,
+   0,
+   0
+  ],
+  "run the request asynchronously|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Async.StartAsyncTask": [
+   2.16,
+   0.0487,
+   0
+  ],
+  "drive the URL readout|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>": [
+   3.135,
+   -0.0862,
+   0
+  ],
+  "url: /api/resolve|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   1.92,
+   -1.3012,
+   0
+  ],
+  "resolve URL -> Uri|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Utility.Uris.StringToAbsoluteURI": [
+   2.37,
+   -1.3012,
+   0
+  ],
+  "what you pasted|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectValueSource<string>": [
+   2.31,
+   -1.4063,
+   0
+  ],
+  "media type|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   2.28,
+   -1.5113,
+   0
+  ],
+  "POST what you pasted|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Network.POST_String": [
+   2.715,
+   -1.2263,
+   0
+  ],
+  "run the POST asynchronously|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Async.StartAsyncTask": [
+   1.98,
+   -1.1812,
+   0
+  ],
+  "the HTTP code as text|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Casts.ValueToObjectCast<HttpStatusCode>": [
+   4.425,
+   -0.0712,
+   0
+  ],
+  "text: response received - HTTP {0}|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   4.47,
+   0.1237,
+   0
+  ],
+  "fill in the code|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.FormatString": [
+   4.83,
+   -0.0562,
+   0
+  ],
+  "-> ResoPal/event|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.WriteDynamicObjectVariable<string>": [
+   5.835,
+   0.0187,
+   0
+  ],
+  "text: network error - no answer from the host|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   4.23,
+   -0.6712,
+   0
+  ],
+  "a request did not answer|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ContinuationRelay": [
+   3.87,
+   -0.5812,
+   0
+  ],
+  "text: host access refused|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   4.245,
+   -0.9412,
+   0
+  ],
+  "a request was refused|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ContinuationRelay": [
+   3.885,
+   -0.7762,
+   0
+  ],
+  "rest of the response|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.DataModelObjectFieldStore<string>": [
+   7.71,
+   -0.4912,
+   0
+  ],
+  "the whole response|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.DataModelObjectFieldStore<string>": [
+   6.975,
+   0.7688,
+   0
+  ],
+  "the Cards slot|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.SlotSource": [
+   8.04,
+   -0.3562,
+   0
+  ],
+  "the card template|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.SlotSource": [
+   9.45,
+   -0.1762,
+   0
+  ],
+  "start unpacking|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ContinuationRelay": [
+   7.23,
+   0.0637,
+   0
+  ],
+  "GET -> keep the whole body|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,string>": [
+   6.27,
+   0.0337,
+   0
+  ],
+  "GET -> and a copy to eat|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,string>": [
+   6.645,
+   0.0337,
+   0
+  ],
+  "POST -> keep the whole body|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,string>": [
+   6.735,
+   -0.5362,
+   0
+  ],
+  "POST -> and a copy to eat|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,string>": [
+   7.035,
+   -0.5362,
+   0
+  ],
+  "remove the last import|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Slots.DestroySlotChildren": [
+   8.4,
+   0.0187,
+   0
+  ],
+  "the loop is asynchronous|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Async.StartAsyncTask": [
+   8.7,
+   0.0337,
+   0
+  ],
+  "next record|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ContinuationRelay": [
+   9.0787,
+   0.03,
+   0
+  ],
+  "one frame|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>": [
+   8.91,
+   -0.2962,
+   0
+  ],
+  "let a frame pass|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Async.DelayUpdates": [
+   9.15,
+   -0.2813,
+   0
+  ],
+  "a newline|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   8.085,
+   -0.5662,
+   0
+  ],
+  "where the record ends|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.IndexOfString": [
+   8.595,
+   -0.5512,
+   0
+  ],
+  "shortest sane record|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>": [
+   8.94,
+   -0.5662,
+   0
+  ],
+  "another record?|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueGreaterThan<int>": [
+   9.15,
+   -0.5062,
+   0
+  ],
+  "another record ? spawn : done|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.If": [
+   9.51,
+   -0.2813,
+   0
+  ],
+  "this record|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.Substring": [
+   9.435,
+   -0.8212,
+   0
+  ],
+  "trimmed to the art URL|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.TrimString": [
+   9.735,
+   -0.7912,
+   0
+  ],
+  "just past the newline|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueInc<int>": [
+   8.91,
+   -1.2112,
+   0
+  ],
+  "everything after it|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.Substring": [
+   9.51,
+   -1.1812,
+   0
+  ],
+  "make a card|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Slots.DuplicateSlot": [
+   9.9,
+   -0.2962,
+   0
+  ],
+  "name: CARD/url|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   10.545,
+   -0.3562,
+   0
+  ],
+  "tell the card its art|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Variables.WriteDynamicObjectVariable<string>": [
+   10.98,
+   -0.3113,
+   0
+  ],
+  "text: a card would not take its art|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   13.395,
+   -0.5662,
+   0
+  ],
+  "which card is this|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Slots.IndexOfChild": [
+   11.115,
+   -0.6412,
+   0
+  ],
+  "that index, twice|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueRelay<int>": [
+   11.43,
+   -0.6412,
+   0
+  ],
+  "cards per row (10)|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>": [
+   11.43,
+   -0.5512,
+   0
+  ],
+  "which column|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueMod<int>": [
+   11.73,
+   -0.5812,
+   0
+  ],
+  "which row|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueDiv<int>": [
+   11.73,
+   -0.7162,
+   0
+  ],
+  "as a float|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Casts.Cast_int_To_float": [
+   12.105,
+   -0.5662,
+   0
+  ],
+  "column pitch|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<float>": [
+   12.12,
+   -0.5212,
+   0
+  ],
+  "row pitch (down)|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<float>": [
+   12.18,
+   -0.8062,
+   0
+  ],
+  "x|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueMul<float>": [
+   12.405,
+   -0.5812,
+   0
+  ],
+  "y|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueMul<float>": [
+   12.405,
+   -0.7162,
+   0
+  ],
+  "z|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<float>": [
+   12.345,
+   -0.8512,
+   0
+  ],
+  "where the card goes|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.Pack_Float3": [
+   12.66,
+   -0.6712,
+   0
+  ],
+  "put it there|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Transform.SetLocalPosition": [
+   12.99,
+   -0.2962,
+   0
+  ],
+  "eat that record|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectWrite<[FrooxEngine]FrooxEngine.ProtoFlux.FrooxEngineContext,string>": [
+   13.305,
+   -0.2962,
+   0
+  ],
+  "response -> readout|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectRelay<string>": [
+   7.215,
+   0.7688,
+   0
+  ],
+  "end of the first record|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.Substring": [
+   7.5,
+   0.6488,
+   0
+  ],
+  "first record, trimmed|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.TrimString": [
+   7.725,
+   0.6788,
+   0
+  ],
+  "response length|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Strings.StringLength": [
+   7.5,
+   0.7837,
+   0
+  ],
+  "did anything come back?|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.Operators.ValueGreaterThan<int>": [
+   7.725,
+   0.7688,
+   0
+  ],
+  "text: Ready|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   7.635,
+   0.9187,
+   0
+  ],
+  "status: first card, else the error, else Ready|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ObjectConditional<string>": [
+   8.07,
+   0.7538,
+   0
+  ],
+  "drive the status line|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>": [
+   8.31,
+   0.7837,
+   0
+  ],
+  "record width (64)|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueInput<int>": [
+   7.215,
+   0.6188,
+   0
+  ],
+  "text: all cards placed|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   9.525,
+   -0.5962,
+   0
+  ],
+  "the last event|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.ValueObjectInput<string>": [
+   7.425,
+   0.3187,
+   0
+  ],
+  "drive the event readout|[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.ObjectFieldDrive<string>": [
+   7.935,
+   0.3187,
+   0
+  ],
+  "StartAsyncTask|[ProtoFluxBindings]FrooxEngine.ProtoFlux.Runtimes.Execution.Nodes.FrooxEngine.Async.StartAsyncTask": [
+   13.485,
+   -0.2962,
+   0
+  ]
+ }
+}

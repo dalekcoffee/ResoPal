@@ -6,6 +6,16 @@ before touching anything that produces a deck package.
 
 ## The one thing that will bite you
 
+> **Stale as of 2026-08-31 — measured, not assumed.** A fresh `build-panel.mjs` was compared
+> against the committed `out/ResoPal_Panel.resonitepackage`: **152 slots identical** in name
+> and component set, and **all 122 positioned slots identical** to four decimals. The builder
+> reproduces the shipped panel, layout included, so a change can ship by rebuilding. The
+> section below is kept because the *reasoning* still applies the moment that stops being
+> true — re-run that comparison before trusting it.
+>
+> `build-panel.mjs` now takes `out=`, so a comparison build cannot overwrite the shipped
+> package. It has been overwritten once by a build run only to check the tests.
+
 **The shipped panel is a file the owner hand-packed in-world. The builder does not
 reproduce it.**
 
@@ -120,6 +130,22 @@ do not *all* share one URL rather than demanding they all differ.
 
 A 48-card deck is **1.8 MB** packaged, and pulls 24 distinct textures at `w=512`.
 
+## Three caches sit between a fixed image and a card in-world
+
+Landscape stayed broken twice after the fix was correct, both times because
+something was still holding older bytes. Worth knowing all three before debugging
+anything image-shaped:
+
+| Cache | Keyed on | Cleared by |
+|---|---|---|
+| Cloudflare edge | the Worker's own cache key | bumping `IMAGE_CACHE_VERSION` in `worker/src/index.js` |
+| Resonite's asset store | the full URL, per install | changing the URL — `ART_VERSION` in `build-deck-probe.mjs`, which appends `&v=` |
+| Resonite's session | nothing that matters here | — a new world does **not** clear the store above |
+
+A new world proves nothing: the asset store is per install, so a card fetched days
+ago comes back from disk. When an image change does not show up, bump both versions
+before suspecting the code.
+
 ## Landscape cards — why no in-world setting can fix it
 
 Confirmed in-world 2026-08-31: the 8 landscape printings in TD01 import wrong, squashed
@@ -184,21 +210,85 @@ Two ways to do that, and the second is better:
 meshes to the panel, needs trim flux that destroys 63 slots for a 7-card booster, caps a deck
 at 70, and keeps the per-card ST because card *i* keeps mesh *i*.
 
-**Make a card self-contained and duplicate it** — preferred. Each card's position flux lives
-in `/Assets/proxy_i`, outside the card, which is why `DuplicateSlot` alone was not enough.
-Move that proxy inside its own `buffer` slot at build time and the card becomes duplicable.
-Measured on proxy 0: of its 8 external references, **2 point into its own buffer subtree**
-(the card slot, and the `SmoothTransform.TargetPosition` it drives) — which `DuplicateSlot`
-rewires to the copy, exactly what is wanted — and **6 point at shared deck machinery**
-(`add/remove handling`, the `Cards` parent, shared constant sources) which it leaves alone,
-also exactly what is wanted.
+**Make a card self-contained and duplicate it** — tried, and it BREAKS THE DECK. Do not
+repeat it. Moving each card's `/Assets` proxy inside its own `buffer` slot makes the card
+duplicable on paper, and every structural check passed: the reference split came out 67
+following a copy and 11 staying shared, with the card slot and the driven transform on the
+right side. In-world the deck imported and looked perfect, the top card grabbed, shuffle
+worked — and after **"show all cards"** none of the spread cards could be picked up.
 
-That buys: one card in the package instead of seventy, no trim flux, no 70-card cap, the same
-`DuplicateSlot` loop the panel already runs — and **one constant ST for every card**, since
-every duplicate shares the template card's mesh and therefore its cell.
+The cause: the deck holds a `GlobalReference<Slot>` aimed at `/Deck/Assets` and indexes its
+children to reach a card's flux. Relocating the proxies emptied that slot, so those lookups
+find nothing. `Card/Grabbable` is written from `/Deck/logixs/Deck functions`, which is exactly
+the kind of code that walks it.
 
-`DestroyProxy` on the buffer already points at that proxy, so destroying a card still takes
-its flux with it once the proxy is its child.
+The lesson is bigger than the bug: **a reference audit proves what a duplicate would carry,
+not what the rest of the deck still expects to find.** Ukilop's graph reaches into `/Assets`
+by position, and nothing in the card's own subtree says so.
+
+So the deck stays exactly as exported, and the importer takes the other route: **ship the deck
+at its full card count and destroy the extras in-world.** `DestroyProxy` on each buffer already
+removes that card's `/Assets` proxy with it, which keeps the two lists in step — Ukilop built
+trimming in, and it is the supported way to change a deck's size.
+
+## The deck cannot live inside the panel
+
+Tried, measured, withdrawn. `graft-deck.mjs` folds a deck template into the panel package
+correctly - the splice verifies, every card keeps its mesh, material, texture and `Card/url`,
+no id is used twice across 52736 of them, and **the panel's own subtree comes out unchanged**:
+151 slots, identical components and positions before and after.
+
+It is still the wrong shape, and the numbers say why:
+
+| | components | flux slots |
+|---|---|---|
+| the panel | 228 | 119 |
+| a deck template | 3763 | 1992 |
+
+The panel's canvas is the thing the owner reads and has hand-cleaned to the pretty-flux
+standard. Grafting buries it under sixteen times its own size in Ukilop's flux. And the
+template has to arrive **inactive**, or a full deck sits in front of the panel - so its nodes
+bind to nothing and read as red, which is what "the flux is severely broken again" was.
+
+Nothing in the panel was damaged. The passenger was the problem.
+
+So the deck stays its own item. What is still open is how the panel reaches one — the
+importer needs a deck to write into, and the two shapes are: the panel targets a deck the
+player has already spawned, or the deck package carries its own import controls. That choice
+has not been made.
+
+## Putting an imported deck into the deck holder — everything needed to build it
+
+Both open questions are answered, read out of `data/template.resonitepackage` itself.
+
+**Reparenting a card into the deck.** `Surface/cards` **and** `Cards` each carry a
+`GrabbableReceiverSurface`, and there are four `OnGrabbableReceiverSurfaceReceived`
+handlers. So reparenting a grabbable card onto it is the supported path — the deck's own
+handler stacks it and sets `OrderOffset`. Nothing needs driving by hand.
+
+**Engaging the search spread.** Not an impulse: the whole deck defines exactly one dynamic
+impulse tag, `"Card removed"`, so there is nothing to fire. The spread state lives in two
+dynamic variables on `/Deck/Surface/cards`:
+
+| variable | type |
+|---|---|
+| `InnerDeck/grid X` | `DynamicValueVariable<int>` |
+| `InnerDeck/grid Y` | `DynamicValueVariable<int>` |
+
+Writing those two ints is what engages search — a plain `WriteDynamicValueVariable<int>`,
+no button press. The search button's own flux is packed into a proxy slot, which is why the
+button's `logix` child reads as empty.
+
+**The build, as specced with the owner:**
+
+- graft the deck template in (`graft-deck.mjs` works and verifies), `DuplicateSlot` on import
+- gate on **more than 30 cards**, off the same `ChildrenCount` the grid index already uses,
+  so boosters and single cards keep spawning loose with no branch of their own
+- reparent each card into `Cards`; the receiver surface does the stacking
+- write `InnerDeck/grid X` / `grid Y` to engage search
+- **new nodes go at x ≥ 14.3**, right of the owner's canvas (his spans x 0–13.48), on his row
+  Ys, wired into his existing chain so he can merge them in. He cleans up and merges; that is
+  the agreed division of labour, not licence to be sloppy.
 
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —

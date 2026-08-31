@@ -63,7 +63,11 @@ const meshBlob = async (id) => {
 };
 
 console.log('the deck still looks like a deck:');
-check('cards and their driver proxies stay 1:1', kids(assetsSlot).length === cardSlots.length,
+// The deck holds a GlobalReference<Slot> to /Deck/Assets and indexes its
+// children, so the proxies must stay there, one per card. Moving them inside the
+// cards emptied that slot and broke grabbing after "show all".
+check('cards and their driver proxies stay 1:1 under /Assets',
+  kids(assetsSlot).length === cardSlots.length,
   `${kids(assetsSlot).length} proxies vs ${cardSlots.length} cards`);
 check('GridFrames follows the card count',
   JSON.stringify(doc).includes(`"GridFrames"`) && (() => {
@@ -91,7 +95,11 @@ const seenMat = new Set(), seenTex = new Set(), seenUrl = new Set();
 // a static one has its URL written straight onto the texture.
 const firstVisual = kids(kids(kids(cardsParent)[0])[0])[0];
 const MODE = (firstVisual.Children ?? []).some((c) => nm(c) === 'art') ? 'driven' : 'static';
-console.log(`  note build mode: ${MODE}`);
+// A template ships with every url empty; a deck ships with them filled.
+const firstArt = (firstVisual.Children ?? []).find((c) => nm(c) === 'art');
+const BLANK = MODE === 'driven' && (firstArt?.Components?.Data ?? [])
+  .some((c) => c.Data?.VariableName?.Data === 'Card/url' && c.Data.Value.Data === '');
+console.log(`  note build mode: ${MODE}${BLANK ? ', blank template' : ''}`);
 
 const compsOf = (slot) => slot.Components?.Data ?? [];
 const allComps = (slot, out = []) => {
@@ -140,7 +148,7 @@ for (let i = 0; i < cardSlots.length; i++) {
 
   if (MODE === 'static') {
     check(`card ${i}: art is a marked http url at the in-world width`,
-      /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(String(tex?.Data?.URL?.Data ?? '')),
+      /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512&v=\d+$/.test(String(tex?.Data?.URL?.Data ?? '')),
       String(tex?.Data?.URL?.Data));
     seenUrl.add(String(tex?.Data?.URL?.Data ?? ''));
     continue;
@@ -159,8 +167,12 @@ for (let i = 0; i < cardSlots.length; i++) {
   // The variable holds a STRING, so it must NOT carry the @ marker - the inverse
   // of the rule for a Sync<Uri>. StringToAbsoluteURI is what makes it a Uri.
   const held = String(urlVar?.Data?.Value?.Data ?? '');
-  check(`card ${i}: its url is an unmarked plain string`,
-    /^https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(held), held);
+  // A blank template carries no url at all: the importer writes one per card at
+  // runtime, which is the entire reason the field is driven. A filled build must
+  // carry a real one, unmarked - it is a STRING, and StringToAbsoluteURI is what
+  // turns it into a Uri, so the `@` a Sync<Uri> needs must NOT be here.
+  check(`card ${i}: its url is ${BLANK ? 'empty, for the importer to fill' : 'an unmarked plain string'}`,
+    BLANK ? held === '' : /^https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512&v=\d+$/.test(held), held);
   seenUrl.add(held);
 
   const globalRef = local.find((c) => /\.GlobalReference</.test(typeName(c)));
@@ -195,9 +207,11 @@ check('no two cards share a texture', seenTex.size === cardSlots.length, `${seen
 // the material or the texture, because each card's ST is bound to its own atlas
 // cell - and those are gated above. So this only has to catch the collapse case,
 // where a wiring slip gives every card the same art.
-check('the cards do not all share one art url', cardSlots.length === 1 || seenUrl.size > 1,
+check(BLANK ? 'a template leaves every url empty' : 'the cards do not all share one art url',
+  BLANK ? (seenUrl.size === 1 && [...seenUrl][0] === '')
+        : (cardSlots.length === 1 || seenUrl.size > 1),
   `${seenUrl.size} distinct across ${cardSlots.length} cards`);
-note(`${seenUrl.size} distinct art urls over ${cardSlots.length} cards` +
+if (!BLANK) note(`${seenUrl.size} distinct art urls over ${cardSlots.length} cards` +
   (seenUrl.size < cardSlots.length ? ` (${cardSlots.length - seenUrl.size} duplicate printings)` : ''));
 
 // The edge and back stay shared - per-card materials are for the front only.

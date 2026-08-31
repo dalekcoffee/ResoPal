@@ -134,7 +134,10 @@ export const toFlat = (pulls) => pulls.map((c) => `${c.code},${c.rarity}`).join(
  * A URL that will not fit is an error rather than a truncation: a silently
  * clipped URL would load nothing and say nothing about why.
  */
-export const RECORD_WIDTH = 64;
+// 80, not 64. The longest code in the pools, TD01-024TSR-ERR, already made a
+// 65-character url - toFixed threw on that card before any of this. 80 leaves
+// room for it plus the cache-bust below.
+export const RECORD_WIDTH = 80;
 
 /**
  * In-world art is served at 512px, not the 1024 the site bakes from.
@@ -153,7 +156,13 @@ export const IN_WORLD_WIDTH = 512;
 export function toFixed(pulls, artBase) {
   const out = [];
   for (const c of pulls) {
-    const url = `${artBase}${c.code}?w=${IN_WORLD_WIDTH}`;
+    // &v= is what makes Resonite refetch. It caches an asset by URL, in the
+    // install, and neither a new world nor a fresh import clears it - so without
+    // this a client keeps the texture it fetched before the art was rotated. The
+    // Worker ignores unknown query parameters and keys its own cache on code and
+    // width, so this changes nothing upstream. Must match ART_VERSION in
+    // booster/build-deck-probe.mjs.
+    const url = `${artBase}${c.code}?w=${IN_WORLD_WIDTH}&v=2`;
     if (url.length > RECORD_WIDTH - 1)
       throw new Error(`art URL ${url.length} chars exceeds the ${RECORD_WIDTH - 1} the fixed format allows`);
     out.push(url.padEnd(RECORD_WIDTH - 1, ' ') + '\n');

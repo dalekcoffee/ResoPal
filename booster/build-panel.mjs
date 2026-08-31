@@ -285,12 +285,12 @@ const NODE_HALF_W = 0.15, NODE_HALF_H = 0.075;
 function node(name, classpath, fields = {}, pos = [0, 0, 0]) {
   const c = comp(classpath, fields);
   const s = slot(name, [c.comp], pos);
-  return { slot: s, id: c.id, f: c.f, pos };
+  return { slot: s, id: c.id, f: c.f, pos, classpath };
 }
 function proxyNode(name, classpath, proxyClasspath, fields = {}, pos = [0, 0, 0], extra = []) {
   const c = comp(classpath, fields);
   const p = comp(proxyClasspath, { Node: c.id, Path: [] });
-  return { slot: slot(name, [c.comp, p.comp, ...extra], pos), id: c.id, f: c.f, pos };
+  return { slot: slot(name, [c.comp, p.comp, ...extra], pos), id: c.id, f: c.f, pos, classpath };
 }
 const strIn = (name, s, pos) => node(name, T.StrIn, { Value: s }, pos);
 const intIn = (name, n, pos) => node(name, T.IntIn, { Value: I(n) }, pos);
@@ -587,7 +587,11 @@ const cardTemplate = slot('card', [
 // copy, reparented under the active Cards slot, comes up visible.
 const templateSlot = slot('Card template', [], [0, -0.42, 0], [cardTemplate]);
 templateSlot.Active.Data = false;
-const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.42, 0]);
+// -0.22, not -0.42. The canvas is 660 units at 0.00058, so the panel's bottom
+// edge sits at about -0.19; starting the grid at -0.42 left a gap wider than a
+// card row between the panel and the first card, and the grid grows DOWNWARD from
+// here, so the whole block hung well below the thing that spawned it.
+const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.22, 0]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE GRAPH. One canvas. Everything a human needs is on it.
@@ -911,13 +915,24 @@ const backB = node('back to the top', T.FlowRelay, { Next: null }, at(12.4, R + 
 // row below everything, and back up the left edge. A straight line from the end
 // of the loop to the start cuts through every data row in between.
 const backC = node('and in again', T.FlowRelay, { Next: loopTop.id }, at(-0.6, R + 13));
-eat.slot.Components.Data[0].Data.OnWritten.Data = backA.id;
+// The loop-back edge needs its OWN async context. `breathe` is a DelayUpdates -
+// an AsyncActionNode - and the top of the loop only reaches it through
+// `loopAsync`. Coming round again from `eat.OnWritten` re-enters that same async
+// node from a SYNCHRONOUS continuation, which runs nothing: the first record
+// spawns a card and every record after it dies silently. Found by the owner in
+// world, not by any check here - verify-classpaths walks impulse edges from the
+// entry points and treats the cycle as already-visited, so it never re-tests the
+// edge that closes the loop.
+const loopAgainAsync = node('and again, asynchronously', T.StartAsync,
+  { TaskStart: null, OnStarted: null, OnFailed: null }, at(10.2, R));
+eat.slot.Components.Data[0].Data.OnWritten.Data = loopAgainAsync.id;
+loopAgainAsync.slot.Components.Data[0].Data.TaskStart.Data = backA.id;
 backA.slot.Components.Data[0].Data.Next.Data = backB.id;
 backB.slot.Components.Data[0].Data.Next.Data = backC.id;
 loopTop.slot.Components.Data[0].Data.Next.Data = breathe.id;
 breathe.slot.Components.Data[0].Data.Next.Data = gate.id;
 
-const spawnNodes = [restStore, bodyStore, cardsNode, tmplNode, startLoop, getBody, getRest, postBody, postRest,
+const spawnNodes = [loopAgainAsync, restStore, bodyStore, cardsNode, tmplNode, startLoop, getBody, getRest, postBody, postRest,
   clear, loopAsync, loopTop, oneFrame, breathe, newline, nlAt, nlTrunk, shortest, another, gate,
   restTap, zero, record, artUrl, afterNl, remainder, dup, cardPath, setUrl,
   cardFailText, cardFailPath, cardFailSay, howMany, idx, perRow,
@@ -982,6 +997,135 @@ const evtFieldId = evtLabel.Components.Data[1].Data.Content.ID;
 const dEvent = drive('drive the event readout', 'str', evtInput.id, evtFieldId, [RX + COL, -ROW * 5, 0]);
 controlNodes.push(evtInput, dEvent);
 controlZones[3] = around('4 · what the panel shows you', readoutNodes.concat([evtInput, dEvent]));
+
+// ── the owner's layout ───────────────────────────────────────────────────────
+// Positions come from layout.json, decoded from the owner's own cleanup of this
+// panel. They are the source of truth: the placement rules in pretty-flux.md are
+// what he applied by hand, and reproducing them from the prose has failed twice.
+// The builder's own `at()` coordinates are now only a fallback for nodes he has
+// never seen - a new node lands somewhere sane and gets moved once, into the file.
+//
+// Relays are deliberately NOT in layout.json. They are routing output, not layout,
+// and the router places them around whatever these positions are.
+const LAYOUT = JSON.parse(await readFile(path.join(import.meta.dirname, 'layout.json'), 'utf8')).positions;
+let placed = 0; const unplaced = [];
+const known = Object.values(LAYOUT);
+const bbox = known.reduce((b, p) => ({
+  x0: Math.min(b.x0, p[0]), x1: Math.max(b.x1, p[0]),
+  y0: Math.min(b.y0, p[1]), y1: Math.max(b.y1, p[1]),
+}), { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity });
+
+for (const n of controlNodes) {
+  const key = `${String(n.slot.Name.Data)}|${n.classpath}`;
+  const p = LAYOUT[key];
+  if (p) { n.pos = [p[0], p[1], p[2] ?? 0]; placed++; }
+  else {
+    // A node the owner's cleanup has never seen. Park it in a row just under his
+    // canvas rather than at the builder's own old coordinates - those are in a
+    // different frame, and a node left there sits metres away and drags a wire
+    // across everything. Adjacent and obvious beats far and tidy: it gets placed
+    // properly the next time layout.json is refreshed, and the build names it.
+    n.pos = [bbox.x0 + unplaced.length * 0.36, bbox.y0 - 0.55, 0];
+    unplaced.push(key.split('|')[0]);
+  }
+  n.slot.Position.Data = n.pos.map((v) => D(v));
+}
+
+// ── the router ───────────────────────────────────────────────────────────────
+// Wires were emitted straight from producer to consumer and left that way, which
+// is why the canvas read as a spray of long diagonals: median wire 0.82 against
+// the reference's 0.23, p90 2.87 against 0.59, six wires over 4.0 where the gate
+// is none. The house style ships an autorouter for exactly this
+// (protoflux/pretty-flux.md 0: "emit logic wired directly to true producers, then
+// let an autorouter place every relay") and it was not being used.
+//
+// It turns each long or obstructed wire into a pipe, flanks corners with a relay
+// pair, and leaves short clear hops direct.
+const { routeGraph } = await import(`file://${path.join(RKL, 'protoflux', 'skill', 'scripts', 'router.mjs')}`);
+const LS = await import(`file://${path.join(RKL, 'protoflux', 'skill', 'scripts', 'layout_stats.mjs')}`);
+
+// Which relay can carry a given producer's output. A stream with no verified relay
+// type is left direct rather than guessed at - a wrong relay is a broken wire.
+const relayFor = (classpath) => {
+  if (/ObjectRelay<string>|GET_String|POST_String|Substring|ValueObjectInput<string>|ObjectValueSource<string>|ObjectRelay/.test(classpath)) return T.StrRelay;
+  if (/ValueRelay<int>|IndexOfString|ValueInput<int>|ChildrenCount|IndexOfChild|ValueAdd<int>|ValueSub<int>/.test(classpath)) return T.IntRelay;
+  return null;
+};
+
+// Keyed on the node's OWN component. A proxy alongside it (FieldDriveBase+Proxy)
+// points at a scene field, not at another node, so it is not a wire endpoint.
+const nodeRec = new Map();          // component id -> { data, box, type }
+for (const n of controlNodes) {
+  const data = n.slot.Components.Data[0].Data;
+  const type = n.classpath;
+  const { w, h } = LS.footprint(type, LS.countPorts(data));
+  nodeRec.set(data.ID, { data, type, box: { x: n.pos[0], y: n.pos[1], w, h } });
+}
+const obstacles = [...nodeRec.values()].map((r) => ({ x: r.box.x, y: r.box.y, w: r.box.w / 2, h: r.box.h / 2 }));
+
+const ROTQ = { 0: null, 90: [0, 0, 0.70710678, 0.70710678], 180: [0, 0, 1, 0], 270: [0, 0, -0.70710678, 0.70710678] };
+const routedRelays = [];
+function makeRelay(relayType, [x, y], rotDeg) {
+  const isCont = relayType === T.FlowRelay;
+  const n = node(isCont ? 'ContinuationRelay' : 'Relay', relayType,
+    isCont ? { Next: null } : { Input: null }, [x, y, 0]);
+  if (ROTQ[rotDeg]) n.slot.Rotation.Data = ROTQ[rotDeg].map((v) => D(v));
+  routedRelays.push(n);
+  const data = n.slot.Components.Data[0].Data;
+  return { id: n.id, setInput: (id) => { data.Input.Data = id; }, setNext: (id) => { data.Next.Data = id; } };
+}
+
+const streams = new Map();
+for (const rec of nodeRec.values()) {
+  for (const [k, v] of Object.entries(rec.data)) {
+    if (LS.META.has(k) || !v || typeof v !== 'object' || Array.isArray(v)) continue;
+    if (typeof v.Data !== 'string' || !/^[0-9a-f]{8}-/.test(v.Data)) continue;
+    const impulse = LS.IMPULSE_FIELDS.has(k) && !LS.isConditionalType(rec.type);
+    const other = nodeRec.get(v.Data);
+    if (!other) continue;                       // a scene reference, not a wire
+    if (impulse) {
+      const sy = LS.portY(rec.box.y, rec.box.h, LS.countPorts(rec.data), LS.portRow(rec.data, k));
+      streams.set(`${rec.data.ID}:${k}`, {
+        key: `${rec.data.ID}:${k}`, outId: null, source: rec.box, sy, relayType: T.FlowRelay, impulse: true,
+        consumers: [{ x: other.box.x, y: other.box.y, w: other.box.w, h: other.box.h, box: other.box,
+                      targetId: v.Data, rewire: (nid) => { v.Data = nid; }, label: k }],
+      });
+    } else {
+      // NEVER relay a reference to an action node's own COMPONENT id. That id is
+      // what an impulse targets, and it carries no value - a named output like
+      // GET_String.Content is addressed by its FIELD id. Keying a data stream on it
+      // put an ObjectRelay in front of the node, which then swallowed the
+      // StartAsyncTask -> TaskStart impulse edge: the request had nothing running
+      // it, and the relay's own Input pointed at a component id that has no value.
+      if (v.Data === other.data.ID) continue;
+      const rt = relayFor(other.type);
+      if (!rt) continue;                        // no verified relay for this type: leave it direct
+      let st = streams.get(v.Data);
+      if (!st) {
+        const sy = v.Data === other.data.ID ? other.box.y
+          : LS.portY(other.box.y, other.box.h, LS.countPorts(other.data), LS.portRowOfId(other.data, v.Data));
+        st = { key: v.Data, outId: v.Data, source: other.box, sy, relayType: rt, impulse: false, consumers: [] };
+        streams.set(v.Data, st);
+      }
+      const py = LS.portY(rec.box.y, rec.box.h, LS.countPorts(rec.data), LS.portRow(rec.data, k));
+      st.consumers.push({ x: rec.box.x, y: rec.box.y, w: rec.box.w, h: rec.box.h, box: rec.box, py,
+                          rewire: (nid) => { v.Data = nid; }, label: k });
+    }
+  }
+}
+
+const routed = routeGraph({
+  obstacles, streams: [...streams.values()], makeRelay,
+  // trunkFirst: a producer feeding three or more consumers gets ONE relay off its
+  // port and the branches come off that, so no node carries a six-wire fan.
+  // fillOver: Infinity - no fill relays on straight runs. The house rule is that
+  // every relay must turn a corner, tap a branch or make a real direction change
+  // (pretty-flux 0b); fills on long straights are the "sprinkled relays that change
+  // nothing" the owner called out. Corners still get their flank pair.
+  opts: { trunkFirst: true, fillOver: Infinity, directMax: 0.65 },
+  log: () => {},
+});
+controlNodes.push(...routedRelays);
 
 const controlFlux = slot('Flux - control', [], [0, 1.35, 0],
   [zones(controlZones), ...controlNodes.map((n) => n.slot)], 'Moduprint.ProtoFlux', controlId);
@@ -1079,7 +1223,10 @@ const res = await pf.exportPackage({
   name: 'ResoPal Panel',
   root, assets,
   embeddedAssets: [{ hash: FONT_HASH, bytes: fontBytes }, { hash: BACK_HASH, bytes: backBytes, metadata: backMeta }],
-  outPath: path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage'),
+  // out= so a comparison build cannot clobber the shipped package. It has been
+  // overwritten once by a build run only to check the tests, and out/ is tracked.
+  outPath: process.argv.slice(2).map((a) => a.split('=')).find(([k]) => k === 'out')?.[1]
+    ?? path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage'),
   version: '2026.6.24.835',
   typeVersions: TYPE_VERSIONS,
 });
@@ -1088,6 +1235,8 @@ console.log(`\n  buttons        ${BUTTONS.length} presets + paste & import`);
 BUTTONS.forEach((b) => console.log(`                   ${b.label.padEnd(32)} ${b.url}`));
 console.log(`                   ${'Import what I pasted'.padEnd(32)} POST ${RESOLVE}`);
 console.log(`  graph          ${controlNodes.length} nodes, ${controlZones.length} comment zones, one canvas`);
+console.log(`  layout         ${placed} nodes from layout.json` + (unplaced.length ? `, ${unplaced.length} placed by the builder: ${unplaced.slice(0, 4).join(', ')}` : ''));
+console.log(`  routing        ${routed.direct} direct, ${routed.routed} routed, ${routed.relays} relays, ${routed.fallback} fallback`);
 console.log(`  cards          one template, duplicated per record - no ceiling in the graph`);
 console.log(`  panel          ${CANVAS_W}x${CANVAS_H} units at ${CANVAS_SCALE} = ${(CANVAS_W * CANVAS_SCALE).toFixed(2)}x${(CANVAS_H * CANVAS_SCALE).toFixed(2)} m`);
 if (!res.ok) process.exitCode = 1;
