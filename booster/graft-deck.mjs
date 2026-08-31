@@ -19,6 +19,19 @@
  * card duplicable - was tried and broke grabbing, because the deck reaches into
  * `/Assets` by position (docs/HANDOFF.md).
  *
+ * ── NOT THE SHIPPING PATH. Measured 2026-08-31 ──────────────────────────────
+ * This works and its output verifies, but the shape is wrong. The deck is 3763
+ * components and 1992 flux slots; the panel is 228 and 119. Grafting one into the
+ * other buries the owner's clean Moduprint canvas under sixteen times its own size
+ * in someone else's flux, and the template has to arrive inactive - so its nodes
+ * bind to nothing and read as red.
+ *
+ * The panel's OWN subtree is untouched by this: 151 slots, identical components and
+ * positions before and after, measured. The mess is entirely the passenger.
+ *
+ * Kept because the splice itself is correct and tested, and because a deck may yet
+ * need to travel inside something. Do not ship its output into the panel.
+ *
  *   node booster/graft-deck.mjs [panel=out/ResoPal_Panel.resonitepackage]
  *                               [deck=out/ResoPal_DeckTemplate.resonitepackage]
  *                               [out=out/ResoPal_Panel_Deck.resonitepackage]

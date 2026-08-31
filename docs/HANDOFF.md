@@ -231,6 +231,32 @@ at its full card count and destroy the extras in-world.** `DestroyProxy` on each
 removes that card's `/Assets` proxy with it, which keeps the two lists in step — Ukilop built
 trimming in, and it is the supported way to change a deck's size.
 
+## The deck cannot live inside the panel
+
+Tried, measured, withdrawn. `graft-deck.mjs` folds a deck template into the panel package
+correctly - the splice verifies, every card keeps its mesh, material, texture and `Card/url`,
+no id is used twice across 52736 of them, and **the panel's own subtree comes out unchanged**:
+151 slots, identical components and positions before and after.
+
+It is still the wrong shape, and the numbers say why:
+
+| | components | flux slots |
+|---|---|---|
+| the panel | 228 | 119 |
+| a deck template | 3763 | 1992 |
+
+The panel's canvas is the thing the owner reads and has hand-cleaned to the pretty-flux
+standard. Grafting buries it under sixteen times its own size in Ukilop's flux. And the
+template has to arrive **inactive**, or a full deck sits in front of the panel - so its nodes
+bind to nothing and read as red, which is what "the flux is severely broken again" was.
+
+Nothing in the panel was damaged. The passenger was the problem.
+
+So the deck stays its own item. What is still open is how the panel reaches one — the
+importer needs a deck to write into, and the two shapes are: the panel targets a deck the
+player has already spawned, or the deck package carries its own import controls. That choice
+has not been made.
+
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
 exactly what the importer will do, minus the loop that writes the variable.
