@@ -133,6 +133,8 @@ const T = {
   ChildCount:  PB + 'FrooxEngine.Slots.ChildrenCount',
   GetChild:    PB + 'FrooxEngine.Slots.GetChild',
   SetParent:   PB + 'FrooxEngine.Slots.SetParent',
+  SetOrder: PB + 'FrooxEngine.Slots.SetSlotOrderOffset',
+  CastIntLong: PB + 'Casts.Cast_int_To_long',
   SetLocalPosRot: PB + 'FrooxEngine.Transform.SetLocalPositionRotation',
   SetLocalScale: PB + 'FrooxEngine.Transform.SetLocalScale',
   F3In:        PB + 'ValueInput<float3>',

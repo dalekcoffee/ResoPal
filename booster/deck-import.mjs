@@ -136,7 +136,7 @@ export function deckImport(kit, hook) {
   // deck itself is on, exactly as the card template is, because DuplicateSlot
   // copies `Active` verbatim and nothing downstream turns a copy back on.
   const tmpl = push(refNode('the deck template', hook.deckTemplate, at(3, 0.91)));
-  const decks = push(refNode('where decks go', hook.decksHolder, atg(3, 0.39)));
+  const decks = push(refNode('where decks go', hook.decksHolder, atg(4, 0.52)));
   const deckDup = push(node('make a deck', T.Dup,
     { Next: null, Template: tmpl.id, OverrideParent: decks.id, Duplicate: null }, atg(3, 0.91)));
   deckGate.slot.Components.Data[0].Data.OnTrue.Data = deckDup.id;
@@ -164,7 +164,7 @@ export function deckImport(kit, hook) {
       pos));
   };
   const surface = kid('the deck surface', deckDup.f.Duplicate, 'Surface/cards', atg(2, 0.65), atg(2, 0.91), at(1, 0.91));
-  const deckCards = kid('the deck Cards slot', surface.id, 'Cards', at(4, 0.39), atg(4, 0.30), at(4, 0.65));
+  const deckCards = kid('the deck Cards slot', surface.id, 'Cards', atg(3, 0.65), at(3, 0.52), at(3, 0.195));
   const deckBuffer = kid('the deck buffer template', deckDup.f.Duplicate, 'buffer', atg(4, -1.93), atg(3, -1.93), atg(3, -2.19));
   const deckAssets = kid('the deck Assets slot', deckDup.f.Duplicate, 'Assets', atg(4, -1.17), atg(4, -1.43), atg(4, -0.90));
 
@@ -173,7 +173,7 @@ export function deckImport(kit, hook) {
   // Each buffer carries a DestroyProxy aimed at that card's `/Assets` driver, so
   // clearing `Cards` empties `Assets` with it and the two lists stay in step.
   const clearStock = push(node('throw away the stock cards', T.ClearKids,
-    { Next: null, Instance: deckCards.id, PreserveAssets: false, SendDestroyingEvent: true }, at(3, 0.39)));
+    { Next: null, Instance: deckCards.id, PreserveAssets: false, SendDestroyingEvent: true }, at(2, 0.52)));
   deckDup.slot.Components.Data[0].Data.Next.Data = clearStock.id;
 
   // ── move the cards across, one per frame ───────────────────────────────────
@@ -182,7 +182,7 @@ export function deckImport(kit, hook) {
   // continuation runs nothing at all, silently - the defect that once spawned the
   // first card of an import and dropped every one after it.
   const moveAsync = push(node('moving is asynchronous', T.StartAsync,
-    { TaskStart: null, OnStarted: null, OnFailed: null }, atg(3, 0.13)));
+    { TaskStart: null, OnStarted: null, OnFailed: null }, at(2, 0.30)));
   clearStock.slot.Components.Data[0].Data.Next.Data = moveAsync.id;
 
   // Down the right edge and back along an empty row, rather than one diagonal
@@ -204,8 +204,8 @@ export function deckImport(kit, hook) {
   // wire back up to the gate's. A reference node is two components and no wire at
   // all; the wire it replaces ran three units down the spine column and through
   // four other nodes on the way.
-  const panelCardsB = push(refNode('the panel Cards slot', hook.panelCards, at(2, -2.40)));
-  const countB = push(node('how many are still loose', T.ChildCount, { Instance: panelCardsB.id }, atg(2, -1.43)));
+  const panelCardsB = push(refNode('the panel Cards slot', hook.panelCards, atg(2, -2.47)));
+  const countB = push(node('how many are still loose', T.ChildCount, { Instance: panelCardsB.id }, atg(3, -2.70)));
   const none = push(intIn('none left', 0, at(2, -1.17)));
   // The guard re-reads the count every pass, which is why this terminates: each
   // pass takes child 0 off the panel's Cards slot, so the count falls by one and
@@ -250,7 +250,7 @@ export function deckImport(kit, hook) {
       PreserveGlobalPosition: keepLocal(atg(3, -1.56)) }, at(3, -1.56)));
   bufDup.slot.Components.Data[0].Data.Next.Data = proxyHome.id;
 
-  const firstB = push(intIn('the first one', 0, at(1, -3.00)));
+  const firstB = push(intIn('the first one', 0, atg(2, -3.00)));
   const nextCard = push(node('the card on top', T.GetChild,
     { Instance: panelCardsB.id, ChildIndex: firstB.id }, at(1, -2.70)));
   // ── the card is reset and resized BEFORE it is moved, and the order is the
@@ -293,12 +293,33 @@ export function deckImport(kit, hook) {
     { Next: null, Instance: nextCard.id, NewParent: bufDup.f.Duplicate, PreserveGlobalPosition: keepLocal(atg(1, -2.08)) }, atg(1, -2.40)));
   cardBig.slot.Components.Data[0].Data.Next.Data = cardIn.id;
 
+  // ── give the buffer an OrderOffset, or shuffle has nothing to shuffle ─────
+  // Shuffle is a SWAP: `RandomInt(0, ChildrenCount)` picks a buffer under `Cards`
+  // and `SetSlotOrderOffset` exchanges its OrderOffset with another's. It never
+  // touches the cards at all. So a deck whose buffers all carry the SAME
+  // OrderOffset shuffles perfectly and changes nothing - which is exactly what a
+  // duplicate of the template buffer gives you, because `DuplicateSlot` copies
+  // OrderOffset verbatim and the template's is 0. Ukilop's own handler assigns one
+  // to every card it receives; this had skipped it on the reasoning that insertion
+  // order already reads correctly, which was true and beside the point.
+  //
+  // The value is the count of what is already in the deck, read BEFORE this buffer
+  // joins, so the offsets come out 0, 1, 2 … in insertion order. That keeps list
+  // index equal to stack position, which is the invariant the atlas order and the
+  // site's reveal order both rest on (CLAUDE.md, "A pull is ordered rarest-first").
+  const inDeck = push(node('how many are in the deck already', T.ChildCount,
+    { Instance: deckCards.id }, at(2, -2.83)));
+  const inDeckLong = push(node('as a long', T.CastIntLong, { Input: inDeck.id }, atg(2, -3.30)));
+  const setOrder = push(node('its place in the stack', T.SetOrder,
+    { Next: null, Instance: bufDup.f.Duplicate, OrderOffset: inDeckLong.id }, at(1, -3.12)));
+  cardIn.slot.Components.Data[0].Data.Next.Data = setOrder.id;
+
   const bufIn = push(node('and the buffer joins the deck', T.SetParent,
-    { Next: null, Instance: bufDup.f.Duplicate, NewParent: deckCards.id, PreserveGlobalPosition: keepLocal(atg(2, -2.70)) }, at(1, -2.40)));
-  cardIn.slot.Components.Data[0].Data.Next.Data = bufIn.id;
+    { Next: null, Instance: bufDup.f.Duplicate, NewParent: deckCards.id, PreserveGlobalPosition: keepLocal(atg(2, -2.70)) }, at(1, -2.47)));
+  setOrder.slot.Components.Data[0].Data.Next.Data = bufIn.id;
 
   const againAsync = push(node('and on to the next card, asynchronously', T.StartAsync,
-    { TaskStart: null, OnStarted: null, OnFailed: null }, atg(2, -2.40)));
+    { TaskStart: null, OnStarted: null, OnFailed: null }, atg(2, -2.19)));
   bufIn.slot.Components.Data[0].Data.Next.Data = againAsync.id;
   // Three corners, not one diagonal: out along the band, up the right edge, and
   // back along an empty row into the top of the loop. A straight line from the end

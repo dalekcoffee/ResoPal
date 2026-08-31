@@ -638,10 +638,30 @@ console.log(`${NEWLINE}the deck-import branch:`);
   // never scaled and the last pass reads null - which breaks the chain and strands
   // the last card. Asserting the ORDER is asserting both of those cannot come back.
   check('the card is reset and resized while it is still the one GetChild names',
-    ['DuplicateSlot', 'SetParent', 'SetLocalPositionRotation', 'SetLocalScale', 'SetParent', 'SetParent']
-      .every((t, i) => moveOrder[i] === t),
-    moveOrder.slice(0, 7).join(' -> '));
-  const [, toAssets, cardHome, cardBig, cardIn, bufIn] = chainFrom(bufDup?.id, 8);
+    ['DuplicateSlot', 'SetParent', 'SetLocalPositionRotation', 'SetLocalScale', 'SetParent',
+     'SetSlotOrderOffset', 'SetParent'].every((t, i) => moveOrder[i] === t),
+    moveOrder.slice(0, 8).join(' -> '));
+  const [, toAssets, cardHome, cardBig, cardIn, setOrder, bufIn] = chainFrom(bufDup?.id, 9);
+
+  // Shuffle SWAPS OrderOffsets between buffers and never touches the cards, so a
+  // deck whose buffers all carry the same offset shuffles and changes nothing.
+  // `DuplicateSlot` copies the template buffer's 0 to every copy, so the importer
+  // has to assign one. The count of what is already in the deck, read BEFORE this
+  // buffer joins, gives 0, 1, 2 … in insertion order - list index equal to stack
+  // position, which the atlas order and the reveal order both rest on.
+  check('each buffer gets its own OrderOffset, or shuffle is a no-op',
+    short(setOrder?.type) === 'SetSlotOrderOffset' &&
+    byField.get(arg(setOrder, 'Instance'))?.name === 'Duplicate');
+  {
+    const src = deref(arg(setOrder, 'OrderOffset'));
+    const counted = deref(arg(src, 'Input'));
+    check('and it is the deck\'s own card count, not a constant',
+      short(src?.type) === 'Cast_int_To_long' && short(counted?.type) === 'ChildrenCount',
+      `${short(src?.type)} <- ${short(counted?.type)}`);
+    check('read off the deck Cards slot, before the buffer joins it',
+      short(byComp.get(arg(counted, 'Instance'))?.type) === 'FindChildByName' &&
+      chainFrom(arg(setOrder, 'Next'), 1)[0]?.id === bufIn?.id);
+  }
   check('all three act on the same card', arg(cardHome, 'Instance') === arg(cardIn, 'Instance') &&
     arg(cardBig, 'Instance') === arg(cardIn, 'Instance'));
 
@@ -885,11 +905,12 @@ const nodesOf = (c) => (c.Children || []).filter((s) => nm(s) !== 'Meta: Comment
 // An inspectability budget, not a hard limit: past roughly this many nodes the
 // canvas stops being something a person can unpack and follow in one sitting.
 // Raised from 130 with the deck-import branch, which is a fifth stage rather than
-// padding: 116 nodes became 168, and the branch's own 51 are a gate, a deck
-// duplication, four name lookups and a per-card move loop. The budget is the
+// padding: 116 nodes became 177, and the branch's own 60 are a gate, a deck
+// duplication, four name lookups and a per-card move loop that resets, resizes,
+// orders and reparents each card. The budget is the
 // inspectability one, so it moves when the graph genuinely gains a stage and not
 // when a change merely spends it.
-check('the whole graph is small enough to read', nodesOf(control).length <= 175, `${nodesOf(control).length} nodes`);
+check('the whole graph is small enough to read', nodesOf(control).length <= 180, `${nodesOf(control).length} nodes`);
 
 // Comment zones: present, every one titled.
 {

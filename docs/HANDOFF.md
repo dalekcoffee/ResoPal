@@ -708,6 +708,43 @@ and move it last. Both survive the move — `SetParent` with `PreserveGlobalPosi
 keeps the local transform, and local scale is not touched by reparenting at all.
 `test-panel.mjs` asserts the order and that all three nodes name the same card.
 
+## Shuffle is a swap, so every buffer needs its own OrderOffset
+
+Shuffle survived the import structurally — the buttons subtree and its flux come out
+byte-alike, and both `ButtonEvents` still resolve — and did nothing at all. It is not driven
+off the cards:
+
+```
+RandomInt(0, ChildrenCount(Cards))  ->  GetChild(Cards, that)
+SetSlotOrderOffset( that buffer, GetSlotOrderOffset( another ) )   ← a SWAP
+```
+
+It permutes `OrderOffset` between the buffers under `Cards` and never touches a `Card` slot.
+So a deck whose buffers all carry the **same** offset shuffles perfectly and changes nothing
+— and `DuplicateSlot` copies `OrderOffset` verbatim, so every buffer duplicated from
+`/Deck/buffer` inherits its 0.
+
+Ukilop's own handler assigns one to every card it receives (`SetSlotOrderOffset` off an
+`ImpulseMultiplexer`). The importer had skipped it, reasoning that insertion order already
+reads correctly — true, and beside the point.
+
+It now writes `ChildrenCount(deck Cards)` — read **before** the buffer joins, so the offsets
+come out 0, 1, 2 … in insertion order, keeping list index equal to stack position.
+
+**The wider lesson: the deck has a per-card contract and it is worth reading before adding to
+it.** Every `Card` slot Ukilop makes carries a `Card` space with `Card/index` and
+`Card/Grabbable`, and the buffer around it carries the `OrderOffset`. Our imported cards
+satisfy none of the `Card/*` half — they carry `CARD`/`CARD/url`, which is the panel's own
+space and deliberately not the deck's. Nothing has needed those two yet; if a deck feature
+turns out dead on an imported deck, that is the first place to look. The full list of
+variable names the deck defines:
+
+```
+Card/Grabbable | Card/index | Deck/Filler | Deck/MaterialBack | Deck/MaterialEdge
+Deck/MaterialFront | Deck/Ready | Deck/cardSize | InnerDeck/SmoothSpeed
+InnerDeck/grid X | InnerDeck/grid Y
+```
+
 ## The card is thinned, not just scaled
 
 The deck stacks its buffers exactly `Deck/cardSize`.Z apart — the reference deck's buffers
