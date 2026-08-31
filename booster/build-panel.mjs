@@ -994,6 +994,39 @@ const dEvent = drive('drive the event readout', 'str', evtInput.id, evtFieldId, 
 controlNodes.push(evtInput, dEvent);
 controlZones[3] = around('4 · what the panel shows you', readoutNodes.concat([evtInput, dEvent]));
 
+// ── the owner's layout ───────────────────────────────────────────────────────
+// Positions come from layout.json, decoded from the owner's own cleanup of this
+// panel. They are the source of truth: the placement rules in pretty-flux.md are
+// what he applied by hand, and reproducing them from the prose has failed twice.
+// The builder's own `at()` coordinates are now only a fallback for nodes he has
+// never seen - a new node lands somewhere sane and gets moved once, into the file.
+//
+// Relays are deliberately NOT in layout.json. They are routing output, not layout,
+// and the router places them around whatever these positions are.
+const LAYOUT = JSON.parse(await readFile(path.join(import.meta.dirname, 'layout.json'), 'utf8')).positions;
+let placed = 0; const unplaced = [];
+const known = Object.values(LAYOUT);
+const bbox = known.reduce((b, p) => ({
+  x0: Math.min(b.x0, p[0]), x1: Math.max(b.x1, p[0]),
+  y0: Math.min(b.y0, p[1]), y1: Math.max(b.y1, p[1]),
+}), { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity });
+
+for (const n of controlNodes) {
+  const key = `${String(n.slot.Name.Data)}|${n.classpath}`;
+  const p = LAYOUT[key];
+  if (p) { n.pos = [p[0], p[1], p[2] ?? 0]; placed++; }
+  else {
+    // A node the owner's cleanup has never seen. Park it in a row just under his
+    // canvas rather than at the builder's own old coordinates - those are in a
+    // different frame, and a node left there sits metres away and drags a wire
+    // across everything. Adjacent and obvious beats far and tidy: it gets placed
+    // properly the next time layout.json is refreshed, and the build names it.
+    n.pos = [bbox.x0 + unplaced.length * 0.36, bbox.y0 - 0.55, 0];
+    unplaced.push(key.split('|')[0]);
+  }
+  n.slot.Position.Data = n.pos.map((v) => D(v));
+}
+
 // ── the router ───────────────────────────────────────────────────────────────
 // Wires were emitted straight from producer to consumer and left that way, which
 // is why the canvas read as a spray of long diagonals: median wire 0.82 against
@@ -1198,6 +1231,7 @@ console.log(`\n  buttons        ${BUTTONS.length} presets + paste & import`);
 BUTTONS.forEach((b) => console.log(`                   ${b.label.padEnd(32)} ${b.url}`));
 console.log(`                   ${'Import what I pasted'.padEnd(32)} POST ${RESOLVE}`);
 console.log(`  graph          ${controlNodes.length} nodes, ${controlZones.length} comment zones, one canvas`);
+console.log(`  layout         ${placed} nodes from layout.json` + (unplaced.length ? `, ${unplaced.length} placed by the builder: ${unplaced.slice(0, 4).join(', ')}` : ''));
 console.log(`  routing        ${routed.direct} direct, ${routed.routed} routed, ${routed.relays} relays, ${routed.fallback} fallback`);
 console.log(`  cards          one template, duplicated per record - no ceiling in the graph`);
 console.log(`  panel          ${CANVAS_W}x${CANVAS_H} units at ${CANVAS_SCALE} = ${(CANVAS_W * CANVAS_SCALE).toFixed(2)}x${(CANVAS_H * CANVAS_SCALE).toFixed(2)} m`);
