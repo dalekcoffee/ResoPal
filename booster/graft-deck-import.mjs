@@ -41,8 +41,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
 import { memberOrder, isFluxNode, typeVersion } from './members.mjs';
-import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS,
-         DECKS_POSITION, DECKS_ROTATION } from './deck-import.mjs';
+import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -248,12 +247,14 @@ if (!cardsSlot) throw new Error('no Cards slot on the panel root');
 
 // A deck is a metre-wide object; it does not belong in the grid the loose cards
 // land on, so it gets its own slot beside it rather than sharing that parent.
-// Beside the panel rather than under it: the loose-card grid grows DOWNWARD from
-// -0.22 and a 50-card import reaches about -0.70, so a deck parked below would
-// land inside it. A deck is also half a metre of furniture, which is why it does
-// not share the cards' parent. Pose from DECKS_POSITION / DECKS_ROTATION.
-const decksSlot = slot('Decks', [], DECKS_POSITION);
-decksSlot.Rotation.Data = DECKS_ROTATION.map(D);
+// Its own parent rather than the loose cards': a deck is half a metre of furniture
+// and the card grid grows down into where it would sit.
+//
+// IDENTITY, deliberately. `Slot.Duplicate` keeps the template's GLOBAL transform
+// by default, so a duplicate ignores whatever pose this slot has - posing it is
+// the one thing that cannot work. The pose lives on the deck template's root,
+// written by `graft-deck.mjs`; this is only somewhere for duplicates to hang.
+const decksSlot = slot('Decks', [], [0, 0, 0]);
 doc.Object.Children.push(decksSlot);
 
 // The panel's card is whatever `build-panel.mjs` built it as; its BoxCollider is

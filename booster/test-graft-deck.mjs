@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import JSZip from 'jszip';
+import { DECK_POSITION, DECK_ROTATION } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const decodeMjs = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
@@ -46,6 +47,29 @@ check('the HOLDER is inactive, so the template stays out of sight',
 const deckSlot = kids(holder ?? {})[0];
 check('and the DECK inside it is ACTIVE, or every duplicate would be invisible',
   deckSlot?.Active?.Data === true, String(deckSlot?.Active?.Data));
+
+// THE POSE LIVES HERE, not on the `Decks` slot the duplicates are parented under.
+// `Slot.Duplicate(parent, keepGlobalTransform = true)` - the default the ProtoFlux
+// node takes - keeps the TEMPLATE's world transform and merely re-parents, so the
+// parent's own pose never enters into it. The holder above must stay at identity
+// too, or it would add to this.
+{
+  const num = (v) => Number(v);
+  const hp = (holder?.Position?.Data || []).map(num), hr = (holder?.Rotation?.Data || []).map(num);
+  check('the holder adds nothing to the pose',
+    hp.every((v) => Math.abs(v) < 1e-6) && Math.abs(hr[3] - 1) < 1e-6);
+  const p = (deckSlot?.Position?.Data || []).map(num), r = (deckSlot?.Rotation?.Data || []).map(num);
+  check('and the deck root carries the pose a duplicate will inherit',
+    DECK_POSITION.every((v, i) => Math.abs(p[i] - v) < 1e-6) &&
+    DECK_ROTATION.every((v, i) => Math.abs(r[i] - v) < 1e-6),
+    `pos ${p.map((v) => v.toFixed(3))} rot ${r.map((v) => v.toFixed(3))}`);
+  // Euler(-90,-90,-90) through floatQ.EulerRad, checked so a hand-edited value
+  // cannot quietly stop being a rotation.
+  check('which is a unit quaternion', Math.abs(Math.hypot(...DECK_ROTATION) - 1) < 1e-6);
+  // The export's own 0.91 was saved-in-world residue, not an authored size.
+  check('and scale 1, not the 0.91 the export carried',
+    (deckSlot?.Scale?.Data || []).map(num).every((v) => Math.abs(v - 1) < 1e-6));
+}
 for (const want of ['Card template', 'Cards', 'credits']) {
   check(`the panel still has its "${want}"`, rootKids.some((s) => nm(s) === want),
     rootKids.map(nm).join(', '));

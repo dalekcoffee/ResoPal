@@ -815,30 +815,47 @@ Deck/MaterialFront | Deck/Ready | Deck/cardSize | InnerDeck/SmoothSpeed
 InnerDeck/grid X | InnerDeck/grid Y
 ```
 
-## Where a spawned deck sits, and why identity was wrong
+## Where a spawned deck sits — and why the pose goes on the TEMPLATE
 
 A deck is authored **Y-up** — its buffers stack along local +Z and its card faces look along
-local +Y — and the panel is a **wall**. So a `Decks` slot at identity rotation stands the deck
-on its side, which is what the first few imports did.
+local +Y — and the panel is a **wall**. So a deck at identity rotation stands on its side,
+which is what the first few imports did.
 
-The pose was set in-world by the owner and read back off the Scene Inspector:
+**The pose goes on the deck template's root, not on the `Decks` slot duplicates land under.**
+Putting it on `Decks` was tried and did nothing at all:
+
+```cs
+public Slot Duplicate(Slot duplicateRoot = null, bool keepGlobalTransform = true, …)
+```
+
+and the ProtoFlux node calls `slot.Duplicate(duplicateRoot)`, taking that default. A duplicate
+keeps the **template's** world transform and is merely re-parented — the new parent's own pose
+never enters into it. Posing the parent is the one thing that cannot work.
+
+**That is the second time a transform-preserving flag has defaulted to TRUE and quietly
+ignored what this code set** — `SetParent.PreserveGlobalPosition` was the first, and it moved
+every card off its buffer. Assume any such flag is on unless the file says otherwise.
+
+So `graft-deck.mjs` writes the pose onto the grafted deck's root, the holder above it stays at
+identity so it adds nothing, and `Decks` stays at identity too. The template is a child of the
+panel, so the pose is still panel-relative and a deck still comes up square to the reader.
 
 ```
-Decks   position  0.2, 0, -1.31        (panel space)
-        rotation  Euler(-90, -90, -90) = (0, -0.70710678, -0.70710678, 0)
+Deck template (holder)   identity, inactive
+  Deck (the template)    pos 0.2, 0, -1.31   rot Euler(-90, -90, -90)
+Decks                    identity — somewhere for duplicates to hang, nothing more
 ```
 
-`floatQ.EulerRad` turns those three angles into a half turn about the axis between −Y and −Z.
-It maps the deck's local **+Z to panel up** and its local **+Y to panel forward**, so the deck
-lies as a stack with its card faces toward whoever is reading the panel. Both values live in
-`deck-import.mjs` so the builder and the graft cannot drift, and both are **panel-relative**,
-so the deck follows the panel wherever it is placed. `test-panel.mjs` holds the slot to them
-and checks the quaternion is still unit length.
+`Euler(-90, -90, -90)` through `floatQ.EulerRad` is `(0, -0.70710678, -0.70710678, 0)`, a half
+turn about the axis between −Y and −Z. Checked against the basis vectors, it maps local +Z to
+panel up and local +Y to panel forward. `test-graft-deck.mjs` holds the deck root to the pose,
+the holder to identity and the scale to 1; `test-panel.mjs` holds `Decks` to identity and
+checks the duplicate is parented into it.
 
 > **One number to confirm.** The owner read the position as `.2 1.3 -1.3`, but the inspector
 > shows `y = 1.31130226e-06` — that is 1.3 × 10⁻⁶, i.e. zero, and its mantissa happens to
 > match the z. `0.2, 0, -1.31` is what shipped. If the deck wants to be a metre and a third
-> **above** the panel rather than level with it, `DECKS_POSITION` is the one line to change.
+> **above** the panel rather than level with it, `DECK_POSITION` is the one line to change.
 
 ## Square corners: the imported card is ours, not Ukilop's
 

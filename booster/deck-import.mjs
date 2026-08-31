@@ -103,8 +103,8 @@ export const DECK_CARD_HEIGHT = 0.25;
 export const DECK_CARD_THICKNESS = 0.0015911388909444213;
 
 /**
- * Where a spawned deck sits, in the PANEL's frame — placed in-world by the owner
- * and read back off the Scene Inspector.
+ * The pose a spawned deck takes, in the PANEL's frame — placed in-world by the
+ * owner and read back off the Scene Inspector.
  *
  * Rotation is `Euler(-90, -90, -90)`, which `floatQ.EulerRad` turns into
  * `(0, -0.70710678, -0.70710678, 0)`: a half turn about the axis between -Y and
@@ -113,12 +113,27 @@ export const DECK_CARD_THICKNESS = 0.0015911388909444213;
  * faces toward whoever is reading the panel. Identity left it standing on its side,
  * because a deck is authored Y-up and the panel is a wall.
  *
- * Both live here rather than in either builder so the graft and the build cannot
- * drift, and both are in panel space, so the deck follows the panel wherever it is
- * put.
+ * ── IT GOES ON THE TEMPLATE, NOT ON `Decks` ─────────────────────────────────
+ * This was first put on the `Decks` slot the duplicates are parented under, and it
+ * did nothing at all, because:
+ *
+ *   public Slot Duplicate(Slot duplicateRoot = null, bool keepGlobalTransform = true, …)
+ *
+ * and the ProtoFlux node calls `slot.Duplicate(duplicateRoot)` — taking that
+ * default. A duplicate keeps the TEMPLATE's world transform and is merely
+ * re-parented, so the parent's own pose never enters into it. Posing the parent is
+ * the one thing that cannot work.
+ *
+ * So `graft-deck.mjs` writes these onto the grafted deck's ROOT, and `Decks` stays
+ * at identity. The template is a child of the panel, so the pose is still
+ * panel-relative and a deck still comes up square to whoever is reading it.
+ *
+ * That is the second time a `…GlobalTransform`/`…GlobalPosition` parameter has
+ * defaulted to TRUE and quietly ignored what this code set - see `SetParent` in the
+ * move loop. Assume any transform-preserving flag is on unless it says otherwise.
  */
-export const DECKS_POSITION = [0.2, 0, -1.31];
-export const DECKS_ROTATION = [0, -0.7071067811865476, -0.7071067811865476, 0];
+export const DECK_POSITION = [0.2, 0, -1.31];
+export const DECK_ROTATION = [0, -0.7071067811865476, -0.7071067811865476, 0];
 
 /**
  * @param kit  emitters from whichever document this is going into:
