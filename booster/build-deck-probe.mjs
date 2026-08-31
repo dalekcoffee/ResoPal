@@ -348,54 +348,6 @@ if (MODE === 'driven') {
 // ── trim, then give each card its own art ────────────────────────────────────
 const trimmed = trimToCards(doc, CODES.length);
 
-/**
- * Move each card's position flux inside the card, so the card is self-contained.
- *
- * A card's stack position is driven by a `proxy` slot under `/Assets`, one per
- * card - outside the card. That is why `DuplicateSlot` alone was never enough for
- * an importer: the copy arrives with no driver and sits at the origin.
- *
- * Moving proxy `i` to be a child of buffer `i` fixes it, and the reference split
- * says why it is safe. Of proxy 0's eight external references, TWO point into its
- * own buffer subtree - the card slot it reads `IndexOfChild` on, and the
- * `SmoothTransform.TargetPosition` it drives - and `DuplicateSlot` rewires exactly
- * those to the copy. The other SIX point at shared deck machinery (`add/remove
- * handling`, the `Cards` parent, shared constant sources) and it leaves those
- * alone, which is also what is wanted: every card should read the same machinery.
- *
- * The buffer already carries a `DestroyProxy` aimed at that proxy, so destroying a
- * card still takes its flux with it once the proxy is its child - Ukilop built the
- * link, this only shortens it.
- *
- * Runs AFTER the trim, which asserts `/Assets` still holds one proxy per card.
- */
-function relocateProxies() {
-  const buffers = kids(cardsParent);
-  const proxies = kids(assetsSlot);
-  if (proxies.length !== buffers.length)
-    throw new Error(`${proxies.length} proxies for ${buffers.length} cards - relocate must run after the trim`);
-
-  // Pair each proxy with the buffer it drives, by the DestroyProxy that names it,
-  // never by index: /Assets order matching card order is an assumption, and this
-  // reads the link Ukilop actually wrote.
-  const byProxyId = new Map(proxies.map((p) => [p.ID, p]));
-  let moved = 0;
-  for (const buffer of buffers) {
-    const dp = (buffer.Components?.Data ?? []).find((c) => /\.DestroyProxy$/.test(typeName(c)));
-    if (!dp) throw new Error(`card buffer ${buffer.ID} has no DestroyProxy naming its flux`);
-    const target = dp.Data.DestroyTarget.Data;
-    const proxy = byProxyId.get(target);
-    if (!proxy) throw new Error(`buffer ${buffer.ID} points at ${target}, which is not a /Assets proxy`);
-    (buffer.Children ??= []).push(proxy);
-    byProxyId.delete(target);
-    moved++;
-  }
-  if (byProxyId.size) throw new Error(`${byProxyId.size} proxies belong to no card`);
-  assetsSlot.Children = [];
-  return moved;
-}
-
-const relocated = args.selfcontained === '1' || args.selfcontained === true ? relocateProxies() : 0;
 
 const report = [];
 CODES.forEach((code, i) => {
@@ -508,7 +460,6 @@ if (appendedTypes.length) {
 }
 console.log(`  grid ${GRID_COLS}x${GRID_ROWS}, front material = renderer slot ${FRONT_SLOT}` +
   (MODE === 'driven' ? `, url driven from ${URL_VAR}` : ', url written at build time'));
-if (relocated) console.log(`  ${relocated} card driver proxies moved inside their own card - DuplicateSlot carries them now`);
 console.log(`  art   ${PROXY}/img/<CODE>?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}` +
   `   (v is the lever that makes Resonite refetch)`);
 console.log(`  back  ${BACK_URL}` + (backArg === 'site' ? '   (a second host: expect two access prompts)' : '') +

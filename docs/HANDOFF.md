@@ -200,31 +200,26 @@ Two ways to do that, and the second is better:
 meshes to the panel, needs trim flux that destroys 63 slots for a 7-card booster, caps a deck
 at 70, and keeps the per-card ST because card *i* keeps mesh *i*.
 
-**Make a card self-contained and duplicate it** — chosen, and built:
-`build-deck-probe.mjs selfcontained=1`. Each card's position flux lives
-in `/Assets/proxy_i`, outside the card, which is why `DuplicateSlot` alone was not enough.
-Move that proxy inside its own `buffer` slot at build time and the card becomes duplicable.
-Measured on proxy 0: of its 8 external references, **2 point into its own buffer subtree**
-(the card slot, and the `SmoothTransform.TargetPosition` it drives) — which `DuplicateSlot`
-rewires to the copy, exactly what is wanted — and **6 point at shared deck machinery**
-(`add/remove handling`, the `Cards` parent, shared constant sources) which it leaves alone,
-also exactly what is wanted.
+**Make a card self-contained and duplicate it** — tried, and it BREAKS THE DECK. Do not
+repeat it. Moving each card's `/Assets` proxy inside its own `buffer` slot makes the card
+duplicable on paper, and every structural check passed: the reference split came out 67
+following a copy and 11 staying shared, with the card slot and the driven transform on the
+right side. In-world the deck imported and looked perfect, the top card grabbed, shuffle
+worked — and after **"show all cards"** none of the spread cards could be picked up.
 
-That buys: one card in the package instead of seventy, no trim flux, no 70-card cap, the same
-`DuplicateSlot` loop the panel already runs — and **one constant ST for every card**, since
-every duplicate shares the template card's mesh and therefore its cell.
+The cause: the deck holds a `GlobalReference<Slot>` aimed at `/Deck/Assets` and indexes its
+children to reach a card's flux. Relocating the proxies emptied that slot, so those lookups
+find nothing. `Card/Grabbable` is written from `/Deck/logixs/Deck functions`, which is exactly
+the kind of code that walks it.
 
-`DestroyProxy` on the buffer already points at that proxy, so destroying a card still takes
-its flux with it once the proxy is its child — Ukilop built the link, the move only shortens
-it. The pairing is read from that `DestroyProxy` rather than by index, because "`/Assets` order
-matches card order" is an assumption and the component is the fact.
+The lesson is bigger than the bug: **a reference audit proves what a duplicate would carry,
+not what the rest of the deck still expects to find.** Ukilop's graph reaches into `/Assets`
+by position, and nothing in the card's own subtree says so.
 
-`test-deck-probe.mjs` simulates the duplication rather than trusting it: it collects every id
-DECLARED inside a card's buffer, then splits the subtree's references into those that follow a
-copy and those that stay shared. **67 follow, 11 stay** — and the two that decide whether this
-works at all are on the right side: the card slot `IndexOfChild` reads, and the
-`SmoothTransform.TargetPosition` the driver writes. The shared `Cards` parent stays shared.
-Getting that split wrong gives a deck whose cards all sit on top of each other.
+So the deck stays exactly as exported, and the importer takes the other route: **ship the deck
+at its full card count and destroy the extras in-world.** `DestroyProxy` on each buffer already
+removes that card's `/Assets` proxy with it, which keeps the two lists in step — Ukilop built
+trimming in, and it is the supported way to change a deck's size.
 
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —

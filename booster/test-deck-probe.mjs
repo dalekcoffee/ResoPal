@@ -63,13 +63,12 @@ const meshBlob = async (id) => {
 };
 
 console.log('the deck still looks like a deck:');
-// One driver proxy per card, wherever it lives. A stock export keeps them under
-// /Assets; a selfcontained build moves each one inside the card it drives, so
-// count them by name rather than by parent.
-const proxyCount = kids(assetsSlot).filter((c) => nm(c) === 'proxy').length
-  + kids(cardsParent).reduce((n, b) => n + kids(b).filter((c) => nm(c) === 'proxy').length, 0);
-check('cards and their driver proxies stay 1:1', proxyCount === cardSlots.length,
-  `${proxyCount} proxies vs ${cardSlots.length} cards`);
+// The deck holds a GlobalReference<Slot> to /Deck/Assets and indexes its
+// children, so the proxies must stay there, one per card. Moving them inside the
+// cards emptied that slot and broke grabbing after "show all".
+check('cards and their driver proxies stay 1:1 under /Assets',
+  kids(assetsSlot).length === cardSlots.length,
+  `${kids(assetsSlot).length} proxies vs ${cardSlots.length} cards`);
 check('GridFrames follows the card count',
   JSON.stringify(doc).includes(`"GridFrames"`) && (() => {
     let ok = true;
@@ -249,86 +248,7 @@ for (let i = 0; i < cardSlots.length; i++) {
   cardKidCounts.add(kids(kids(buffer)[0]).length);
 }
 check('no card slot gained a child', [...cardKidCounts].every((n) => n === 1), [...cardKidCounts].join(','));
-// A relocated build gives every buffer exactly one extra child on purpose: its
-// own driver flux. Anything else is an accident.
-const expectBufferKids = kids(kids(cardsParent)[0]).some((c) => nm(c) === 'proxy') ? 2 : 1;
-check(`every buffer slot has ${expectBufferKids} child${expectBufferKids > 1 ? 'ren' : ''}`,
-  [...bufferKidCounts].every((n) => n === expectBufferKids), [...bufferKidCounts].join(','));
-
-// ── self-contained cards: what DuplicateSlot would do ────────────────────────
-// Only meaningful on a build with selfcontained=1. The whole importer design
-// rests on one property: duplicating a card's buffer slot must give the copy its
-// OWN position driver, wired to the copy, while still reading the deck's shared
-// machinery. That is simulated here rather than assumed, because getting it wrong
-// gives a deck whose cards all sit on top of each other in-world.
-const firstBuffer = kids(cardsParent)[0];
-// The driver flux sits on grandchildren of the proxy slot, so detect the slot
-// itself rather than looking for a node one level down.
-const relocated = kids(firstBuffer).some((c) => nm(c) === 'proxy');
-if (relocated) {
-  console.log('\nthe card carries its own position driver:');
-  // Declared locally: the integrity section's copies are defined further down and
-  // a const is not hoisted.
-  const GUID = /^[0-9a-f]{8}-0000-0000-0000-000000000000$/;
-  const NULL_GUID = '00000000-0000-0000-0000-000000000000';
-  check('every card buffer holds its driver flux',
-    kids(cardsParent).every((b) => kids(b).length === 2), 
-    kids(cardsParent).map((b) => kids(b).length).join(','));
-  check('/Assets holds no loose proxies any more', kids(assetsSlot).length === 0, `${kids(assetsSlot).length} left`);
-
-  // Duplicate buffer 0 the way Resonite would: every id DECLARED inside the
-  // subtree gets a new one, and references to those follow the copy. References
-  // OUT of the subtree are left pointing where they pointed.
-  const declared = new Set();
-  (function w(o) {
-    if (Array.isArray(o)) return o.forEach(w);
-    if (!o || typeof o !== 'object') return;
-    for (const [k, v] of Object.entries(o)) {
-      if (typeof v === 'string' && (k === 'ID' || k === 'ParentReference' || /-ID$/i.test(k))) declared.add(v);
-      else w(v);
-    }
-  })(firstBuffer);
-
-  const inside = [], outside = [];
-  (function w(o) {
-    if (Array.isArray(o)) return o.forEach(w);
-    if (!o || typeof o !== 'object') return;
-    for (const [k, v] of Object.entries(o)) {
-      if (typeof v === 'string' && GUID.test(v) && v !== NULL_GUID
-          && !(k === 'ID' || k === 'ParentReference' || /-ID$/i.test(k))) {
-        (declared.has(v) ? inside : outside).push(v);
-      } else w(v);
-    }
-  })(firstBuffer);
-
-  // Both halves matter. Nothing pointing inward means the driver would not follow
-  // the copy; nothing pointing outward means it lost the deck it belongs to.
-  check('its flux references things inside the card, which follow a duplicate',
-    inside.length > 0, `${inside.length}`);
-  check('and things outside it, which a duplicate must keep sharing',
-    outside.length > 0, `${outside.length}`);
-  note(`${inside.length} internal references follow the copy, ${outside.length} stay shared`);
-
-  // The two that must be internal, named: the card slot IndexOfChild reads, and
-  // the SmoothTransform position the driver writes.
-  const cardSlotId = kids(firstBuffer).find((c) => nm(c) === 'Card')?.ID;
-  const smooth = (firstBuffer.Components?.Data ?? []).find((c) => /\.SmoothTransform$/.test(typeName(c)));
-  check('the card slot it indexes is inside the copy', !!cardSlotId && declared.has(cardSlotId));
-  check('the transform it drives is inside the copy',
-    !!smooth && declared.has(smooth.Data.TargetPosition.ID), smooth?.Data?.TargetPosition?.ID);
-
-  // And the shared machinery it must NOT take a copy of.
-  const sharedNames = outside.map((id) => {
-    const s = (function find(o) {
-      if (o.ID === id) return o;
-      for (const c of kids(o)) { const r = find(c); if (r) return r; }
-      return null;
-    })(doc.Object);
-    return s ? nm(s) : null;
-  }).filter(Boolean);
-  check('it still points at the shared Cards parent', sharedNames.includes(nm(cardsParent)),
-    sharedNames.join(', ') || '(none resolve to slots)');
-}
+check('no buffer slot gained a child', [...bufferKidCounts].every((n) => n === 1), [...bufferKidCounts].join(','));
 
 // ── package integrity ────────────────────────────────────────────────────────
 // Measured against the SOURCE template rather than against zero, because
