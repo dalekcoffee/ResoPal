@@ -17,6 +17,10 @@ on:
         required: false
         default: ''
   push:
+    # main only. Without this it fires on every feature branch that touches the
+    # script and commits generated images back onto it, which is a surprise even
+    # when the output is right.
+    branches: [main]
     paths:
       - 'data/pool-*.json'
       - 'tools/rotate-landscape.mjs'
