@@ -587,7 +587,11 @@ const cardTemplate = slot('card', [
 // copy, reparented under the active Cards slot, comes up visible.
 const templateSlot = slot('Card template', [], [0, -0.42, 0], [cardTemplate]);
 templateSlot.Active.Data = false;
-const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.42, 0]);
+// -0.22, not -0.42. The canvas is 660 units at 0.00058, so the panel's bottom
+// edge sits at about -0.19; starting the grid at -0.42 left a gap wider than a
+// card row between the panel and the first card, and the grid grows DOWNWARD from
+// here, so the whole block hung well below the thing that spawned it.
+const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.22, 0]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE GRAPH. One canvas. Everything a human needs is on it.
