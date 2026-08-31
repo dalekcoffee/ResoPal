@@ -138,17 +138,30 @@ So the rotation has to be **in the pixels**, which is exactly what the browser b
 does (`compose.js`, `ROT = 90`; `compose.py`, `Image.ROTATE_270` — they agree, the constants
 do not, see docs/PIPELINE.md).
 
-The shape of the fix, in order of preference:
+**The mechanism is built; the images are not generated yet.** Two halves:
 
-1. **Pre-rotate the 26 landscape printings once and serve them from the site**, with `/img/`
-   picking that upstream for those codes. The Worker still only moves bytes, so the invariant
-   holds. `landscape` in each `data/pool-*.json` is the authoritative list.
-2. A browser tool to generate them — `tools/check-codes.html` is the precedent for a
-   browser-side tool in this repo, and `web/compose.js` already has the rotation with the
-   direction constant that has been got wrong twice. Reuse it rather than re-deriving it.
+1. **`tools/rotate-landscape.html`** — a dependency-free browser tool, in the manner of
+   `tools/check-codes.html`. Serve the repo root over http, open it, press *Rotate all*: it
+   reads the `landscape` lists out of `data/pool-*.json`, pulls each printing through
+   `/img/?orig=1`, turns it **90° clockwise**, and writes 256/512/1024 WebPs into a zip laid
+   out as `assets/rot/w<width>/<CODE>.webp`. Unzip at the repo root and commit.
 
-Not fixable from this container: it has no image tooling at all — no PIL, ImageMagick, ffmpeg
-or JS equivalent.
+   It shows each card **before and after, side by side**, on purpose: the rotation direction
+   has been got wrong twice in this project and both times silently. Look at the pairs before
+   committing. The rotation itself is `web/imgfix.js`'s `toImageData(src, 90)` copied
+   verbatim rather than re-derived.
+
+2. **The Worker substitutes it.** `/img/<CODE>` serves the rotated copy for any code in a
+   `landscape` list. Deploying this before the images exist is a no-op: a missing rotated copy
+   **falls back to Palify**, and that fallback is deliberately not cached (`max-age=300`, no
+   edge cache) so it is replaced the moment the images land. `?orig=1` bypasses the whole
+   thing, which is what the generator reads through.
+
+Nothing in-world or in the deck builder changes — the URL stays `{PROXY}/img/{code}?w=512` for
+every card and the Worker decides.
+
+Not doable from the cloud container: it has no image tooling at all — no PIL, ImageMagick,
+ffmpeg or JS equivalent — which is why the generator is a browser page rather than a script.
 
 ## Getting the deck into the panel — the architecture, decided
 

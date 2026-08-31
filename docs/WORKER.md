@@ -60,6 +60,25 @@ Proxy one card image and attach CORS headers.
   import a card fetches it from Palify and every user after that is served from Cloudflare's edge.
   This is the single biggest thing you can do to be kind to Palify's servers.
 
+**Landscape substitution.** 26 printings — every one a Structure — are served by Palify
+already-landscape, against a portrait card cell. The browser bake turns them on the way into
+the atlas; the in-world path uses the image as it comes, and **no material setting in Resonite
+can turn it there** (`_Tex_ST` is `uv * scale + offset`: it scales and translates each axis,
+it cannot swap them). So `/img/` substitutes a pre-rotated copy from
+`resopal.dalek.coffee/assets/rot/w<width>/<CODE>.webp` for any code in a pool's `landscape`
+list.
+
+Two properties make this safe to deploy before the images exist:
+
+- **A missing rotated copy falls back to Palify** rather than 404ing. A squashed card beats a
+  card that does not load, so the route is a no-op until the images land.
+- **A fallback is not edge-cached and not `immutable`** (`max-age=300`). Caching it for a year
+  would hide the rotated copy for a year after it appeared.
+
+`?orig=1` bypasses the substitution entirely. `tools/rotate-landscape.html` reads through this
+route, so without it a second run of the generator would read back its own output and turn it
+twice.
+
 ### `GET /back`
 
 The card back. Every Palworld card has the same one, so it is a single shared texture behind

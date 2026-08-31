@@ -18,6 +18,7 @@ const PROFILE_FLIGHT = '1:"$Sreact.fragment"\n'
   + '["$","$L1f","f2dd143c-8e6f-4142-87d2-051195185f96",{"href":"/decks/f2dd143c-8e6f-4142-87d2-051195185f96","className":"rounded-xl",'
   + '"children":[["$","div",null,{"className":"font-display","children":"Green/Purple Trial"}],["$","div",null,{"className":"text-xs","children":[50," cards"]}]]}]]}]\n';
 let lastUpstream = null;
+let rotatedExists = false;   // flipped per-case by the landscape suite
 // Shaped like the real thing, trimmed to what the code reads. The parsers get
 // their own fixtures in resolve.mjs; these exist so the ROUTE can be exercised.
 const FLIGHT = '1b:{"deckId":"f2dd143c-8e6f-4142-87d2-051195185f96","deckName":"Green/Purple Trial",'
@@ -28,6 +29,10 @@ const CARDS = JSON.stringify({ count: 2, cards: [
 ] });
 globalThis.fetch = async (u, init) => {
   lastUpstream = { url: String(u), headers: (init && init.headers) || {} };
+  if (String(u).includes('/assets/rot/'))
+    return rotatedExists ? new Response(new Uint8Array([9,9,9]), { status: 200 })
+                         : new Response('not generated yet', { status: 404 });
+  if (String(u).includes('/assets/DefaultBack.png')) return new Response(new Uint8Array([7,7]), { status: 200 });
   if (String(u).includes('/cards/w')) return new Response(new Uint8Array([1,2,3]), { status: 200 });
   if (String(u).includes('/api/cards?set=TD02')) return new Response(CARDS, { status: 200 });
   if (String(u).includes('/api/cards?set=')) return new Response(JSON.stringify({ count: 0, cards: [] }), { status: 200 });
@@ -264,6 +269,47 @@ check('a missing deck is a 404, not a 502',
   (await get('/deck/66cdf5a2-aa5d-48e6-8bb7-7a3249bfccfc')).status === 404);
 check('a missing profile is a 404 too', (await get('/profile/nobody')).status === 404);
 globalThis.fetch = savedFetch;
+
+// ── landscape substitution ───────────────────────────────────────────────────
+// TD01-008 is a Structure, and data/pool-td01.json lists it as landscape. Palify
+// serves it already-turned against a portrait cell, and no material setting in
+// Resonite can turn it back, so the route substitutes a pre-rotated copy.
+console.log('\nlandscape printings:');
+
+rotatedExists = true;
+const turned = await get('/img/TD01-008?w=512');
+check('a landscape code is served the rotated copy',
+  lastUpstream.url === 'https://resopal.dalek.coffee/assets/rot/w512/TD01-008.webp', lastUpstream.url);
+check('and that copy is cached forever', /immutable/.test(turned.headers.get('cache-control')),
+  turned.headers.get('cache-control'));
+
+const upright = await get('/img/TD01-001?w=512');
+check('a portrait code is untouched',
+  lastUpstream.url === 'https://palify.org/cards/w512/TD01-001.webp', lastUpstream.url);
+check('and is still cached forever', /immutable/.test(upright.headers.get('cache-control')));
+
+// The generator reads through this route, so without a bypass a second run would
+// read back its own output and turn it twice.
+await get('/img/TD01-008?w=512&orig=1');
+check('orig=1 bypasses the substitution',
+  lastUpstream.url === 'https://palify.org/cards/w512/TD01-008.webp', lastUpstream.url);
+
+// Deploying the route before the images exist must not break a card.
+rotatedExists = false;
+const missing = await get('/img/TD01-009?w=512');
+check('a missing rotated copy falls back to palify rather than 404',
+  missing.status === 200 && lastUpstream.url === 'https://palify.org/cards/w512/TD01-009.webp',
+  `${missing.status} ${lastUpstream.url}`);
+check('and the fallback is NOT cached forever, so it is picked up later',
+  !/immutable/.test(missing.headers.get('cache-control')), missing.headers.get('cache-control'));
+rotatedExists = true;
+
+// ── the card back ────────────────────────────────────────────────────────────
+const back = await get('/back');
+check('/back proxies the site copy',
+  back.status === 200 && lastUpstream.url === 'https://resopal.dalek.coffee/assets/DefaultBack.png',
+  `${back.status} ${lastUpstream.url}`);
+check('the back is cached forever', /immutable/.test(back.headers.get('cache-control')));
 
 // Runs last: it deliberately empties the token bucket for this IP.
 let sawThrottle = false;

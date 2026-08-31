@@ -13,7 +13,7 @@
  * few hundred bytes of arithmetic, and it has to live somewhere neither the
  * player's devtools nor the in-world tool can reach.
  */
-import { weights, poolBP01, decks } from './data.js';
+import { weights, poolBP01, poolTD01, poolTD02, decks } from './data.js';
 import { parseDeck, parseProfile, isNotFound } from './flight.js';
 import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
 import { sniff, parseFlight, parseDeckList, expand, MAX_CARDS } from './resolve.js';
@@ -56,28 +56,66 @@ const fail = (status, msg, h) => new Response(JSON.stringify({ error: msg }), {
   status, headers: { ...h, 'content-type': 'application/json' },
 });
 
+/**
+ * The printings Palify serves already-landscape - every one a Structure.
+ *
+ * They arrive 1024x732 against a portrait card cell. The browser bake turns them
+ * on the way into the atlas, but the in-world path uses the image as it comes, and
+ * NOTHING in Resonite can turn it there: TextureScale/TextureOffset reach the
+ * shader as _Tex_ST, applied as `uv * scale + offset`, which scales and translates
+ * each axis but cannot swap them. So the rotation has to be in the pixels, and
+ * this route is where a pre-turned copy gets substituted.
+ */
+const LANDSCAPE = new Set([
+  ...(poolBP01.landscape ?? []), ...(poolTD01.landscape ?? []), ...(poolTD02.landscape ?? []),
+]);
+const ROTATED = 'https://resopal.dalek.coffee/assets/rot';
+
 /** Card art. Immutable upstream, so cache it at the edge effectively forever. */
-async function image(request, ctx, code, width, h) {
+async function image(request, ctx, code, width, h, orig = false) {
   if (!CODE.test(code)) return fail(400, 'bad card code', h);
   if (!WIDTHS.has(width)) return fail(400, 'width must be 256, 512 or 1024', h);
 
+  // `orig=1` asks for Palify's copy whatever the code is. tools/rotate-landscape.html
+  // needs it: without it, re-running the generator after the turned images are live
+  // would read back its own output and turn it a second time.
+  const turn = !orig && LANDSCAPE.has(code);
+
   const cache = caches.default;
-  const key = new Request(`https://resopal-cache.invalid/img/${width}/${code}`, { method: 'GET' });
+  const key = new Request(`https://resopal-cache.invalid/img/${turn ? 'rot/' : ''}${width}/${code}`, { method: 'GET' });
   let hit = await cache.match(key);
 
   if (!hit) {
-    const upstream = await fetch(`${UPSTREAM}/cards/w${width}/${code}.webp`, {
-      cf: { cacheEverything: true, cacheTtl: 31536000 },
-    });
+    let upstream = null, permanent = true;
+
+    if (turn) {
+      upstream = await fetch(`${ROTATED}/w${width}/${code}.webp`, {
+        cf: { cacheEverything: true, cacheTtl: 31536000 },
+      });
+      // Not generated yet: fall through to Palify rather than 404. A landscape
+      // card that is merely squashed beats a card that does not load, and this
+      // makes deploying the route before the images exist a safe no-op.
+      if (!upstream.ok) { upstream = null; permanent = false; }
+    }
+
+    if (!upstream) {
+      upstream = await fetch(`${UPSTREAM}/cards/w${width}/${code}.webp`, {
+        cf: { cacheEverything: true, cacheTtl: 31536000 },
+      });
+    }
     if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `upstream ${upstream.status} for ${code}`, h);
+
     hit = new Response(upstream.body, {
       headers: {
         'content-type': 'image/webp',
-        'cache-control': 'public, max-age=31536000, immutable',
+        // A fallback is deliberately NOT immutable and NOT edge-cached: the turned
+        // copy is expected to appear later, and a year-long cache entry would hide
+        // it until the images were renamed.
+        'cache-control': permanent ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
       },
     });
     // the first user to import a card pays for it; everyone after is served here
-    ctx.waitUntil(cache.put(key, hit.clone()));
+    if (permanent) ctx.waitUntil(cache.put(key, hit.clone()));
   }
 
   return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...h } });
@@ -446,7 +484,7 @@ export default {
     let m;
     if ((m = p.match(/^\/img\/([^/]+)$/)))
       return image(request, ctx, decodeURIComponent(m[1]).replace(/\.webp$/i, '').toUpperCase(),
-        url.searchParams.get('w') || '1024', h);
+        url.searchParams.get('w') || '1024', h, url.searchParams.get('orig') === '1');
 
     const raw = url.searchParams.get('raw') === '1';
 
