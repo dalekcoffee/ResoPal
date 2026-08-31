@@ -497,54 +497,8 @@ const cardTexture = comp(T.Texture, {
 });
 // Cutout at 0.72, the values the deck bake settled on: Palify art carries its
 // rounded corners in the alpha, and is matted against white so 0.5 leaves a rim.
-// ── the card back ────────────────────────────────────────────────────────────
-// The same image for every Palworld card, so it ships INSIDE the package rather
-// than being fetched. Fetching it would mean either a second host-access prompt
-// (a different origin from the card art) or another route on the Worker, and the
-// point of a back face is that it is just there.
-//
-// A texture asset needs its `Metadata/<hash>.bitmap` sidecar as well as the
-// bytes - the engine reads width/height/format from it, not from the file. The
-// field name really is misspelled `assetIdenfitier`; see docs/PIPELINE.md.
-const backBytes = new Uint8Array(await readFile(path.join(import.meta.dirname, '..', 'assets', 'DefaultBack.png')));
-const BACK_HASH = createHash('sha256').update(backBytes).digest('hex');
-const pngSize = (b) => ({ width: (b[16]<<24)|(b[17]<<16)|(b[18]<<8)|b[19], height: (b[20]<<24)|(b[21]<<16)|(b[22]<<8)|b[23] });
-const backDims = pngSize(backBytes);
-const backMeta = Buffer.from(JSON.stringify({
-  ...backDims, mipMapCount: 1, baseFormat: 'png', isCorrupted: false, metadataVersion: 5,
-  assetIdenfitier: BACK_HASH, bitsPerPixel: 32, channelCount: 4, colorData: 'Color', alphaData: 'Alpha',
-  invalidPixelCount: 0,
-}));
-
-// The card back's texture, declared HERE because the front material masks against
-// it and a component's id has to exist before anything can reference it. The back
-// face below uses the same one.
-const backTexture = comp(T.Texture, {
-  URL: `@packdb:///${BACK_HASH}`, Uncompressed: false, DirectLoad: false, ForceExactVariant: false,
-  PreferredProfile: 'sRGB', MipMapBias: D(0), IsNormalMap: false,
-  WrapModeU: 'Clamp', WrapModeV: 'Clamp', PowerOfTwoAlignThreshold: D(0.05),
-  CrunchCompressed: true, MipMaps: true, KeepOriginalMipMaps: false, MipMapFilter: 'Box', Readable: false,
-});
-
-// The front is MASKED against the card back, which rounds its corners.
-//
-// Ukilop's cards are a baked mesh per card with the rounded outline in the
-// geometry; this one is a quad, so square corners poked out past the holder and a
-// stacked deck's edge came out as a sawtooth. `UnlitMaterial` carries a mask
-// (`_MASK_TEXTURE_MUL`), and the card already has a texture whose alpha IS the
-// card silhouette - `DefaultBack.png`, rounded corners in its `tRNS` chunk, and
-// already embedded because the back face uses it. So the front multiplies its
-// alpha by the back's and the existing `Cutout` at 0.72 clips what is left. No new
-// asset, no mesh, one reference.
-//
-// MaskScale and MaskOffset are stated rather than left out: an omitted `Sync<float2>`
-// loads as (0,0), which would collapse the mask to a single texel.
-//
-// The back needs no mask - it samples that alpha directly and was always round.
 const cardMat = comp(T.Unlit, {
-  TintColor: C([1, 1, 1, 1]), Texture: cardTexture.id,
-  MaskTexture: backTexture.id, MaskScale: V2(1, 1), MaskOffset: V2(0, 0), MaskMode: 'MultiplyAlpha',
-  BlendMode: 'Cutout', AlphaCutoff: D(0.72),
+  TintColor: C([1, 1, 1, 1]), Texture: cardTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',
 });
 // QuadMesh carries its OWN Rotation, and this one field decides which way a card
@@ -597,6 +551,31 @@ const cardUri = comp(T.ToUri, { Input: cardSrc.id });
 const cardDrive = comp(T.UriDrive, { Value: cardUri.id });
 const cardDriveProxy = comp(T.UriDriveProxy, { Node: cardDrive.id, Path: [], Drive: cardTexture.f.URL });
 
+// ── the card back ────────────────────────────────────────────────────────────
+// The same image for every Palworld card, so it ships INSIDE the package rather
+// than being fetched. Fetching it would mean either a second host-access prompt
+// (a different origin from the card art) or another route on the Worker, and the
+// point of a back face is that it is just there.
+//
+// A texture asset needs its `Metadata/<hash>.bitmap` sidecar as well as the
+// bytes - the engine reads width/height/format from it, not from the file. The
+// field name really is misspelled `assetIdenfitier`; see docs/PIPELINE.md.
+const backBytes = new Uint8Array(await readFile(path.join(import.meta.dirname, '..', 'assets', 'DefaultBack.png')));
+const BACK_HASH = createHash('sha256').update(backBytes).digest('hex');
+const pngSize = (b) => ({ width: (b[16]<<24)|(b[17]<<16)|(b[18]<<8)|b[19], height: (b[20]<<24)|(b[21]<<16)|(b[22]<<8)|b[23] });
+const backDims = pngSize(backBytes);
+const backMeta = Buffer.from(JSON.stringify({
+  ...backDims, mipMapCount: 1, baseFormat: 'png', isCorrupted: false, metadataVersion: 5,
+  assetIdenfitier: BACK_HASH, bitsPerPixel: 32, channelCount: 4, colorData: 'Color', alphaData: 'Alpha',
+  invalidPixelCount: 0,
+}));
+
+const backTexture = comp(T.Texture, {
+  URL: `@packdb:///${BACK_HASH}`, Uncompressed: false, DirectLoad: false, ForceExactVariant: false,
+  PreferredProfile: 'sRGB', MipMapBias: D(0), IsNormalMap: false,
+  WrapModeU: 'Clamp', WrapModeV: 'Clamp', PowerOfTwoAlignThreshold: D(0.05),
+  CrunchCompressed: true, MipMaps: true, KeepOriginalMipMaps: false, MipMapFilter: 'Box', Readable: false,
+});
 const backMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: backTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',

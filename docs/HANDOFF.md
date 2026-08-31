@@ -857,44 +857,61 @@ checks the duplicate is parented into it.
 > match the z. `0.2, 0, -1.31` is what shipped. If the deck wants to be a metre and a third
 > **above** the panel rather than level with it, `DECK_POSITION` is the one line to change.
 
-## Square corners — fixed with a mask, not a mesh
+## Square corners: the imported card is ours, not Ukilop's
+
+Open. **A material mask was tried and reverted — read this before trying it again.**
 
 Ukilop's card is `Card/Visual (Baked)`: a baked mesh per card, rounded, with three submeshes
-(edge / front / back). The imported card is the panel's own — two `QuadMesh` quads — and a
-quad has square corners, so they poked out past the holder and a stacked deck's edge came out
-as a **sawtooth**.
+(edge / front / back). The imported card is the panel's own — two `QuadMesh` quads — and a quad
+has square corners, so they poke out past the holder and a stacked deck's edge comes out as a
+sawtooth. The back looks right because `DefaultBack.png` carries transparent corners and the
+material is already `BlendMode: Cutout` at `AlphaCutoff 0.72`; the front is square because
+Palify's art is a square image with no alpha.
 
-The fix turned out to be one reference, not an architecture change. `UnlitMaterial` carries a
-mask (`_MASK_TEXTURE_MUL` / `_MASK_TEXTURE_CLIP`), and the card already had a texture whose
-alpha **is** the card silhouette: `DefaultBack.png`, rounded corners in its `tRNS` chunk,
-embedded already because the back face uses it. So the FRONT material multiplies its alpha by
-the back's, and the `Cutout` at `AlphaCutoff 0.72` it already ran clips what is left.
+### The mask attempt, and why it is not simply "fix the details"
 
-```
-front UnlitMaterial   MaskTexture = <the back's StaticTexture2D>
-                      MaskMode    = MultiplyAlpha
-                      MaskScale   = (1, 1)      MaskOffset = (0, 0)
-```
+`UnlitMaterial` carries `MaskTexture` / `MaskScale` / `MaskOffset` / `MaskMode`
+(`MultiplyAlpha` or `AlphaClip`), and it sets the shader keywords `_MASK_TEXTURE_MUL` /
+`_MASK_TEXTURE_CLIP`. The idea was to point the FRONT material's mask at the BACK's texture —
+whose alpha already is the card silhouette — so the corners clip with no new asset and no mesh.
 
-No new asset, no mesh, no ProtoFlux. The back needed nothing — it samples that alpha directly
-and was always round.
+**Shipped, and it regressed: the corners were still square AND the card fronts stopped
+rendering entirely.** Reverted whole; the package decodes byte-identical to the build before it.
 
-Two things worth keeping:
+What that outcome rules out, and what it does not:
 
-- **`MaskScale` must be stated.** An omitted `Sync<float2>` loads as `(0, 0)`, which collapses
-  the mask to a single texel. The suite checks it is `(1, 1)`.
-- **The graft rebuilds the material's fields in declared order** rather than appending the four
-  new ones, the same rule `comp()` follows.
+- The material's fields were written correctly — `MaskTexture` resolved to the back's
+  `StaticTexture2D`, `MaskMode` was `MultiplyAlpha`, `MaskScale` was `(1, 1)`, and the fields
+  were in the class's declared order. So this was **not** a malformed component.
+- Corners unchanged **and** the front gone is consistent with the mask sampling as alpha ≈ 0
+  across the whole quad, not just at the corners — the front is then wholly clipped rather
+  than trimmed. Candidate causes, none of them measured: `MaskScale`/`MaskOffset` may not mean
+  `uv * scale + offset` the way `TextureScale`/`TextureOffset` do; the back texture ships
+  `CrunchCompressed: true`, and a DXT/crunch variant's alpha may not survive as a mask; or
+  `MultiplyAlpha` may read a channel other than alpha.
+- **Do not re-land this by adjusting a field and shipping.** That is what produced the
+  regression. The next attempt needs a one-card probe that changes exactly one thing, the way
+  the UV remap and the drive chain were each settled by a single drag-test.
 
-The options that were on the table and are no longer needed: rounding the art at the Worker
-(ruled out by the invariant that the Worker moves bytes and nothing else), grafting one of
-Ukilop's baked meshes onto our card, and dropping the move-cards-in architecture to retexture
-his cards in place. The third is still the tidier end state if a card ever needs a real edge or
-a per-card back — but it is no longer the price of round corners.
+### The routes that remain
 
-## (superseded) Square corners: the imported card is ours, not Ukilop's
+1. ~~Round the art at the Worker~~ — ruled out: CLAUDE.md's invariant is that the Worker
+   "moves bytes and nothing else", and this would make it decode and re-encode every card.
+2. **Give the panel's card one of Ukilop's baked meshes** and remap the full-size texture onto
+   that mesh's atlas cell, exactly as `build-deck-probe.mjs` already does per card
+   (`TextureScale = (10, 7)`, `TextureOffset = (-col, -(6 - row))`, verified against the MeshX
+   UV bounds by `meshx.mjs`). One mesh and one constant ST serves every card, because they
+   would all share the same cell. Note it costs the `TextureSizeDriver`, which is what makes a
+   landscape printing render landscape on a loose card.
+3. **Stop moving cards in at all** — keep the deck's own 52 cards, give each its own front
+   material and texture at its cell's ST, and write `Card/url` per card instead of reparenting.
+   This is what "the shape of the real thing" always described, and the remap half of it is
+   drag-tested. It gets the rounded corners, the `Card/index` and `Card/Grabbable` contract and
+   the deck's own materials for free.
 
-Kept for the measurements. The fix is architectural rather than a value to change.
+3 is the end state. 2 is the smaller step. Both put the rounded outline in **geometry**, which
+is how the only known-good cards in this project do it — and that, not a material trick, is
+what the evidence supports.
 
 Ukilop's card is `Card/Visual (Baked)` — a **baked mesh per card**, rounded, with three
 submeshes (edge / front / back) and its atlas cell baked into the UVs. The imported card is

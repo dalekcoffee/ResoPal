@@ -216,44 +216,6 @@ for (const t of doc.Types.map(String)) {
   console.log(`  ${flipped} QuadMesh rotations upgraded to match QuadMesh version 1`);
 }
 
-// ── round the card's corners ─────────────────────────────────────────────────
-// Ukilop's cards are a baked mesh per card with the rounded outline in the
-// geometry; the panel's card is a quad, so its square corners poked out past the
-// holder and a stacked deck's edge came out as a sawtooth.
-//
-// `UnlitMaterial` carries a mask (`_MASK_TEXTURE_MUL`), and the card already has a
-// texture whose alpha IS the card silhouette: `DefaultBack.png`, rounded corners in
-// its `tRNS` chunk, embedded already because the back face uses it. So the FRONT
-// material multiplies its alpha by the back's, and the `Cutout` at 0.72 it already
-// runs clips what is left. No new asset, no mesh, one reference.
-//
-// The fields are rebuilt in the class's declared order rather than appended, the
-// same rule `comp()` follows. MaskScale is stated because an omitted `Sync<float2>`
-// loads as (0,0), which would collapse the mask to a single texel.
-{
-  const cardSlot = (function find(sl) {
-    if (nm(sl) === 'card') return sl;
-    for (const c of sl.Children ?? []) { const r = find(c); if (r) return r; }
-    return null;
-  })(doc.Object);
-  const backSlot = (cardSlot?.Children ?? []).find((c) => nm(c) === 'back');
-  const typeIs = (c, t) => String(doc.Types[idx(c.Type)]) === t;
-  const backTex = (backSlot?.Components?.Data ?? []).find((c) => typeIs(c, FE + 'StaticTexture2D'));
-  const frontMat = (cardSlot?.Components?.Data ?? []).find((c) => typeIs(c, FE + 'UnlitMaterial'));
-  if (!backTex || !frontMat) throw new Error('cannot find the card front material and back texture');
-
-  const add = { MaskTexture: String(backTex.Data.ID), MaskScale: [1, 1].map(D),
-                MaskOffset: [0, 0].map(D), MaskMode: 'MultiplyAlpha' };
-  const order = memberOrder(FE + 'UnlitMaterial', 'component');
-  const rebuilt = { ID: frontMat.Data.ID, 'persistent-ID': frontMat.Data['persistent-ID'] };
-  for (const k of order.slice(1)) {
-    if (k in add) rebuilt[k] = fd(add[k]);
-    else if (k in frontMat.Data) rebuilt[k] = frontMat.Data[k];
-  }
-  frontMat.Data = rebuilt;
-  console.log(`  card front masked against the back's silhouette (${Object.keys(add).join(', ')})`);
-}
-
 const emitted = [];
 const kit = {
   T,
