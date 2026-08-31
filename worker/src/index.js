@@ -76,6 +76,20 @@ const fail = (status, msg, h) => new Response(JSON.stringify({ error: msg }), {
  */
 const ROTATED = 'https://resopal.dalek.coffee/assets/rot';
 
+/**
+ * Bump this to invalidate every cached card image.
+ *
+ * The edge cache stores card art `immutable` for a year, so a change to what this
+ * route DECIDES cannot take effect on its own: `cache.match` hits the entry the
+ * previous build wrote and the new logic never runs. That is exactly what happened
+ * when landscape substitution shipped - the route was correct and still served
+ * year-old un-turned bytes, because the key had not moved.
+ *
+ * The key is the only thing that invalidates. Bump it whenever the BYTES this
+ * route would return change for a URL that has not changed.
+ */
+const IMAGE_CACHE_VERSION = 'v2';
+
 /** Card art. Immutable upstream, so cache it at the edge effectively forever. */
 async function image(request, ctx, code, width, h, orig = false) {
   if (!CODE.test(code)) return fail(400, 'bad card code', h);
@@ -85,7 +99,9 @@ async function image(request, ctx, code, width, h, orig = false) {
   // tools/rotate-landscape.html reads through this route, so without the bypass a
   // second run would read back its own output and turn it a second time.
   const cache = caches.default;
-  const key = new Request(`https://resopal-cache.invalid/img/${orig ? 'orig/' : ''}${width}/${code}`, { method: 'GET' });
+  const key = new Request(
+    `https://resopal-cache.invalid/img/${IMAGE_CACHE_VERSION}/${orig ? 'orig/' : ''}${width}/${code}`,
+    { method: 'GET' });
   let hit = await cache.match(key);
 
   if (!hit) {

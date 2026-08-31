@@ -60,6 +60,12 @@ Proxy one card image and attach CORS headers.
   import a card fetches it from Palify and every user after that is served from Cloudflare's edge.
   This is the single biggest thing you can do to be kind to Palify's servers.
 
+**The image cache key is versioned** (`IMAGE_CACHE_VERSION`). Card art is stored `immutable`
+for a year, so changing what this route *decides* has no effect on its own: `cache.match` hits
+the entry the previous build wrote and the new logic never runs. Landscape substitution
+shipped correct and served year-old un-turned bytes for exactly this reason. Bump the version
+whenever the bytes this route would return change for a URL that has not.
+
 **Landscape substitution.** Some printings — every one a Structure — are served by Palify
 already-landscape, against a portrait card cell. The browser bake turns them on the way into
 the atlas; the in-world path uses the image as it comes, and **no material setting in Resonite

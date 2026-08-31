@@ -1,5 +1,9 @@
 // Exercise routing + validation with a stubbed upstream; no network involved.
-globalThis.caches = { default: { match: async () => null, put: async () => {} } };
+let lastCacheKey = null;
+globalThis.caches = { default: {
+  match: async (k) => { lastCacheKey = String(k.url ?? k); return null; },
+  put: async () => {},
+} };
 const realFetch = globalThis.fetch;
 // Trimmed from real RSC payloads captured from palify.org - the surrounding React
 // element soup is what the parser has to survive, so keep some of it.
@@ -339,6 +343,16 @@ check('a code in NO pool snapshot is still detected and turned',
 await get('/img/BP01-053?w=256');
 check('a portrait card never looks for a rotated copy',
   lastUpstream.url === 'https://palify.org/cards/w256/BP01-053.webp', lastUpstream.url);
+
+// The edge cache stores card art immutable for a year, so the key has to move
+// whenever the route's answer for an unchanged url changes - otherwise the new
+// logic never runs against entries the previous build wrote. That is what made
+// the landscape substitution look like a no-op after it shipped.
+await get('/img/TD01-001?w=512');
+check('the image cache key carries a version',
+  /\/img\/v\d+\/512\/TD01-001$/.test(lastCacheKey), lastCacheKey);
+await get('/img/TD01-001?w=512&orig=1');
+check('and orig has its own key', /\/img\/v\d+\/orig\/512\/TD01-001$/.test(lastCacheKey), lastCacheKey);
 
 // ── the card back ────────────────────────────────────────────────────────────
 const back = await get('/back');
