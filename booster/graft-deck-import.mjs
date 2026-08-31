@@ -41,7 +41,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
 import { memberOrder, isFluxNode } from './members.mjs';
-import { deckImport, COL_X, DECK_CARD_HEIGHT } from './deck-import.mjs';
+import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -168,7 +168,7 @@ const kit = {
   strIn: (name, v, pos) => kit.node(name, T.StrIn, { Value: v }, pos),
   intIn: (name, v, pos) => kit.node(name, T.IntIn, { Value: new Int32(v) }, pos),
   boolIn: (name, v, pos) => kit.node(name, T.BoolIn, { Value: v }, pos),
-  f3In: (name, v, pos) => kit.node(name, T.F3In, { Value: [D(v), D(v), D(v)] }, pos),
+  f3In: (name, v, pos) => kit.node(name, T.F3In, { Value: v.map(D) }, pos),
 };
 
 // ── find what the branch has to reach in the packed panel ────────────────────
@@ -197,7 +197,9 @@ const cardTemplate = (function find(s) {
 const cardCollider = (cardTemplate?.Components?.Data ?? [])
   .find((c) => /FrooxEngine\.BoxCollider$/.test(String(doc.Types[idx(c.Type)])));
 const cardHeight = Number(cardCollider?.Data?.Size?.Data?.[1]);
-if (!(cardHeight > 0)) throw new Error('cannot read the card template height off its collider');
+const cardThickness = Number(cardCollider?.Data?.Size?.Data?.[2]);
+if (!(cardHeight > 0) || !(cardThickness > 0))
+  throw new Error('cannot read the card template size off its collider');
 
 const nodeOf = (s) => ({ slot: s, type: String(doc.Types[idx(s.Components?.Data?.[0]?.Type ?? 0)]), data: s.Components?.Data?.[0]?.Data });
 const nodes = (canvas.Children || []).filter((s) => nm(s) !== 'Meta: Comments').map(nodeOf);
@@ -259,7 +261,8 @@ const { nodes: branch, entryId } = deckImport(kit, {
   // Read off the card template's own collider rather than restated here, so the
   // two cannot drift: the collider is authored at the card's real size, which is
   // the thing the deck's cell has to be reconciled with.
-  cardScale: DECK_CARD_HEIGHT / cardHeight,
+  cardScale: [DECK_CARD_HEIGHT / cardHeight, DECK_CARD_HEIGHT / cardHeight,
+              DECK_CARD_THICKNESS / cardThickness],
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   if (donePlaced.data[k]) donePlaced.data[k].Data = entryId;

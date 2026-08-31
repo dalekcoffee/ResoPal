@@ -632,23 +632,33 @@ console.log(`${NEWLINE}the deck-import branch:`);
   });
   check('a buffer is duplicated per card', !!bufDup);
   const moveOrder = chainFrom(bufDup?.id, 8).map((c) => short(c.type));
-  check('its flux moves to Assets, the card goes in it, is reset and resized, then it joins the deck',
-    ['DuplicateSlot', 'SetParent', 'SetParent', 'SetLocalPositionRotation', 'SetLocalScale', 'SetParent']
+  // The card is reset and scaled BEFORE it is moved, and that order is load-bearing:
+  // `GetChild` re-evaluates on every read, so once SetParent has taken the card out
+  // of Cards the same expression names the NEXT card. Reversed, the first card is
+  // never scaled and the last pass reads null - which breaks the chain and strands
+  // the last card. Asserting the ORDER is asserting both of those cannot come back.
+  check('the card is reset and resized while it is still the one GetChild names',
+    ['DuplicateSlot', 'SetParent', 'SetLocalPositionRotation', 'SetLocalScale', 'SetParent', 'SetParent']
       .every((t, i) => moveOrder[i] === t),
     moveOrder.slice(0, 7).join(' -> '));
-  const [, toAssets, cardIn, cardHome, cardBig, bufIn] = chainFrom(bufDup?.id, 8);
+  const [, toAssets, cardHome, cardBig, cardIn, bufIn] = chainFrom(bufDup?.id, 8);
+  check('all three act on the same card', arg(cardHome, 'Instance') === arg(cardIn, 'Instance') &&
+    arg(cardBig, 'Instance') === arg(cardIn, 'Instance'));
 
-  // A card arrives carrying the grid position the spawn loop gave it under the
-  // panel. Left alone it keeps it - SetParent preserves the LOCAL transform - and
-  // every card sits that far off its own buffer. Both inputs unwired is the reset:
-  // an unconnected ValueInput reads float3.Zero and floatQ.Identity.
+  // Both inputs unwired is the reset: an unconnected ValueInput reads float3.Zero
+  // and floatQ.Identity. Without it a card arrives carrying the grid position the
+  // spawn loop gave it, because SetParent preserves the LOCAL transform.
   check('the card is reset to sit AT its buffer, not where it was on the grid',
-    !byComp.has(arg(cardHome, 'Position')) && !byComp.has(arg(cardHome, 'Rotation')) &&
-    arg(cardHome, 'Instance') === arg(cardIn, 'Instance'));
+    !byComp.has(arg(cardHome, 'Position')) && !byComp.has(arg(cardHome, 'Rotation')));
   // And scaled to the cell it now occupies: the panel's card is 0.088 tall against
   // the deck's 0.25, so unscaled it is a third of its slot.
   {
     const k = arg(deref(arg(cardBig, 'Scale')), 'Value')?.map(Number) ?? [];
+    // Z is deliberately NOT the same as X and Y. The deck stacks its buffers
+    // `cardSize`.Z apart - 1.6 mm - and a card scaled uniformly to fill the cell
+    // comes out 5.7 mm thick, so it would poke through the card above it.
+    check('the card is thinned to the deck\'s stacking pitch, not scaled uniformly',
+      k.length === 3 && k[2] < k[0], `${k.map((v) => v.toFixed(3)).join(', ')}`);
     // Read off the card template's own collider - the one place the card's real
     // size is written as a number - so this cannot pass by restating a constant.
     const cardSlot = findSlot('card');
@@ -656,8 +666,11 @@ console.log(`${NEWLINE}the deck-import branch:`);
       .map((c) => byComp.get(c.Data.ID)).find((c) => short(c?.type) === 'BoxCollider');
     const cardH = (arg(box, 'Size') || []).map(num)[1];
     check('and scaled to the deck\'s card height, not left at the panel\'s',
-      k.length === 3 && k.every((v) => Math.abs(v - k[0]) < 1e-6) &&
-      Math.abs(k[0] * cardH - 0.25) < 1e-4, `${k.map((v) => v.toFixed(3)).join(', ')} x ${cardH}`);
+      k.length === 3 && Math.abs(k[1] - k[0]) < 1e-6 &&
+      Math.abs(k[1] * cardH - 0.25) < 1e-4, `${k.map((v) => v.toFixed(3)).join(', ')} x ${cardH}`);
+    const cardZ = (arg(box, 'Size') || []).map(num)[2];
+    check('and its thickness lands on the deck\'s card thickness',
+      Math.abs(k[2] * cardZ - 0.0015911388909444213) < 1e-6, `${(k[2] * cardZ).toFixed(5)}`);
   }
   check('the buffer\'s packed flux lands in the deck Assets slot',
     String(arg(deref(arg(byComp.get(arg(toAssets, 'NewParent')), 'Name')), 'Value')) === 'Assets');

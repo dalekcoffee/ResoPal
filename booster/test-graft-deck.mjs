@@ -118,7 +118,48 @@ for (const buffer of cards) {
 check('every card still resolves its mesh', meshOk === cards.length, `${meshOk}/${cards.length}`);
 check('every card still resolves its front material', matOk === cards.length, `${matOk}/${cards.length}`);
 check('every card still resolves its texture', texOk === cards.length, `${texOk}/${cards.length}`);
-check('every card still carries its Card/url', artOk === cards.length, `${artOk}/${cards.length}`);
+// A STOCK card carrying `Card/url` means the template came from
+// `build-deck-probe.mjs`, which bakes the per-card art chain into all 52. The
+// shipping template is a plain Deck Maker export and has none, which is correct:
+// the importer destroys every stock card and puts the panel's own in their place,
+// and those carry their own `CARD/url`. So this is reported, not required.
+note(artOk === cards.length ? 'stock cards carry Card/url (a probe-built template)'
+  : `stock cards carry no Card/url (${artOk}/${cards.length}) - a plain export, which the importer replaces`);
+
+// What the importer DOES need from the stock cards is that they can be thrown
+// away cleanly. Ukilop built the hook: each buffer carries a DestroyProxy aimed at
+// that card's driver proxy in `/Deck/Assets`, so destroying the buffer takes its
+// flux with it and the two lists stay the same length. The deck indexes `Assets`
+// by POSITION, so a card destroyed without its proxy would silently shift every
+// later card's flux onto the wrong card.
+{
+  const withProxy = cards.filter((b) =>
+    (b.Components?.Data ?? []).some((c) => /\.DestroyProxy$/.test(typeName(c)) && c.Data.DestroyTarget?.Data));
+  check('every stock card can be destroyed with its flux', withProxy.length === cards.length,
+    `${withProxy.length}/${cards.length} buffers carry a DestroyProxy`);
+  check('and there is one driver proxy per card to destroy',
+    kids(deckAssets ?? {}).length === cards.length);
+}
+
+// A packdb reference with no blob behind it is a font that does not load or a
+// texture that does not, and in-world that is text off its button and untextured
+// card edges. `strip_template.mjs` drops the fallback fonts and the placeholder
+// atlas because the WEBSITE's patch.js replaces both; nothing replaces them here.
+{
+  const have = new Set(Object.keys(zip.files).filter((n) => n.startsWith('Assets/')).map((n) => n.slice(7)));
+  const want = new Set();
+  (function w(o) {
+    if (Array.isArray(o)) return o.forEach(w);
+    if (!o || typeof o !== 'object') return;
+    for (const v of Object.values(o)) {
+      if (typeof v === 'string' && v.startsWith('@packdb:///')) want.add(v.slice(11));
+      else w(v);
+    }
+  })(doc);
+  const absent = [...want].filter((h) => !have.has(h));
+  check('every packdb reference has its blob - no stripped fonts, no stripped atlas',
+    absent.length === 0, `${absent.length} of ${want.size} missing`);
+}
 
 // ── the document holds together ──────────────────────────────────────────────
 console.log('\nthe document holds together:');

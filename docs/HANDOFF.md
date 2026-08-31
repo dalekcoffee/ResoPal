@@ -571,6 +571,39 @@ where several people may be opening at once.
    fallback is invisible — it hid a ten-day-stale Worker deploy. The comment above
    `fillPacks` promises pulls are "marked `local` and the export says so"; neither exists.
 
+## The template must be a WHOLE deck, not the stripped one
+
+`graft-deck.mjs` defaulted to `out/ResoPal_DeckTemplate.resonitepackage`, a
+`build-deck-probe.mjs` output over `data/template.resonitepackage` — and that file is a Deck
+Maker export run through `tools/strip_template.mjs`, which drops the fallback fonts and the
+placeholder atlas **because the website's `patch.js` replaces both on every bake**. Nothing
+replaces them on the in-world path. The grafted deck shipped with five packdb references and
+no blobs behind them:
+
+```
+971a5f8b…  StaticTexture2D   the placeholder atlas      1.1 MB
+4cac5211…  StaticFont                                   0.6 MB
+23e7ad7c…  StaticFont                                   0.4 MB
+415dc629…  StaticFont                                   0.4 MB
+bcda0bcc…  StaticFont        the big fallback face     16.5 MB
+```
+
+In-world that is text that does not sit on its button and untextured card edges.
+
+The probe build was the wrong source on its own terms too: everything it adds is the
+per-card art chain on the 52 stock cards, and **the importer destroys all 52**. What it needs
+from a deck is the furniture — the holder, the buttons, `Surface/cards`, the `buffer`
+template and `logixs` — which is what a plain export already is. The furniture is byte-alike
+between the two; the only difference was the missing blobs.
+
+So `data/deck-template.resonitepackage` is the owner's own confirmed-good export, committed
+whole, and it is the default now. `test-graft-deck.mjs` fails on any packdb reference without
+a blob, so this cannot come back quietly.
+
+**19.9 MB, of which 17.5 is fonts and 16.5 of that is one fallback face.** That face is the
+trim to make if the size matters — but only once the text has been confirmed good in-world,
+because a missing font is what the offset text was.
+
 ## Three things a Deck Maker export brings with it
 
 All three came out of the first in-world import, which otherwise worked: the cards spawned,
@@ -618,6 +651,37 @@ checks the emitted scale lands on 0.25, so the two cannot drift apart.
 The deck also lands **beside** the panel now (`Decks` at `[0.45, -0.30, 0]`), not under it:
 the loose-card grid grows downward from -0.22 and a 50-card import reaches about -0.70, so a
 deck parked below would land inside it.
+
+## `GetChild` does not latch
+
+Worth its own heading, because one wrong assumption produced two symptoms that look
+unrelated.
+
+`GetChild` is a **function** node: it re-evaluates on every read. Three action nodes reading
+`the card on top` are three separate calls to `GetChild(panel Cards, 0)`, and the moment
+`SetParent` moves that card out of `Cards` the same expression names a *different* card.
+
+The move ran first, so each pass moved card A and then reset and scaled card **B**, still
+sitting on the panel. Two symptoms out of that:
+
+- **the first card is a third of the size of the others** — card A was moved before anything
+  scaled it, and nothing ever came back for it;
+- **the last card never leaves the stack** — on the final pass `GetChild` returned null,
+  which breaks an `ActionBreakableFlowNode`, and the break took the `SetParent` that puts the
+  buffer into `Cards` with it.
+
+The fix is ordering, not a new node: reset and scale while the card is still under `Cards`,
+and move it last. Both survive the move — `SetParent` with `PreserveGlobalPosition` unwired
+keeps the local transform, and local scale is not touched by reparenting at all.
+`test-panel.mjs` asserts the order and that all three nodes name the same card.
+
+## The card is thinned, not just scaled
+
+The deck stacks its buffers exactly `Deck/cardSize`.Z apart — the reference deck's buffers
+measure z = 0.0406, 0.0390, 0.0374, a 1.6 mm pitch. The panel's card is 2 mm thick at the
+collider, so scaled **uniformly** to fill the 0.25 cell it becomes 5.7 mm — three and a half
+times the gap it has to sit in, and it pokes through the card above it. So the scale is not
+uniform: X and Y take the card to the cell, Z takes it to the pitch.
 
 ## The record width was drifting
 

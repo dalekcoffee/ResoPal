@@ -61,7 +61,27 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const i = a.indexOf('='); return i < 0 ? [a, true] : [a.slice(0, i), a.slice(i + 1)];
 }));
 const PANEL = args.panel || path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage');
-const DECK = args.deck || path.join(import.meta.dirname, 'out', 'ResoPal_DeckTemplate.resonitepackage');
+// The deck the owner confirmed good in-world, committed whole.
+//
+// It used to default to `out/ResoPal_DeckTemplate.resonitepackage`, a
+// `build-deck-probe.mjs` output over `data/template.resonitepackage` - and that
+// file is a Deck Maker export run through `tools/strip_template.mjs`, which drops
+// the fallback fonts and the placeholder atlas because the WEBSITE's `patch.js`
+// replaces both on every bake. Nothing replaces them on the in-world path, so the
+// grafted deck shipped with five packdb references and no blobs behind them: four
+// StaticFonts and the atlas StaticTexture2D. In-world that is text that does not
+// sit on its button and untextured card edges.
+//
+// The probe build was also the wrong source on its own terms: everything it adds
+// is per-card art on the 52 stock cards, and the importer destroys all 52. What it
+// needs from a deck is the furniture - the holder, the buttons, `Surface/cards`,
+// the `buffer` template and `logixs` - which is exactly what a plain export is.
+//
+// 19.9 MB, of which 17.5 is fonts and 16.5 of that is one fallback face. Dropping
+// that one face is the trim to make if the size becomes a problem; do it only once
+// the text has been confirmed good in-world, because a missing font is what the
+// offset text was.
+const DECK = args.deck || path.join(ROOT, 'data', 'deck-template.resonitepackage');
 const OUT = args.out || path.join(import.meta.dirname, 'out', 'ResoPal_Panel_Deck.resonitepackage');
 const SLOT_NAME = args.name || 'Deck template';
 

@@ -91,6 +91,18 @@ export const DECK_MIN_CARDS = 30;
 export const DECK_CARD_HEIGHT = 0.25;
 
 /**
+ * And its thickness: `Deck/cardSize`.Z, 0.0015911.
+ *
+ * The deck stacks its buffers exactly this far apart - the reference deck's
+ * buffers measure z = 0.0406, 0.0390, 0.0374, a 0.0016 pitch - so a card thicker
+ * than this pokes through the one above it. The panel's card is 0.002 thick at the
+ * collider, and scaled UNIFORMLY to fit the cell it would become 0.0057, three and
+ * a half times the gap it has to sit in. So the scale is not uniform: X and Y take
+ * the card to the cell, Z takes it to the pitch.
+ */
+export const DECK_CARD_THICKNESS = 0.0015911388909444213;
+
+/**
  * @param kit  emitters from whichever document this is going into:
  *             node(name, classpath, fields, pos), refNode(name, targetSlotId, pos),
  *             strIn/intIn/boolIn/f3In(name, value, pos), and the type table T.
@@ -98,7 +110,7 @@ export const DECK_CARD_HEIGHT = 0.25;
  *             panelCards - the panel's own Cards slot (where loose cards land)
  *             deckTemplate - the grafted deck's ROOT slot
  *             decksHolder - the slot deck duplicates are parented under
- *             cardScale - uniform scale taking a panel card to a deck card
+ *             cardScale - [x, y, z] scale taking a panel card to a deck card
  * @returns { nodes, entryId } - entryId is what the "all cards placed" write
  *          continues into.
  */
@@ -220,34 +232,49 @@ export function deckImport(kit, hook) {
   const firstB = push(intIn('the first one', 0, at(1, -3.00)));
   const nextCard = push(node('the card on top', T.GetChild,
     { Instance: panelCardsB.id, ChildIndex: firstB.id }, at(1, -2.70)));
-  const cardIn = push(node('the card goes in the buffer', T.SetParent,
-    { Next: null, Instance: nextCard.id, NewParent: bufDup.f.Duplicate, PreserveGlobalPosition: null }, atg(1, -2.40)));
-  proxyHome.slot.Components.Data[0].Data.Next.Data = cardIn.id;
-
-  // Sit it AT the buffer. `SetParent` with PreserveGlobalPosition unwired keeps the
-  // card's LOCAL transform, and the card arrives carrying the grid position the
-  // spawn loop gave it under the panel - so every card ends up offset from its own
-  // buffer by wherever it happened to be on the panel's grid, and the deck spreads
-  // into a cloud sitting well off the holder. That is the first in-world import's
-  // "the cards are far away from it as well".
+  // ── the card is reset and resized BEFORE it is moved, and the order is the
+  // whole of it ─────────────────────────────────────────────────────────────
+  // `GetChild` is a FUNCTION node: it re-evaluates on every read, it does not
+  // latch. Three action nodes reading `the card on top` are three separate calls
+  // to `GetChild(panel Cards, 0)`, and the moment `SetParent` moves that card out
+  // of `Cards` the same expression names a DIFFERENT card.
   //
-  // The handler does exactly this and it is easy to read as a no-op: BOTH inputs
-  // are deliberately left unwired, because an unconnected ValueInput evaluates to
-  // its type's default - float3.Zero and floatQ.Identity. The node IS the reset.
+  // With the move first, that is exactly what happened in-world: pass 1 moved card
+  // A and then reset and scaled card B, still sitting on the panel; pass 2 moved
+  // the already-scaled B and prepared C. So card A - the first one - never got
+  // scaled and came out a third of the size of every other card, and on the last
+  // pass `GetChild` returned null, which breaks an ActionBreakableFlowNode and
+  // took `bufIn` with it, so the last card never joined the deck. One bug, both
+  // symptoms.
+  //
+  // Reset and scale while the card is still under `Cards` and every read names the
+  // same card. Both survive the move: `SetParent` with PreserveGlobalPosition
+  // unwired keeps the LOCAL transform, so a card zeroed here arrives at its
+  // buffer's origin, and local scale is not touched by reparenting at all.
+  //
+  // The reset is easy to read as a no-op and is not one: BOTH inputs are
+  // deliberately left unwired, because an unconnected ValueInput evaluates to its
+  // type's default - float3.Zero and floatQ.Identity. The node IS the reset, and
+  // without it a card arrives still carrying the grid position the spawn loop gave
+  // it on the panel.
   const cardHome = push(node('sit it at the buffer', T.SetLocalPosRot,
     { Next: null, Instance: nextCard.id, Position: null, Rotation: null }, at(0, -2.40)));
-  cardIn.slot.Components.Data[0].Data.Next.Data = cardHome.id;
+  proxyHome.slot.Components.Data[0].Data.Next.Data = cardHome.id;
 
-  // And make it the size of the slot it is in, rather than the size a loose card
-  // wants in front of the panel. See DECK_CARD_HEIGHT.
+  // And make it the size of the slot it is going into, rather than the size a
+  // loose card wants in front of the panel. See DECK_CARD_HEIGHT.
   const cardScale = push(f3In('the deck\'s card size', hook.cardScale, atg(1, -1.80)));
   const cardBig = push(node('and the size of a deck card', T.SetLocalScale,
     { Next: null, Instance: nextCard.id, Scale: cardScale.id }, at(0, -2.08)));
   cardHome.slot.Components.Data[0].Data.Next.Data = cardBig.id;
 
+  const cardIn = push(node('the card goes in the buffer', T.SetParent,
+    { Next: null, Instance: nextCard.id, NewParent: bufDup.f.Duplicate, PreserveGlobalPosition: null }, atg(1, -2.40)));
+  cardBig.slot.Components.Data[0].Data.Next.Data = cardIn.id;
+
   const bufIn = push(node('and the buffer joins the deck', T.SetParent,
     { Next: null, Instance: bufDup.f.Duplicate, NewParent: deckCards.id, PreserveGlobalPosition: null }, at(1, -2.40)));
-  cardBig.slot.Components.Data[0].Data.Next.Data = bufIn.id;
+  cardIn.slot.Components.Data[0].Data.Next.Data = bufIn.id;
 
   const againAsync = push(node('and on to the next card, asynchronously', T.StartAsync,
     { TaskStart: null, OnStarted: null, OnFailed: null }, at(2, -2.40)));
