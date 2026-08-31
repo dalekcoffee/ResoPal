@@ -19,18 +19,21 @@
  * card duplicable - was tried and broke grabbing, because the deck reaches into
  * `/Assets` by position (docs/HANDOFF.md).
  *
- * ── NOT THE SHIPPING PATH. Measured 2026-08-31 ──────────────────────────────
- * This works and its output verifies, but the shape is wrong. The deck is 3763
- * components and 1992 flux slots; the panel is 228 and 119. Grafting one into the
- * other buries the owner's clean Moduprint canvas under sixteen times its own size
- * in someone else's flux, and the template has to arrive inactive - so its nodes
- * bind to nothing and read as red.
+ * ── THE SHIPPING PATH, as of 2026-08-31 ─────────────────────────────────────
+ * This was marked "not the shipping path" on the grounds that the deck is 3763
+ * components and 1992 flux slots against the panel's 228 and 119, so grafting it
+ * buries the owner's clean canvas under someone else's flux. That reading was of
+ * the canvas COUNT, and it is wrong about what he actually sees: the deck's flux
+ * lives in `Deck/logixs` and 52 packed `Assets/proxy` slots, none of which is a
+ * Moduprint canvas. The panel still has exactly one canvas after this runs, still
+ * with his 116 nodes plus the branch, and `test-graft-deck.mjs` gates that.
  *
- * The panel's OWN subtree is untouched by this: 151 slots, identical components and
- * positions before and after, measured. The mess is entirely the passenger.
- *
- * Kept because the splice itself is correct and tested, and because a deck may yet
- * need to travel inside something. Do not ship its output into the panel.
+ * The other half of the objection was real and is fixed here: the template used to
+ * arrive INACTIVE, so its nodes bound to nothing and read as red - "the flux is
+ * severely broken again". It now arrives ACTIVE inside an INACTIVE HOLDER, which
+ * is what the card template already does and what `DuplicateSlot` requires:
+ * `slot.Duplicate()` copies `Active` verbatim, so duplicating an inactive deck
+ * gives an inactive deck and nothing in the spawn chain turns it back on.
  *
  *   node booster/graft-deck.mjs [panel=out/ResoPal_Panel.resonitepackage]
  *                               [deck=out/ResoPal_DeckTemplate.resonitepackage]
@@ -45,7 +48,7 @@ import { cloneNode, allocator, typeMapper } from './splice.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
-const { Int32 } = require('bson');
+const { Int32, Long, Double } = require('bson');
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -93,11 +96,74 @@ const wholeDoc = cloneNode({ Object: deck.doc.Object, Assets: deck.doc.Assets },
 })(wholeDoc.Object);
 for (const a of wholeDoc.Assets) a.Type = new Int32(mapType(idx(a.Type)));
 
-wholeDoc.Object.Name.Data = SLOT_NAME;
-wholeDoc.Object.Active.Data = false;
+// ── the spread toggle, exposed as a variable ─────────────────────────────────
+// `InnerDeck/grid X` and `grid Y` are DRIVEN outputs of `ChildrenCount(Cards)`,
+// not inputs - writing them does nothing (see deck-import.mjs for the
+// measurement). What actually opens the search spread is
+// `BooleanValueDriver<floatQ>.State` on `/Deck/Surface/cards`, a plain field the
+// search button's own flux writes, and there is no variable on it for the
+// importer to reach. One `DynamicField<bool>` gives it one, using the same idiom
+// the deck already uses to expose `InnerDeck/SmoothSpeed` on every buffer.
+const findSlot = (s, name) => nm(s) === name ? s
+  : (s.Children ?? []).reduce((f, c) => f || findSlot(c, name), null);
+const surface = findSlot(wholeDoc.Object, 'Surface/cards');
+if (!surface) throw new Error('no Surface/cards in the deck template');
+const typeName = (c) => String(panel.doc.Types[idx(c.Type)]);
+const stateDriver = (surface.Components?.Data ?? []).find((c) => /BooleanValueDriver<floatQ>/.test(typeName(c)));
+if (!stateDriver) throw new Error('no BooleanValueDriver<floatQ> on Surface/cards - the spread toggle moved');
+const SPREAD_VAR = 'InnerDeck/spread';
+const dynFieldType = '[FrooxEngine]FrooxEngine.DynamicField<bool>';
+let dfIndex = panel.doc.Types.indexOf(dynFieldType);
+if (dfIndex < 0) { dfIndex = panel.doc.Types.length; panel.doc.Types.push(dynFieldType); }
+surface.Components.Data.push({
+  Type: new Int32(dfIndex),
+  Data: {
+    ID: newId(), 'persistent-ID': newId(),
+    UpdateOrder: { ID: newId(), Data: new Int32(0) },
+    Enabled: { ID: newId(), Data: true },
+    VariableName: { ID: newId(), Data: SPREAD_VAR },
+    TargetField: { ID: newId(), Data: String(stateDriver.Data.State.ID) },
+    OverrideOnLink: { ID: newId(), Data: false },
+  },
+});
 
-(panel.doc.Object.Children ??= []).push(wholeDoc.Object);
+// ── in, alive, behind an inactive holder ─────────────────────────────────────
+// The DECK stays active and its HOLDER is switched off, exactly as the card
+// template is. `DuplicateSlot` copies `Active` verbatim: hand it an inactive deck
+// and the copy is invisible too, with nothing downstream to turn it on.
+wholeDoc.Object.Name.Data = 'Deck';
+const holder = {
+  ID: newId(),
+  Components: { ID: newId(), Data: [] },
+  Name: { ID: newId(), Data: SLOT_NAME }, Tag: { ID: newId(), Data: null },
+  Active: { ID: newId(), Data: false }, 'Persistent-ID': newId(),
+  Position: { ID: newId(), Data: [0, -0.9, 0].map((v) => new Double(v)) },
+  Rotation: { ID: newId(), Data: [0, 0, 0, 1].map((v) => new Double(v)) },
+  Scale: { ID: newId(), Data: [1, 1, 1].map((v) => new Double(v)) },
+  OrderOffset: { ID: newId(), Data: Long.fromNumber(0) },
+  ParentReference: null, Children: [wholeDoc.Object],
+};
+
+(panel.doc.Object.Children ??= []).push(holder);
 panel.doc.Assets = [...(panel.doc.Assets ?? []), ...wholeDoc.Assets];
+
+// ── point the importer at it ─────────────────────────────────────────────────
+// `graft-deck-import.mjs` emits the branch with its deck-template reference left
+// null, because the id the deck lands on does not exist until this runs. Filling
+// it in is the one thing that joins the two grafts, and it is a hard error rather
+// than a warning: a null reference here is a panel whose deck button duplicates
+// nothing, silently, which is exactly the class of failure this repo keeps paying
+// for. Running only `graft-deck-import.mjs` and stopping is fine - the branch is
+// inert until a template exists - but a build that gets here must connect.
+let bound = 0;
+(function bind(s) {
+  if (nm(s) === 'the deck template')
+    for (const c of s.Components?.Data ?? [])
+      if (/GlobalReference<\[FrooxEngine\]FrooxEngine\.Slot>/.test(typeName(c)) && !c.Data.Reference.Data) {
+        c.Data.Reference.Data = String(wholeDoc.Object.ID); bound++;
+      }
+  for (const c of s.Children ?? []) bind(c);
+})(panel.doc.Object);
 
 // ── the blobs those assets point at ──────────────────────────────────────────
 const wanted = new Set();
@@ -155,6 +221,7 @@ const cards = (() => {
 
 console.log(`\n✓ ${OUT}`);
 console.log(`  ${(bytes.length / 1048576).toFixed(2)} MB  (panel ${(await readFile(PANEL)).length / 1048576 | 0}+ MB, deck folded in)`);
-console.log(`  "${SLOT_NAME}" grafted inactive, ${cards} cards, ids from ${newId.start.toString(16)}`);
+console.log(`  "${SLOT_NAME}" holder inactive, deck active, ${cards} cards, ids from ${newId.start.toString(16)}`);
+console.log(`  ${SPREAD_VAR} bound to the spread toggle; ${bound} importer reference(s) pointed at the deck`);
 console.log(`  ${mapType.appended.length} types appended, ${carried.length} blobs carried, ${absent.length} left to the bake`);
 console.log(`  ${wholeDoc.Assets.length} asset entries folded into doc.Assets\n`);

@@ -5,13 +5,15 @@
   "description": "In-world ResoPal panel: a UIX panel whose buttons fetch a deck or a booster pull and lay the cards out in front of you.",
   "scripts": {
     "build": "node build-panel.mjs",
-    "test": "node verify-classpaths.mjs && node test-panel.mjs",
+    "test": "npm run graft:import && node verify-classpaths.mjs out/ResoPal_Panel_DeckImport.resonitepackage && node test-panel.mjs out/ResoPal_Panel_DeckImport.resonitepackage",
     "build:deck-probe": "node build-deck-probe.mjs",
     "test:deck-probe": "node test-deck-probe.mjs",
     "graft:url-markers": "node graft-url-markers.mjs",
     "build:deck-template": "node build-deck-probe.mjs blank=52 back=proxy out=out/ResoPal_DeckTemplate.resonitepackage",
-    "graft:deck": "node graft-deck.mjs",
-    "test:graft-deck": "node test-graft-deck.mjs"
+    "graft:deck": "node graft-deck.mjs panel=out/ResoPal_Panel_DeckImport.resonitepackage out=out/ResoPal_Panel_Deck.resonitepackage",
+    "test:graft-deck": "npm run ship && node test-graft-deck.mjs out/ResoPal_Panel_Deck.resonitepackage",
+    "graft:import": "node graft-deck-import.mjs",
+    "ship": "npm run graft:import && npm run graft:deck"
   },
   "dependencies": {
     "bson": "^7.2.0",

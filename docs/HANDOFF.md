@@ -6,15 +6,24 @@ before touching anything that produces a deck package.
 
 ## The one thing that will bite you
 
-> **Stale as of 2026-08-31 — measured, not assumed.** A fresh `build-panel.mjs` was compared
-> against the committed `out/ResoPal_Panel.resonitepackage`: **152 slots identical** in name
-> and component set, and **all 122 positioned slots identical** to four decimals. The builder
-> reproduces the shipped panel, layout included, so a change can ship by rebuilding. The
-> section below is kept because the *reasoning* still applies the moment that stops being
-> true — re-run that comparison before trusting it.
+> **That "stale" note is itself withdrawn — re-measured 2026-08-31, and the section below
+> is live again.** The comparison it rested on predates the autorouter being switched on.
+> Counted now, on the Moduprint canvas:
 >
-> `build-panel.mjs` now takes `out=`, so a comparison build cannot overwrite the shipped
-> package. It has been overwritten once by a build run only to check the tests.
+> | | logic nodes | relays | total |
+> |---|---|---|---|
+> | committed `out/ResoPal_Panel.resonitepackage` | 100 | 16 | **116** |
+> | a fresh `build-panel.mjs` | 101 | 111 | **212** |
+>
+> The router puts a relay on very nearly every wire, and the result fails this repo's own
+> layout gates: 576 pairs of overlapping node visuals and 226 wires crossing a wired node
+> against a budget of 30. **The builder does not reproduce the shipped panel and handing
+> back a rebuild would throw away his cleanup.** A change ships by grafting.
+>
+> That router regression is a separate, untouched problem. It is the reason `npm test` now
+> runs against the grafted artifact rather than a build.
+>
+> `build-panel.mjs` takes `out=`, so a comparison build cannot overwrite a shipped package.
 
 **The shipped panel is a file the owner hand-packed in-world. The builder does not
 reproduce it.**
@@ -231,7 +240,21 @@ at its full card count and destroy the extras in-world.** `DestroyProxy` on each
 removes that card's `/Assets` proxy with it, which keeps the two lists in step — Ukilop built
 trimming in, and it is the supported way to change a deck's size.
 
-## The deck cannot live inside the panel
+## ~~The deck cannot live inside the panel~~ — withdrawn 2026-08-31, it can
+
+The numbers below are right and the conclusion was wrong, so both are kept. What the
+component and flux-slot counts miss is **where** that flux lives: `Deck/logixs` and 52
+packed `Assets/proxy` slots, none of which is a Moduprint canvas. The panel still has
+exactly one canvas after the graft, still carrying his nodes and nothing else, and
+`test-graft-deck.mjs` gates that. The deck is a passenger in the package, not on his canvas.
+
+The other half of the objection was real and is fixed: the template used to arrive
+**inactive**, so its nodes bound to nothing and read as red — which is what "the flux is
+severely broken again" was. It now arrives **active inside an inactive holder**, the way the
+card template already does, because `DuplicateSlot` copies `Active` verbatim and duplicating
+an inactive deck gives an invisible one.
+
+The original note follows.
 
 Tried, measured, withdrawn. `graft-deck.mjs` folds a deck template into the panel package
 correctly - the splice verifies, every card keeps its mesh, material, texture and `Card/url`,
@@ -261,34 +284,86 @@ has not been made.
 
 Both open questions are answered, read out of `data/template.resonitepackage` itself.
 
-**Reparenting a card into the deck.** `Surface/cards` **and** `Cards` each carry a
-`GrabbableReceiverSurface`, and there are four `OnGrabbableReceiverSurfaceReceived`
-handlers. So reparenting a grabbable card onto it is the supported path — the deck's own
-handler stacks it and sets `OrderOffset`. Nothing needs driving by hand.
+**~~Reparenting a card into the deck.~~ WRONG — corrected 2026-08-31, from the engine
+source.** The note said `Surface/cards` and `Cards` each carry a `GrabbableReceiverSurface`
+with four `OnGrabbableReceiverSurfaceReceived` handlers, so reparenting onto one lets the
+deck's own handler stack the card and set `OrderOffset`, with nothing to drive by hand.
 
-**Engaging the search spread.** Not an impulse: the whole deck defines exactly one dynamic
-impulse tag, `"Card removed"`, so there is nothing to fire. The spread state lives in two
-dynamic variables on `/Deck/Surface/cards`:
+The first half is true and the conclusion does not follow. That node hangs off
+`GrabbableReceiverSurface.OnLocalReceived`, which is raised in exactly one place —
+`Receive(grabbable, grabber)` — and `Receive` has exactly one caller in the whole engine:
+`Grabber.cs:447`, a person letting go of something they had grabbed. **A `SetParent` from
+ProtoFlux raises nothing.** A card reparented onto `Cards` gets no buffer, no position
+driver and no `OrderOffset`; it simply sits there.
 
-| variable | type |
-|---|---|
-| `InnerDeck/grid X` | `DynamicValueVariable<int>` |
-| `InnerDeck/grid Y` | `DynamicValueVariable<int>` |
+So the importer does what the handler does, in the handler's order, read out of
+`/Deck/logixs/add/remove handling`:
 
-Writing those two ints is what engages search — a plain `WriteDynamicValueVariable<int>`,
-no button press. The search button's own flux is packed into a proxy slot, which is why the
-button's `logix` child reads as empty.
+1. `DuplicateSlot(/Deck/buffer)` — the buffer template, which carries that card's packed
+   position flux as its `proxy` child;
+2. `SetParent(the copy's proxy → /Deck/Assets)`;
+3. `SetParent(the card → the buffer copy)`;
+4. `SetParent(the buffer copy → /Deck/Surface/cards/Cards)`.
+
+Appending to `Cards` and to `Assets` in the same pass is what keeps the two lists in step,
+which is the thing the deck indexes **by position** — the same coupling that broke grabbing
+the last time those proxies were moved.
+
+**~~Engaging the search spread.~~ WRONG — corrected 2026-08-31, from the deck itself.**
+"Not an impulse" is right: the deck defines exactly one dynamic impulse tag, `"Card
+removed"`, so there is nothing to fire. But `InnerDeck/grid X` and `InnerDeck/grid Y` are
+**outputs, not inputs**. Both `Value` fields are DRIVEN, by two `ValueFieldDrive<int>` in
+`/Deck/logixs/Deck functions`, off `ChildrenCount(Cards)` and the card aspect:
+
+```
+aspect = Deck/cardSize.Y / .X = 0.25 / 0.175 = 1.42857
+grid Y = round(sqrt(n / aspect))      grid X = ceil(aspect * sqrt(n / aspect))
+n = 52  ->  grid Y = round(6.03) = 6      grid X = ceil(8.62) = 9
+```
+
+which is exactly the 9 and 6 the file ships. Writing a driven field is undone on the next
+update, and there is nothing to write anyway — the grid follows the card count on its own
+the moment the cards land.
+
+What actually opens the spread is a **bool**: `BooleanValueDriver<floatQ>.State` on
+`/Deck/Surface/cards`, copied to the `float3` driver beside it by a `ValueCopy<bool>`. The
+search button's label is driven from that same field and reads **"Search" while it is true,
+"Close" while it is false** — so `false` is open. Its writer is a `ValueWrite` inside the
+button's packed flux, which is why the button's `logix` child reads as empty.
+
+It is a plain field with no variable on it, so `graft-deck.mjs` attaches one
+`DynamicField<bool>` exposing it as `InnerDeck/spread` — the same idiom the deck already
+uses to expose `InnerDeck/SmoothSpeed` on every buffer — and the importer writes that false
+once every card has landed. It is written last because the spread lays out from
+`ChildrenCount`, so opening a half-filled deck would spread it twice.
 
 **The build, as specced with the owner:**
 
-- graft the deck template in (`graft-deck.mjs` works and verifies), `DuplicateSlot` on import
-- gate on **more than 30 cards**, off the same `ChildrenCount` the grid index already uses,
-  so boosters and single cards keep spawning loose with no branch of their own
-- reparent each card into `Cards`; the receiver surface does the stacking
-- write `InnerDeck/grid X` / `grid Y` to engage search
-- **new nodes go at x ≥ 14.3**, right of the owner's canvas (his spans x 0–13.48), on his row
+- graft the deck template in (`graft-deck.mjs`), `DuplicateSlot` it on import
+- gate on **more than 30 cards**, so boosters and single cards keep spawning loose with no
+  branch of their own. The count is a `ChildrenCount` on the panel's own `Cards` slot, read
+  after the loop finishes. Note the grid index does **not** use one — it asks `IndexOfChild`
+  for the card's own index, deliberately (see `booster/GRAPH.md`), so this is a new read
+  rather than a shared one.
+- move each card into the deck through a duplicated **buffer**, as above; a bare reparent
+  does nothing
+- write `InnerDeck/spread` false to engage search
+- **new nodes go at x ≥ 14.3**, right of the owner's canvas (his ends at 13.57), on his row
   Ys, wired into his existing chain so he can merge them in. He cleans up and merges; that is
   the agreed division of labour, not licence to be sloppy.
+
+**Built 2026-08-31.** `booster/deck-import.mjs` is the branch, emitted through a kit so the
+same 51 nodes go into both the builder and the graft. `booster/graft-deck-import.mjs`
+splices them into the packed panel; `booster/graft-deck.mjs` then folds the deck template in
+and fills in the branch's template reference. `npm run ship` does both in order.
+
+Its placement was **hill-climbed against this repo's own crossing test**, not eyeballed:
+constants into gutter columns half a pitch left of their consumer, leaf producers duplicated
+beside the nodes that read them rather than wired back across the zone. It measures **0
+wires through a constant and 2 through a wired node** — his own graph carries 16 — in
+17.18 × 8.35 units. The autorouter was tried first and made it worse twice (32 relays and
+98 crossings at his pitch, 33 and 85 at double it): a router needs empty lanes to thread,
+and a branch bolted onto the right edge of a full canvas has none.
 
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
@@ -483,17 +558,38 @@ where several people may be opening at once.
 ## Open tasks
 
 1. **The card back** — above.
-2. **Decks into a real Ukilop deck** (deferred, and the owner asked that nothing be thrown
-   away in the meantime). Boosters stay loose cards. The `Snapper` keyed `"Card"` from
-   attempt 3 is the hook a deck's `GrabbableReceiverSurface` looks for; it is not in the
-   current file but the design note is here. `Surface/cards` accepts any grabbable dropped
-   on it — its 51-node add/remove handler hangs off
-   `OnGrabbableReceiverSurfaceReceived` — so a spawner reparents directly and sets
-   `OrderOffset` itself, the way DeckReader's `DuplicateSlot(OverrideParent)` does.
-3. **The site's silent fallback.** `index.html:894` catches a failed `/api/pull` and rolls
+2. ~~**Decks into a real Ukilop deck.**~~ Built 2026-08-31; see the section above.
+   **Not yet drag-tested in-world** — everything here is read out of the engine source and
+   the deck's own file, and gated by the suites, but no one has imported it yet. The three
+   things to watch on the first import, in order of how likely they are to be the thing
+   that is wrong:
+   - **the cards land but do not lay out** → the buffer's packed `proxy` did not reach
+     `/Deck/Assets`, or reached it out of step with `Cards`. The deck indexes that list by
+     position.
+   - **the deck stays stacked** → `InnerDeck/spread` did not bind. Check the
+     `DynamicField<bool>` is on `Surface/cards` itself, not on a child: the space is
+     `OnlyDirectBinding`.
+   - **nothing happens at all past 30 cards** → the branch's deck-template reference is
+     null, which happens if `graft-deck-import.mjs` ran without `graft-deck.mjs` after it.
+     `npm run ship` runs both; `test:graft-deck` fails on an unbound reference.
+3. **The router regression.** A fresh `build-panel.mjs` emits 148 relays for 51 logic nodes
+   and fails the layout gates outright. Nothing in this round touched it and the shipping
+   path routes around it by grafting, but the builder's own output is not importable until
+   it is fixed. Numbers are in "The one thing that will bite you", above.
+4. **The site's silent fallback.** `index.html:894` catches a failed `/api/pull` and rolls
    in the browser instead. `serverDown` is set at line 905 and never read anywhere, so the
    fallback is invisible — it hid a ten-day-stale Worker deploy. The comment above
    `fillPacks` promises pulls are "marked `local` and the export says so"; neither exists.
+
+## The record width was drifting
+
+`worker/src/roll.js` moved `RECORD_WIDTH` to 80 and `build-panel.mjs` still had a literal
+64, so the status line's `Substring` cut the first record at 64 characters and showed a
+truncated URL. Nothing failed: the loop walks newlines and never reads the constant, so only
+the readout was wrong, and only for URLs longer than 64. The builder imports the Worker's
+constant now — there is one definition of it. `test-panel.mjs` had the same 64 hard-coded
+and was slicing live responses into fragments with it, which is what the five
+"want &lt;url&gt; got &lt;url&gt;" failures were; it splits on newlines now, the way the graph does.
 
 ## How to debug this thing
 

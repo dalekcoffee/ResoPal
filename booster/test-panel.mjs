@@ -55,6 +55,18 @@ const byComp = new Map(), byField = new Map(), slotOf = new Map();
 
 const compsOfType = (t) => [...byComp.values()].filter((c) => short(c.type) === t);
 const arg = (c, name) => (c.data[name] === undefined ? undefined : c.data[name].Data);
+// A routing relay is not logic. The autorouter turns every long or cornered
+// impulse wire into a ContinuationRelay pipe, and a corner gets a flank PAIR, so
+// a chain the builder emits as `A -> B` arrives as `A -> relay -> relay -> B`.
+// Asserting the raw chain therefore asserts the router's output, not the graph's
+// meaning - which is how four of these checks went red on a build whose logic had
+// not changed at all. Every walk below steps over relays instead: the order of
+// the OPERATIONS is the property worth holding, and a relay is precisely the
+// thing that cannot change it.
+const throughRelays = (c) => {
+  for (let n = 0; short(c?.type) === 'ContinuationRelay' && n < 16; n++) c = byComp.get(arg(c, 'Next'));
+  return c;
+};
 
 console.log(`${path.basename(pkg)}  (${byComp.size} components, ${raw.length} bytes)`);
 
@@ -158,10 +170,9 @@ check('every write continues into the request', writes.every((w) => {
   // write -> trunk relay -> StartAsyncTask -> GET. The async wrapper is not
   // optional: GET_String is an AsyncActionNode and an ordinary impulse cannot
   // run one - the chain would reach it and stop with no error anywhere.
-  let after = byComp.get(arg(w, 'OnSuccess'));
-  if (short(after?.type) === 'ContinuationRelay') after = byComp.get(arg(after, 'Next'));
+  let after = throughRelays(byComp.get(arg(w, 'OnSuccess')));
   check_async_seen = check_async_seen || short(after?.type) === 'StartAsyncTask';
-  if (short(after?.type) === 'StartAsyncTask') after = byComp.get(arg(after, 'TaskStart'));
+  if (short(after?.type) === 'StartAsyncTask') after = throughRelays(byComp.get(arg(after, 'TaskStart')));
   return short(after?.type) === 'GET_String';
 }));
 check('the request runs inside a StartAsyncTask', check_async_seen);
@@ -393,9 +404,24 @@ check('into its own texture URL',
 // Structure first, then behaviour. The structural checks are the ones that
 // would otherwise fail silently in-world.
 console.log(`${NEWLINE}the spawn loop:`);
+// There are three DuplicateSlot nodes now - one per card, one per deck, one per
+// buffer - so counting them no longer identifies the spawner. The one that means
+// "make a card" is the one that duplicates INTO the panel's own Cards slot; the
+// deck branch's two duplicate the deck template and one of its buffers, and both
+// land inside the deck. Identity, not population.
 const dups = compsOfType('DuplicateSlot');
-check('one DuplicateSlot', dups.length === 1);
-const dup = dups[0];
+const intoPanelCards = (c, field) => {
+  // `OverrideParent` is legitimately null on the buffer duplicate - it lands
+  // beside its template - so every hop here has to tolerate not being wired.
+  const src = byComp.get(arg(c, field));
+  if (!src) return false;
+  const ref = byComp.get(arg(src, 'Source'));
+  return !!ref && arg(ref, 'Reference') === findSlot('Cards')?.ID;
+};
+const cardDups = dups.filter((d) => intoPanelCards(d, 'OverrideParent'));
+check('exactly one DuplicateSlot spawns a card into Cards', cardDups.length === 1,
+  `${cardDups.length} of ${dups.length} DuplicateSlot nodes`);
+const dup = cardDups[0];
 check('it duplicates the template', (() => {
   const src = byComp.get(arg(dup, 'Template'));
   const ref = byComp.get(arg(src, 'Source'));
@@ -416,11 +442,11 @@ const evtWritesEarly = () => allWrites.filter((w) =>
 const IMPULSE = ['Next', 'OnSuccess', 'OnWritten', 'OnTrue', 'OnFalse', 'TaskStart', 'OnTriggered', 'OnResponse'];
 const chainFrom = (id, stop = 24) => {
   const out = [];
-  let c = byComp.get(id);
+  let c = throughRelays(byComp.get(id));
   while (c && out.length < stop) {
     out.push(c);
     const nxt = IMPULSE.map((f) => arg(c, f)).find((v) => typeof v === 'string' && byComp.has(v));
-    c = nxt ? byComp.get(nxt) : null;
+    c = nxt ? throughRelays(byComp.get(nxt)) : null;
   }
   return out;
 };
@@ -479,8 +505,13 @@ check('so every pass removes at least ' + (minRecord + 2) + ' characters and the
 
 // It also has to yield, or a 200-card import is one very long frame.
 const loopBody = chainFrom(loopGate.id, 2);
+// Same again: the deck branch's move loop yields per card too, so the property is
+// that THIS loop's gate is reached through a DelayUpdates, not that the package
+// contains exactly one.
 const delays = compsOfType('DelayUpdates');
-check('the loop lets a frame pass each time round', delays.length === 1);
+check('the loop lets a frame pass each time round',
+  delays.some((d) => chainFrom(arg(d, 'Next'), 1)[0]?.id === loopGate?.id),
+  `${delays.length} DelayUpdates nodes, none feeding this gate`);
 const indexNodes = compsOfType('IndexOfChild');
 check('the grid index is the card\'s own, not a count taken after it exists',
   indexNodes.length === 1 && byField.get(arg(indexNodes[0], 'Instance'))?.name === 'Duplicate',
@@ -488,7 +519,14 @@ check('the grid index is the card\'s own, not a count taken after it exists',
 check('a card that will not take its art says so instead of stopping silently',
   evtWritesEarly().some((w) => arg(setUrl, 'OnNotFound') === w.id && arg(setUrl, 'OnFailed') === w.id));
 check('and runs inside a StartAsyncTask', compsOfType('StartAsyncTask').length >= 3);
-check('the previous import is cleared first', compsOfType('DestroySlotChildren').length === 1);
+// One clears the panel's Cards before an import; the deck branch's clears the
+// stock cards out of a freshly duplicated deck. Only the first is this check's.
+{
+  const clears = compsOfType('DestroySlotChildren');
+  const ofPanelCards = clears.filter((c) => intoPanelCards(c, 'Instance'));
+  check('the previous import is cleared first', ofPanelCards.length === 1,
+    `${ofPanelCards.length} of ${clears.length} DestroySlotChildren nodes`);
+}
 // The bug this missed: a refactor moved OnResponse onto the event stub and took
 // the unpack chain's only trigger with it. Every operation must have something
 // that runs it.
@@ -536,6 +574,106 @@ check('nothing in the graph sits there with no impulse running it', orphans.leng
     codes.every((f) => f && casts.some((c) => arg(c, 'Input') === f)), `${casts.length} casts`);
 }
 
+// ── the deck-import branch ──────────────────────────────────────────────────
+// Past thirty cards an import is a deck and goes into a Ukilop holder. Everything
+// here is a silent failure in-world if it is wrong: a gate on the wrong count
+// puts boosters in a deck, a lookup with MatchSubstring left at its default aims
+// at the wrong slot, and a move loop in the wrong order leaves cards with no
+// position driver.
+console.log(`${NEWLINE}the deck-import branch:`);
+{
+  const finds = compsOfType('FindChildByName');
+  check('the branch is present', finds.length === 4, `${finds.length} FindChildByName nodes`);
+
+  // The gate hangs off "all cards placed" - the only point in the graph that knows
+  // the import has finished - on ALL THREE outcomes, the way the response landings
+  // do. A panel that cannot write its own event line has still imported the deck.
+  const placed = allWrites.find((w) =>
+    String(arg(byComp.get(arg(w, 'Value')), 'Value') ?? '').includes('all cards placed'));
+  check('it hangs off the end of the spawn loop', !!placed);
+  const after = ['OnSuccess', 'OnNotFound', 'OnFailed'].map((k) => chainFrom(arg(placed, k), 1)[0]);
+  check('on every outcome of that write, not just success',
+    after.every((c) => c && c.id === after[0].id), after.map((c) => short(c?.type)).join(', '));
+
+  const deckGate = after[0];
+  check('and it is a gate', short(deckGate?.type) === 'If', short(deckGate?.type));
+  const cond = deref(arg(deckGate, 'Condition'));
+  check('gated on a card COUNT, not on anything else',
+    short(cond?.type) === 'ValueGreaterThan<int>', short(cond?.type));
+  const counted = deref(arg(cond, 'A'));
+  check('the count is ChildrenCount of the panel Cards slot',
+    short(counted?.type) === 'ChildrenCount' && intoPanelCards(counted, 'Instance'));
+  check('and the threshold is more than 30',
+    Number(arg(deref(arg(cond, 'B')), 'Value')) === 30, String(arg(deref(arg(cond, 'B')), 'Value')));
+  // Boosters and single cards keep spawning loose. If OnFalse ever grows a branch,
+  // a seven-card pull starts building a deck.
+  check('a small import has no branch of its own - OnFalse goes nowhere',
+    !byComp.has(arg(deckGate, 'OnFalse')), String(arg(deckGate, 'OnFalse')));
+
+  // MatchSubstring carries [DefaultValue(true)]. Left unwired, "Cards" matches
+  // "Surface/cards" and every lookup below it aims one slot too high.
+  check('every name lookup matches the WHOLE name', finds.every((f) => {
+    const m = deref(arg(f, 'MatchSubstring'));
+    return m && short(m.type) === 'ValueInput<bool>' && arg(m, 'Value') === false;
+  }));
+  check('and searches direct children only', finds.every((f) => !byComp.has(arg(f, 'SearchDepth'))));
+  const names = finds.map((f) => String(arg(deref(arg(f, 'Name')), 'Value'))).sort();
+  check('it looks up exactly the four slots it needs',
+    names.join() === ['Assets', 'Cards', 'Surface/cards', 'buffer'].sort().join(), names.join(', '));
+
+  // The order the deck's own receiver-surface handler uses, read out of
+  // /Deck/logixs/add/remove handling. A card reparented onto `Cards` WITHOUT a
+  // buffer has no position driver and no OrderOffset: the handler cannot be
+  // triggered from ProtoFlux, because OnLocalReceived fires only from
+  // Grabber.Receive - a person letting go of something.
+  const bufDup = dups.find((d) => {
+    const t = deref(arg(d, 'Template'));
+    return short(t?.type) === 'FindChildByName' && String(arg(deref(arg(t, 'Name')), 'Value')) === 'buffer';
+  });
+  check('a buffer is duplicated per card', !!bufDup);
+  const moveOrder = chainFrom(bufDup?.id, 6).map((c) => short(c.type));
+  check('its flux moves to Assets, then the card goes in it, then it joins the deck',
+    moveOrder[0] === 'DuplicateSlot' && moveOrder[1] === 'SetParent' &&
+    moveOrder[2] === 'SetParent' && moveOrder[3] === 'SetParent',
+    moveOrder.slice(0, 5).join(' -> '));
+  const [, toAssets, cardIn, bufIn] = chainFrom(bufDup?.id, 6);
+  check('the buffer\'s packed flux lands in the deck Assets slot',
+    String(arg(deref(arg(byComp.get(arg(toAssets, 'NewParent')), 'Name')), 'Value')) === 'Assets');
+  check('the card lands inside the buffer',
+    byField.get(arg(cardIn, 'NewParent'))?.name === 'Duplicate');
+  check('and the buffer lands in the deck Cards slot',
+    String(arg(deref(arg(byComp.get(arg(bufIn, 'NewParent')), 'Name')), 'Value')) === 'Cards');
+  check('the card taken is the one on top',
+    short(deref(arg(cardIn, 'Instance'))?.type) === 'GetChild');
+
+  // The move loop re-enters DelayUpdates, which is async: coming round from a
+  // synchronous continuation runs nothing and drops every card after the first.
+  check('the move loop comes round in its own async context',
+    compsOfType('StartAsyncTask').length >= 5, `${compsOfType('StartAsyncTask').length} StartAsyncTask nodes`);
+
+  // `InnerDeck/grid X` and `grid Y` are DRIVEN outputs of ChildrenCount, so
+  // writing them is a no-op. The spread is a bool the search button writes, and
+  // graft-deck.mjs exposes it as InnerDeck/spread.
+  const spread = compsOfType('WriteDynamicValueVariable<bool>');
+  check('the spread is engaged by writing one bool', spread.length === 1, `${spread.length} writes`);
+  check('named InnerDeck/spread',
+    String(arg(deref(arg(spread[0], 'Path')), 'Value')) === 'InnerDeck/spread');
+  check('set FALSE, which is what open means on that toggle',
+    arg(deref(arg(spread[0], 'Value')), 'Value') === false);
+  check('aimed at the deck surface, the slot that owns the InnerDeck space',
+    String(arg(deref(arg(byComp.get(arg(spread[0], 'Target')), 'Name')), 'Value')) === 'Surface/cards');
+  // Written on the move loop's EXHAUSTED branch, not anywhere earlier: the spread
+  // lays out from ChildrenCount, so opening a half-filled deck spreads it twice.
+  const moveGate = ifs.find((i) => chainFrom(arg(i, 'OnTrue'), 1)[0]?.id === bufDup?.id);
+  check('written on the branch the loop takes when no cards are left', !!moveGate &&
+    chainFrom(arg(moveGate, 'OnFalse'), 1)[0]?.id === spread[0].id);
+  // And it says so on the event line however the write itself turns out.
+  const said = ['OnSuccess', 'OnNotFound', 'OnFailed'].map((k) => chainFrom(arg(spread[0], k), 1)[0]);
+  check('then the event line says the deck is in the holder',
+    said.every((c) => c && c.id === said[0].id) &&
+    String(arg(byComp.get(arg(said[0], 'Value')), 'Value') ?? '').includes('deck in the holder'));
+}
+
 // ── behaviour: run the loop the way the runtime would ───────────────────────
 globalThis.caches = { default: { match: async () => null, put: async () => {} } };
 const { default: worker } = await import('../worker/src/index.js');
@@ -564,9 +702,14 @@ function runLoop(body, limit = 400) {
 }
 
 console.log(`${NEWLINE}live responses:`);
-const W = 64;
+// Records come off the response by NEWLINE, which is what the graph does. They
+// were sliced at a hard-coded 64 here; the Worker's fixed width is 80, so every
+// `recs` entry after the first was a fragment and five scenarios failed with
+// "want <url> got <url>" - the same first record, differing further down. A
+// constant restated in three places drifts; this reads the record boundary the
+// same way the node under test does.
 function scenario(name, body, expect) {
-  const recs = Array.from({ length: body.length / W }, (_, i) => body.slice(i * W, (i + 1) * W).trim());
+  const recs = body.split('\n').map((r) => r.trim()).filter((r) => r.length > 8);
   const { urls, spots } = runLoop(body);
   check(`${name}: ${expect} cards`, urls.length === expect, String(urls.length));
   check(`${name}: each card gets its own record's art, in order`,
@@ -706,7 +849,12 @@ check('named for what it is', nm(control).includes('control'));
 const nodesOf = (c) => (c.Children || []).filter((s) => nm(s) !== 'Meta: Comments');
 // An inspectability budget, not a hard limit: past roughly this many nodes the
 // canvas stops being something a person can unpack and follow in one sitting.
-check('the whole graph is small enough to read', nodesOf(control).length <= 130, `${nodesOf(control).length} nodes`);
+// Raised from 130 with the deck-import branch, which is a fifth stage rather than
+// padding: 116 nodes became 168, and the branch's own 51 are a gate, a deck
+// duplication, four name lookups and a per-card move loop. The budget is the
+// inspectability one, so it moves when the graph genuinely gains a stage and not
+// when a change merely spends it.
+check('the whole graph is small enough to read', nodesOf(control).length <= 175, `${nodesOf(control).length} nodes`);
 
 // Comment zones: present, every one titled.
 {
@@ -718,7 +866,7 @@ check('the whole graph is small enough to read', nodesOf(control).length <= 130,
   const labels = (meta?.Components?.Data || []).filter((x) => /DynamicValueVariable<string>/.test(short(TYPES[num(x.Type)])));
   check('every zone has a title', rects.length > 0 && rects.length === labels.length, `${rects.length} rects, ${labels.length} labels`);
   check('no title is blank', labels.every((l) => String(l.Data.Value?.Data ?? '').trim().length > 0));
-  check('four zones, one per stage', rects.length === 4, String(rects.length));
+  check('five zones, one per stage', rects.length === 5, String(rects.length));
 
   // Spacing, gated rather than eyeballed. The complaint that started this was
   // "the gaps between nodes is massive"; the graph measured 25.2 x 12.6 units at
@@ -739,7 +887,10 @@ check('the whole graph is small enough to read', nodesOf(control).length <= 130,
   const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
   // A budget, not a target: a graph that will not fit on a screen at a readable
   // zoom is one the user has to pan around to follow.
-  check('the whole graph fits in one screenful', w <= 16 && h <= 11,
+  // Widened from 16 with the fifth zone. His four span 13.57 at ~3.4 units each;
+  // the branch adds 2.9 for 51 nodes, so it is denser than the graph it joins
+  // rather than sprawl spending the budget. It is still one screenful.
+  check('the whole graph fits in one screenful', w <= 17.5 && h <= 11,
     `${w.toFixed(2)} x ${h.toFixed(2)} units`);
   const cells = new Set(pts.map(([x, y]) => `${Math.round(x / 0.36)},${Math.round(y / 0.30)}`)).size;
   const span = (w / 0.36 + 1) * (h / 0.30 + 1);

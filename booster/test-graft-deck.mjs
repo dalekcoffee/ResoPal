@@ -35,9 +35,17 @@ console.log(`${path.basename(pkg)}  (${(raw.length / 1048576).toFixed(2)} MB)\n`
 // ── the panel is still a panel ───────────────────────────────────────────────
 console.log('the panel survived the graft:');
 const rootKids = kids(doc.Object);
-const deckSlot = rootKids.find((s) => nm(s) === 'Deck template');
-check('the deck template is there', !!deckSlot);
-check('and it is INACTIVE, so it is a template', deckSlot?.Active?.Data === false, String(deckSlot?.Active?.Data));
+// The HOLDER is switched off and the DECK inside it is on. `DuplicateSlot` copies
+// `Active` verbatim, so a template that is itself inactive duplicates into an
+// inactive deck and nothing in the spawn chain turns it back on - the card
+// template solves it the same way, and this used to have it the other way round.
+const holder = rootKids.find((s) => nm(s) === 'Deck template');
+check('the deck template is there', !!holder);
+check('the HOLDER is inactive, so the template stays out of sight',
+  holder?.Active?.Data === false, String(holder?.Active?.Data));
+const deckSlot = kids(holder ?? {})[0];
+check('and the DECK inside it is ACTIVE, or every duplicate would be invisible',
+  deckSlot?.Active?.Data === true, String(deckSlot?.Active?.Data));
 for (const want of ['Card template', 'Cards', 'credits']) {
   check(`the panel still has its "${want}"`, rootKids.some((s) => nm(s) === want),
     rootKids.map(nm).join(', '));
@@ -57,6 +65,37 @@ check('and one driver proxy per card', kids(deckAssets ?? {}).length === cards.l
   `${kids(deckAssets ?? {}).length} proxies vs ${cards.length} cards`);
 check('and its logix', kids(deckSlot ?? {}).some((s) => nm(s) === 'logixs'));
 note(`${cards.length} cards`);
+
+// ── the two things the importer reaches for ──────────────────────────────────
+// Both are silent failures if they are missing: a null template reference makes
+// the deck button duplicate nothing, and a missing variable makes the spread
+// write land on no space at all. Neither shows up as a dangling reference.
+{
+  const spread = (surface?.Components?.Data ?? []).find((c) => /DynamicField<bool>/.test(typeName(c)));
+  check('Surface/cards exposes the spread toggle as a variable',
+    String(spread?.Data?.VariableName?.Data ?? '') === 'InnerDeck/spread',
+    String(spread?.Data?.VariableName?.Data));
+  // It must point at the BooleanValueDriver's State - the field the search button
+  // writes. `grid X` and `grid Y` look like the spread's inputs and are not: both
+  // are driven outputs of ChildrenCount, so writing them does nothing.
+  const state = (surface?.Components?.Data ?? []).find((c) => /BooleanValueDriver<floatQ>/.test(typeName(c)));
+  check('and it is bound to the toggle the search button writes',
+    !!state && String(spread?.Data?.TargetField?.Data) === String(state.Data.State.ID));
+
+  let refs = 0, bound = 0;
+  (function w(sl) {
+    if (nm(sl) === 'the deck template')
+      for (const c of sl.Components?.Data ?? [])
+        if (/GlobalReference<\[FrooxEngine\]FrooxEngine\.Slot>/.test(typeName(c))) {
+          refs++;
+          if (String(c.Data.Reference?.Data ?? '') === String(deckSlot?.ID)) bound++;
+        }
+    for (const c of kids(sl)) w(c);
+  })(doc.Object);
+  check('the importer has a deck-template reference', refs > 0, `${refs} found`);
+  check('and it points at the deck, not at the holder or at nothing', refs > 0 && bound === refs,
+    `${bound}/${refs} bound`);
+}
 
 // Every card must still reach a mesh, a material and a texture that exist here.
 const assetById = new Map((doc.Assets ?? []).map((a) => [a.Data.ID, a]));

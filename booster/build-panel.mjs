@@ -42,6 +42,7 @@ import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
 import { memberOrder, isFluxNode, haveSource } from './members.mjs';
 import { asUrl } from './urlmarker.mjs';
+import { deckImport } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -57,11 +58,17 @@ const { ProtoFlux } = await import(`file://${encoder}`);
 const PROXY = process.env.PROXY || 'https://resopal-proxy.dalek.workers.dev';
 const LOGO = process.env.LOGO || 'https://resopal.dalek.coffee/assets/logo.png';
 
-// The response is one art URL per line. `format=fixed` pads each to 64 chars,
-// which the old constant-offset decoder needed; this one does not - it walks to
-// the next newline and trims - but the padding is harmless and the format is
-// already documented, tested and cacheable, so it stays.
-const RECORD_WIDTH = 64;
+// The response is one art URL per line. `format=fixed` pads each record to a
+// fixed width, which the old constant-offset decoder needed; this one does not -
+// it walks to the next newline and trims - but the padding is harmless and the
+// format is already documented, tested and cacheable, so it stays.
+//
+// IMPORTED from the Worker rather than restated. It was written here as a
+// literal 64 and the Worker moved to 80, so the status line's Substring cut the
+// first record at 64 characters and showed a truncated URL. Nothing failed: the
+// loop walks newlines and never reads this, so only the readout was wrong, and
+// only for URLs longer than 64. There is one definition of the width now.
+const { RECORD_WIDTH } = await import('../worker/src/roll.js');
 
 const BUTTONS = [
   { tag: 'deck/td01', label: 'Trial Deck  ·  Red / Blue',     url: `${PROXY}/api/deck?deck=td01&format=fixed` },
@@ -120,6 +127,15 @@ const T = {
   Dup:         PB + 'FrooxEngine.Slots.DuplicateSlot',
   ClearKids:   PB + 'FrooxEngine.Slots.DestroySlotChildren',
   IndexOfChild: PB + 'FrooxEngine.Slots.IndexOfChild',
+  // The deck-import branch. `WriteDynamicValueVariable<T>` is `where T : unmanaged`
+  // - bool satisfies that where string does not, which is why the string write
+  // beside it has to be the Object form.
+  ChildCount:  PB + 'FrooxEngine.Slots.ChildrenCount',
+  GetChild:    PB + 'FrooxEngine.Slots.GetChild',
+  SetParent:   PB + 'FrooxEngine.Slots.SetParent',
+  FindChild:   PB + 'FrooxEngine.Slots.FindChildByName',
+  BoolIn:      PB + 'ValueInput<bool>',
+  WriteBoolVar: PB + 'FrooxEngine.Variables.WriteDynamicValueVariable<bool>',
   SetPos:      PB + 'FrooxEngine.Transform.SetLocalPosition',
   DelayFrames: PB + 'FrooxEngine.Async.DelayUpdates',
   IndexOf:     PB + 'Strings.IndexOfString',
@@ -592,6 +608,9 @@ templateSlot.Active.Data = false;
 // card row between the panel and the first card, and the grid grows DOWNWARD from
 // here, so the whole block hung well below the thing that spawned it.
 const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.22, 0]);
+// A deck is a metre-wide object; it does not belong on the grid the loose cards
+// land on, so duplicates get their own parent beside it rather than sharing one.
+const decksSlot = slot('Decks', [], [0, -0.22, -0.25]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE GRAPH. One canvas. Everything a human needs is on it.
@@ -988,6 +1007,37 @@ spawnNodes.push(doneStub, doneText, donePath, doneSay);
 controlNodes.push(doneStub, doneText, donePath, doneSay);
 controlZones[2] = around('3 · unpack the response into cards', spawnNodes);
 
+// ── zone 5: a big import goes in a deck holder ───────────────────────────────
+// The same nodes `graft-deck-import.mjs` splices into the packed panel, from the
+// same module, so the builder cannot drift away from what actually ships. Their
+// positions come from `deck-import.mjs` rather than from layout.json: they are the
+// one part of this graph the owner's cleanup has never seen, and they are placed
+// to clear his canvas rather than to sit inside it.
+const deckKit = {
+  T,
+  node,
+  refNode(name, targetSlotId, pos) {
+    const ref = comp(T.SlotRef, { Reference: targetSlotId });
+    const src = comp(T.SlotIn, { Source: ref.id });
+    return { slot: slot(name, [src.comp, ref.comp], pos), id: src.id, f: src.f, pos, classpath: T.SlotIn };
+  },
+  strIn, intIn,
+  boolIn: (name, v, pos) => node(name, T.BoolIn, { Value: v }, pos),
+};
+const deck = deckImport(deckKit, {
+  panelCards: cardsSlot._slot.id,
+  // The template itself is a separate graft - the deck is a foreign document with
+  // its own ids, types and blobs, and `graft-deck.mjs` is what moves it and fills
+  // this reference in. Null here is an unbound external hook, not a dangling one.
+  deckTemplate: null,
+  decksHolder: decksSlot._slot.id,
+});
+for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
+  doneSay.slot.Components.Data[0].Data[k].Data = deck.entryId;
+controlNodes.push(...deck.nodes);
+const deckPlaced = new Set(deck.nodes.map((n) => n.id));
+controlZones.push(around('5 · a big import goes in a deck holder', deck.nodes));
+
 const evtInput = strIn('the last event', '-', [RX, -ROW * 5, 0]);
 evtInput.slot.Components.Data.push(comp(T.VarDriver, {
   VariableName: 'ResoPal/event', Target: evtInput.f.Value, DefaultValue: 'idle - no request yet',
@@ -1016,6 +1066,9 @@ const bbox = known.reduce((b, p) => ({
 }), { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity });
 
 for (const n of controlNodes) {
+  // The deck branch brings its own coordinates and keeps them. Parking it in the
+  // unplaced row under his canvas would drop a whole stage on top of his graph.
+  if (deckPlaced.has(n.id)) { n.slot.Position.Data = n.pos.map((v) => D(v)); continue; }
   const key = `${String(n.slot.Name.Data)}|${n.classpath}`;
   const p = LAYOUT[key];
   if (p) { n.pos = [p[0], p[1], p[2] ?? 0]; placed++; }
@@ -1217,7 +1270,7 @@ const root = slot('ResoPal', [
   comp(T.Grabbable, { Scalable: true }).comp,
   comp(T.ObjectRoot, {}).comp,
   comp(T.VarSpace, { SpaceName: 'ResoPal', OnlyDirectBinding: false }).comp,
-], [0, 0, 0], [varsSlot, canvasSlot, templateSlot, cardsSlot, credits, controlFlux], null, pf.rootId);
+], [0, 0, 0], [varsSlot, canvasSlot, templateSlot, cardsSlot, decksSlot, credits, controlFlux], null, pf.rootId);
 
 const res = await pf.exportPackage({
   name: 'ResoPal Panel',
