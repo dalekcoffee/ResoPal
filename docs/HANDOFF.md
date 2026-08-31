@@ -257,6 +257,39 @@ importer needs a deck to write into, and the two shapes are: the panel targets a
 player has already spawned, or the deck package carries its own import controls. That choice
 has not been made.
 
+## Putting an imported deck into the deck holder — everything needed to build it
+
+Both open questions are answered, read out of `data/template.resonitepackage` itself.
+
+**Reparenting a card into the deck.** `Surface/cards` **and** `Cards` each carry a
+`GrabbableReceiverSurface`, and there are four `OnGrabbableReceiverSurfaceReceived`
+handlers. So reparenting a grabbable card onto it is the supported path — the deck's own
+handler stacks it and sets `OrderOffset`. Nothing needs driving by hand.
+
+**Engaging the search spread.** Not an impulse: the whole deck defines exactly one dynamic
+impulse tag, `"Card removed"`, so there is nothing to fire. The spread state lives in two
+dynamic variables on `/Deck/Surface/cards`:
+
+| variable | type |
+|---|---|
+| `InnerDeck/grid X` | `DynamicValueVariable<int>` |
+| `InnerDeck/grid Y` | `DynamicValueVariable<int>` |
+
+Writing those two ints is what engages search — a plain `WriteDynamicValueVariable<int>`,
+no button press. The search button's own flux is packed into a proxy slot, which is why the
+button's `logix` child reads as empty.
+
+**The build, as specced with the owner:**
+
+- graft the deck template in (`graft-deck.mjs` works and verifies), `DuplicateSlot` on import
+- gate on **more than 30 cards**, off the same `ChildrenCount` the grid index already uses,
+  so boosters and single cards keep spawning loose with no branch of their own
+- reparent each card into `Cards`; the receiver surface does the stacking
+- write `InnerDeck/grid X` / `grid Y` to engage search
+- **new nodes go at x ≥ 14.3**, right of the owner's canvas (his spans x 0–13.48), on his row
+  Ys, wired into his existing chain so he can merge them in. He cleans up and merges; that is
+  the agreed division of labour, not licence to be sloppy.
+
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
 exactly what the importer will do, minus the loop that writes the variable.
