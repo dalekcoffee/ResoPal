@@ -4,3 +4,6 @@ worker/dist/
 
 # Scratch probes: named _*.mjs by convention, never committed
 booster/_*.mjs
+
+# Scratch comparison copies of packages, never committed
+booster/out/_*.resonitepackage
