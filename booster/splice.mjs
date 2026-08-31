@@ -115,8 +115,19 @@ export function typeMapper(into, from) {
       i = into.Types.length;
       into.Types.push(name);
       appended.push(name);
-      const v = from.TypeVersions?.[name];
-      if (v !== undefined) (into.TypeVersions ??= {})[name] = v;
+    }
+    // The version travels whether or not the TYPE is new, and that distinction is
+    // the whole of the bug this once caused. A grafted deck's `UIX.Text` mapped
+    // onto the panel's existing `UIX.Text` entry and kept the PANEL's version -
+    // which was absent, so 0 - and every Text in the deck came up on its legacy
+    // path: left-aligned, autosized, in the world's font. The types matched
+    // perfectly; only the version was missing.
+    const v = from.TypeVersions?.[name];
+    if (v !== undefined) {
+      const have = into.TypeVersions?.[name];
+      if (have !== undefined && Number(have) !== Number(v))
+        throw new Error(`TypeVersions disagree for ${name}: target ${have}, source ${v}`);
+      (into.TypeVersions ??= {})[name] = v;
     }
     return i;
   };

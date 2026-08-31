@@ -222,3 +222,44 @@ export function baseChain(classpath) {
  */
 export const isOperation = (classpath) =>
   baseChain(classpath).some((n) => /^(Action|AsyncAction)(Node|FlowNode|BreakableFlowNode)$/.test(n));
+
+/**
+ * The `Version` a component type declares, read out of the decompiled engine.
+ *
+ * `TypeVersions` in a package is not decoration. A type that declares
+ * `public override int Version => N` and is written at a LOWER version gets its
+ * `OnLoading` legacy-upgrade path, which rewrites fields the file had set
+ * correctly. `UIX.Text` is the one that cost a session:
+ *
+ *   if (control.GetTypeVersion(GetType()) != 0) return;
+ *   control.OnLoaded(this, delegate {
+ *     HorizontalAutoSize.Value = true;
+ *     Align = _legacyAlign.Value;                  // -> Left / Top
+ *     Font.Target = base.World.GetDefaultFont();   // -> the world's font chain
+ *   });
+ *
+ * Emitted without a version, every Text in the package - the panel's own button
+ * captions and the grafted deck's - loaded left-aligned in the world's font, and
+ * nothing in the file was wrong. Reading the number out of the source is the only
+ * way to keep it right, exactly as `memberOrder` reads declaration order rather
+ * than trusting the builder to restate it.
+ */
+export function typeVersion(classpath) {
+  // Walk the base chain: `BoxCollider` declares no Version of its own and gets 1
+  // from `Collider`, which has its own `GetTypeVersion(GetType()) == 0` legacy
+  // branch. The version belongs to the runtime type, so an inherited one counts.
+  let file = exactFile(classpath);
+  const seen = new Set();
+  while (file && !seen.has(file)) {
+    seen.add(file);
+    const body = readFileSync(file, 'utf8');
+    const m = /public override int Version => (\d+);/.exec(body);
+    if (m) return Number(m[1]);
+    const { name } = parseClasspath(classpath);
+    const base = baseOf(body, /class\s+([A-Za-z0-9_]+)/.exec(body)?.[1] ?? name);
+    if (!base) return undefined;
+    file = sourceFiles(base).find((f) => !f.includes('/ProtoFlux')) ?? sourceFiles(base)[0];
+    classpath = base;
+  }
+  return undefined;
+}

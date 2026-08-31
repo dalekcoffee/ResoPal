@@ -15,6 +15,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import JSZip from 'jszip';
 import { scanUrlFields } from './urlmarker.mjs';
+import { typeVersion } from './members.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const decodeMjs = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
@@ -572,6 +573,31 @@ check('nothing in the graph sits there with no impulse running it', orphans.leng
   const codes = ['GET_String', 'POST_String'].map((t) => compsOfType(t)[0].data.StatusCode?.ID);
   check('each request reports its OWN status code',
     codes.every((f) => f && casts.some((c) => arg(c, 'Input') === f)), `${casts.length} casts`);
+}
+
+// ── type versions ───────────────────────────────────────────────────────────
+// Not decoration. A type that declares a `Version` and is written without one
+// gets its `OnLoading` legacy-upgrade path, which rewrites fields the file had
+// set correctly - and nothing about the file looks wrong afterwards. `UIX.Text`
+// runs `HorizontalAutoSize = true; Align = _legacyAlign; Font =
+// World.GetDefaultFont()`, so every caption in the package came up left-aligned,
+// autosized and in the world's font: the panel's own buttons and the grafted
+// deck's alike, in a file whose button subtree was byte-identical to a
+// known-good deck's. Read from the engine, never restated.
+console.log(`${NEWLINE}type versions:`);
+{
+  const declared = doc.TypeVersions ?? {};
+  const wrong = [];
+  let versioned = 0;
+  for (const t of TYPES.map(String)) {
+    const want = typeVersion(t);
+    if (want === undefined) continue;
+    versioned++;
+    if (Number(declared[t] ?? 0) !== want) wrong.push(`${t.split('.').pop()} ${Number(declared[t] ?? 0)}!=${want}`);
+  }
+  check('every versioned type declares the version the engine gives it',
+    wrong.length === 0, wrong.join(', '));
+  console.log(`  note ${versioned} versioned types`);
 }
 
 // ── the deck-import branch ──────────────────────────────────────────────────

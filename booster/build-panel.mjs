@@ -40,7 +40,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
-import { memberOrder, isFluxNode, haveSource } from './members.mjs';
+import { memberOrder, isFluxNode, haveSource, typeVersion } from './members.mjs';
 import { asUrl } from './urlmarker.mjs';
 import { deckImport, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
 
@@ -224,7 +224,18 @@ const T = {
   LayoutElement: UIX + 'LayoutElement',
   VerticalLayout: UIX + 'VerticalLayout',
 };
-const TYPE_VERSIONS = { [T.Grabbable]: 2, [T.BoxCollider]: 1 };
+// READ OUT OF THE ENGINE, never restated. A type that declares a `Version` and is
+// written without one gets its `OnLoading` legacy-upgrade path, which rewrites
+// fields the file had set correctly - and nothing about the file looks wrong.
+// `UIX.Text` is the one that cost a session: emitted at version 0 it comes up
+// left-aligned, autosized, in the world's default font, because that is exactly
+// what its legacy branch does. Hand-listing found two of the nine types here that
+// need one; the other seven - Text, Canvas, RectTransform, Image, TextField,
+// UI_UnlitMaterial, Snapper, QuadMesh - were all silently wrong, in the panel's own
+// buttons as much as in the grafted deck's. `test-panel.mjs` holds every declared
+// type against the engine now.
+const TYPE_VERSIONS = Object.fromEntries(
+  [...new Set(Object.values(T))].map((cp) => [cp, typeVersion(cp)]).filter(([, v]) => v !== undefined));
 
 const pf = ProtoFlux();
 const D = pf.D, I = (n) => new Int32(n);

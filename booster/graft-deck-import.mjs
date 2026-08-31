@@ -40,7 +40,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
-import { memberOrder, isFluxNode } from './members.mjs';
+import { memberOrder, isFluxNode, typeVersion } from './members.mjs';
 import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
@@ -150,6 +150,31 @@ const T = {
   SlotIn: '[ProtoFluxBindings]FrooxEngine.FrooxEngine.ProtoFlux.CoreNodes.SlotSource',
   SlotRef: FE + 'ProtoFlux.GlobalReference<[FrooxEngine]FrooxEngine.Slot>',
 };
+
+// ── the TypeVersions the packed panel never declared ─────────────────────────
+// A type that declares a `Version` and is written without one gets its
+// `OnLoading` legacy-upgrade path, which rewrites fields the file had set
+// correctly. `UIX.Text` runs:
+//
+//   if (control.GetTypeVersion(GetType()) != 0) return;
+//   HorizontalAutoSize = true;  Align = _legacyAlign;  Font = World.GetDefaultFont();
+//
+// so every Text came up left-aligned, autosized and in the world's font - the
+// panel's own button captions as much as the grafted deck's, which is why the
+// deck's buttons looked wrong in a file whose buttons were byte-identical to a
+// known-good deck's. The owner's own exports declare Text 1, Canvas 2,
+// RectTransform 1, Image 1, UI_UnlitMaterial 2 and Snapper 1; the packed panel
+// declared only BoxCollider and Grabbable. The engine is the authority, so every
+// version is read from it rather than restated here.
+let versioned = 0, corrected = 0;
+for (const t of doc.Types.map(String)) {
+  const v = typeVersion(t);
+  if (v === undefined) continue;
+  versioned++;
+  const have = doc.TypeVersions?.[t];
+  if (have === undefined || Number(have) !== v) corrected++;
+  (doc.TypeVersions ??= {})[t] = new Int32(v);
+}
 
 const emitted = [];
 const kit = {
@@ -334,6 +359,7 @@ await writeFile(OUT, bytes);
 
 const total = (canvas.Children || []).filter((s) => nm(s) !== 'Meta: Comments').length;
 console.log(`\n✓ ${OUT}`);
+console.log(`  ${versioned} versioned types declared, ${corrected} that the packed panel had wrong`);
 console.log(`  ${emitted.length} nodes grafted (${asyncAdded ? '1 of them the missing loop-back StartAsyncTask' : 'loop-back wrapper already present'})`);
 console.log(`  canvas ${total - emitted.length} -> ${total} nodes, branch logic at x >= ${COL_X[0]}`);
 console.log(`  hooks: panel Cards ${cardsSlot.ID.slice(0, 8)}, Decks ${decksSlot.ID.slice(0, 8)}, deck template unbound until graft-deck\n`);

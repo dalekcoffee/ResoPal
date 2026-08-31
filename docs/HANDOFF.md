@@ -708,6 +708,46 @@ and move it last. Both survive the move — `SetParent` with `PreserveGlobalPosi
 keeps the local transform, and local scale is not touched by reparenting at all.
 `test-panel.mjs` asserts the order and that all three nodes name the same card.
 
+## TypeVersions is not decoration — it decides which loader runs
+
+The one that made the buttons' text sit off its button, in a file whose button subtree was
+**byte-identical** to a known-good deck's. Every `Text` field in the package was right;
+the loader overwrote them.
+
+A component that declares `public override int Version => N` and is written at a LOWER
+version gets its `OnLoading` legacy-upgrade path. `UIX.Text` is version 1 and its path is:
+
+```cs
+if (control.GetTypeVersion(GetType()) != 0) return;
+control.OnLoaded(this, delegate {
+    HorizontalAutoSize.Value = true;
+    Align = _legacyAlign.Value;                    // -> Left / Top
+    Font.Target = base.World.GetDefaultFont();     // -> the world's font chain
+    LineHeight.Value = 0.8f;
+});
+```
+
+Which is the symptom exactly. An export of the imported deck measured `H=Left V=Top
+autoH=true` and a **six**-fallback font chain of faces the package does not contain, against
+`H=Center V=Middle autoH=false` in the template on disk and in both known-good decks.
+
+**The panel had it too, and always had.** `build-panel.mjs` hand-listed
+`{Grabbable: 2, BoxCollider: 1}` and that was all — so `Text`, `Canvas`, `RectTransform`,
+`Image`, `TextField`, `UI_UnlitMaterial`, `Snapper` and `QuadMesh` all shipped at 0. The
+panel's own button captions have been left-aligned in the world's font this whole time.
+
+Fixed the way member order was: **read out of the engine, never restated.**
+`members.mjs` gained `typeVersion(classpath)`, which walks the base chain — `BoxCollider`
+declares no version of its own and inherits 1 from `Collider`, which has its own legacy
+branch. The builder derives `TYPE_VERSIONS` from every type it emits, the graft rewrites the
+packed panel's table from the engine, and `test-panel.mjs` fails on any declared version that
+disagrees. The numbers it produces match the owner's own exports for all nine shared types.
+
+`splice.mjs` carried a related bug: it copied a type's version only when the type was
+**appended**. The deck's `UIX.Text` mapped onto the panel's existing `UIX.Text` entry, kept
+the panel's (absent) version, and every Text in the deck loaded legacy. It now carries the
+version whether the type is new or not, and throws if two documents disagree.
+
 ## Shuffle is a swap, so every buffer needs its own OrderOffset
 
 Shuffle survived the import structurally — the buttons subtree and its flux come out
@@ -744,6 +784,38 @@ Card/Grabbable | Card/index | Deck/Filler | Deck/MaterialBack | Deck/MaterialEdg
 Deck/MaterialFront | Deck/Ready | Deck/cardSize | InnerDeck/SmoothSpeed
 InnerDeck/grid X | InnerDeck/grid Y
 ```
+
+## Square corners: the imported card is ours, not Ukilop's
+
+Open, and the fix is architectural rather than a value to change.
+
+Ukilop's card is `Card/Visual (Baked)` — a **baked mesh per card**, rounded, with three
+submeshes (edge / front / back) and its atlas cell baked into the UVs. The imported card is
+the panel's own: two `QuadMesh` quads, front and back. A quad has square corners.
+
+The back looks right because `DefaultBack.png` carries transparent corners and the material
+is already `BlendMode: Cutout` at `AlphaCutoff 0.72`. The front is square because Palify's
+art is a square image with no alpha.
+
+Three ways out, and only one of them is cheap in the wrong way:
+
+1. **Round the art at the Worker.** Ruled out: CLAUDE.md's invariant is that the Worker
+   "moves bytes and nothing else", and this would make it decode and re-encode every card.
+2. **Give the panel's card one of Ukilop's baked meshes** and remap the full-size texture
+   onto that mesh's atlas cell, exactly as `build-deck-probe.mjs` already does per card
+   (`TextureScale = (10, 7)`, `TextureOffset = (-col, -(6 - row))`, verified against the
+   MeshX UV bounds by `meshx.mjs`). One mesh and one constant ST serves every card, because
+   they would all share the same cell. Also gives the card a real edge and back.
+3. **Stop moving cards in at all** — keep the deck's own 52 cards, give each its own front
+   material and texture at its cell's ST, and write `Card/url` per card instead of
+   reparenting. This is what "the shape of the real thing" in the section above always
+   described, and the remap half of it is drag-tested. It gets the rounded corners, the
+   `Card/index` and `Card/Grabbable` contract and the deck's own materials for free, and
+   caps a deck at the template's card count with the extras destroyed in-world.
+
+3 is the end state. 2 is the smaller step and keeps the current import branch intact.
+There is no procedural rounded-rect mesh in the engine to shortcut either — `RectMeshSource`
+and `StandaloneRectMesh` carry no corner radius.
 
 ## The card is thinned, not just scaled
 
