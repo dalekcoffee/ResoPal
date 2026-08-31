@@ -748,6 +748,36 @@ disagrees. The numbers it produces match the owner's own exports for all nine sh
 the panel's (absent) version, and every Text in the deck loaded legacy. It now carries the
 version whether the type is new or not, and throws if two documents disagree.
 
+### The other side of that coin: QuadMesh's version-0 loader flips every quad
+
+Declaring the versions correctly immediately broke the cards — backs on the front — and the
+reason is worth keeping, because it is the same mechanism pointing the other way.
+
+`QuadMesh.Version` is 1, and its version-0 branch is:
+
+```cs
+float3 v  = Rotation.Value * float3.Forward;
+float3 up = Rotation.Value * float3.Up;
+Rotation.Value = floatQ.LookRotation(-v, in up);
+```
+
+It aligns forward with **-v** and leaves up alone, which is exactly `Rotation × <half turn
+about Y>`. So every quad in a version-0 package is flipped 180° as it loads.
+
+The card's two quads were tuned in-world **against that flip** — front `[0,1,0,0]`, back
+identity, both flipped on the way in — so stopping the flip swapped the faces. The stored
+rotations are the post-upgrade ones now: front identity, back `[0,1,0,0]`. For this pair the
+transform is its own inverse, so it reads as a straight swap.
+
+`graft-deck-import.mjs` applies the same upgrade to the packed panel at build time, with a
+self-check on the two cases it has to get right, and normalises `w >= 0` so the file reads
+`[0,0,0,1]` rather than the equivalent `[0,0,0,-1]`.
+
+**The general lesson: correcting a TypeVersion is not free.** A file authored under version 0
+has values that assume the upgrade will run. Declaring the version stops it, so the stored
+values have to be upgraded at the same time. Anything else added to that table needs the same
+check — what does the old loader do, and does this file depend on it?
+
 ## Shuffle is a swap, so every buffer needs its own OrderOffset
 
 Shuffle survived the import structurally — the buttons subtree and its flux come out

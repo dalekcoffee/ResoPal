@@ -501,13 +501,28 @@ const cardMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: cardTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',
 });
-// QuadMesh carries its OWN Rotation, and the engine default is identity (see
-// QuadMesh.cs line 171). The card that worked in-world had it at [0,1,0,0] - a
-// half turn about Y - and omitting the field left the quad facing the other way,
-// so the card presented its back and the front was culled. State it here rather
-// than inherit a default: this one field decides which way a card faces.
+// QuadMesh carries its OWN Rotation, and this one field decides which way a card
+// faces. State it rather than inherit a default.
+//
+// ── THE VALUES ARE THE POST-UPGRADE ONES, and that is the whole subtlety ─────
+// `QuadMesh.Version` is 1, and at version 0 its loader runs:
+//
+//   float3 v = Rotation.Value * float3.Forward;
+//   Rotation.Value = floatQ.LookRotation(-v, in up);
+//
+// which is exactly `Rotation * <half turn about Y>` - it aligns forward with -v
+// and leaves up alone, and post-multiplying by a Y half-turn does both. So a
+// package written at version 0 has EVERY quad flipped 180 degrees as it loads.
+//
+// This file used to ship with no QuadMesh version at all, so the front carried
+// [0,1,0,0] and the back identity and the loader flipped both, which is why the
+// card came out right. Declaring the version stopped the flip and the card came
+// out with its back on the front. The rotations below are what that upgrade
+// produced - the swap of the two - so the file now means what it says and no
+// loader rewrites it. For these two values the transform is its own inverse:
+// identity <-> [0,1,0,0].
 const cardMesh = comp(T.QuadMesh, {
-  Size: V2(CARD_W, CARD_H), Rotation: [D(0), D(1), D(0), D(0)],
+  Size: V2(CARD_W, CARD_H), Rotation: [D(0), D(0), D(0), D(1)],
   DualSided: false, UseVertexColors: false,
 });
 const cardRenderer = comp(T.MeshRenderer, {
@@ -570,7 +585,7 @@ const backMat = comp(T.Unlit, {
 // and two half turns cancel - the back ends up facing the same way as the front
 // and covers it.
 const backMesh = comp(T.QuadMesh, {
-  Size: V2(CARD_W, CARD_H), Rotation: [D(0), D(0), D(0), D(1)],
+  Size: V2(CARD_W, CARD_H), Rotation: [D(0), D(1), D(0), D(0)],
   DualSided: false, UseVertexColors: false,
 });
 const backRenderer = comp(T.MeshRenderer, {

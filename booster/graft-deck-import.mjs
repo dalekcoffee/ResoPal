@@ -176,6 +176,46 @@ for (const t of doc.Types.map(String)) {
   (doc.TypeVersions ??= {})[t] = new Int32(v);
 }
 
+// ── run QuadMesh's version-0 upgrade at BUILD time ───────────────────────────
+// Declaring `QuadMesh: 1` above stops its loader doing this, and the packed panel
+// was authored when it still did. Its version-0 branch is:
+//
+//   float3 v = Rotation.Value * float3.Forward;
+//   Rotation.Value = floatQ.LookRotation(-v, in up);
+//
+// which aligns forward with -v and leaves up alone - exactly `Rotation * <half
+// turn about Y>`. So every quad in a version-0 package is flipped 180 degrees as
+// it loads, and the card's two quads were tuned against that: front [0,1,0,0],
+// back identity, both flipped on the way in. Declare the version without applying
+// the upgrade and the card comes up with its back on its front.
+//
+// Post-multiplying (x,y,z,w) by the half turn (0,1,0,0) gives (-z, w, x, -y),
+// which is checked below against the two cases it has to get right - it is its
+// own inverse for both, identity <-> half turn.
+{
+  // q and -q are the same rotation, so the result is normalised to w >= 0 - purely
+  // so the file reads as [0,0,0,1] rather than [0,0,0,-1] to anyone inspecting it.
+  const yHalfTurn = ([x, y, z, w]) => {
+    const q = [-z, w, x, -y];
+    return q[3] < 0 ? q.map((v) => -v) : q;
+  };
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  if (!near(yHalfTurn([0, 0, 0, 1]), [0, 1, 0, 0]) || !near(yHalfTurn([0, 1, 0, 0]), [0, 0, 0, 1]))
+    throw new Error('the QuadMesh half-turn is not what it should be');
+  let flipped = 0;
+  (function walk(sl) {
+    for (const c of sl.Components?.Data ?? []) {
+      if (String(doc.Types[idx(c.Type)]) !== FE + 'QuadMesh') continue;
+      const r = c.Data.Rotation;
+      if (!r || !Array.isArray(r.Data)) continue;
+      r.Data = yHalfTurn(r.Data.map(Number)).map(D);
+      flipped++;
+    }
+    for (const ch of sl.Children ?? []) walk(ch);
+  })(doc.Object);
+  console.log(`  ${flipped} QuadMesh rotations upgraded to match QuadMesh version 1`);
+}
+
 const emitted = [];
 const kit = {
   T,

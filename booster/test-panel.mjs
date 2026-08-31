@@ -349,8 +349,15 @@ check('and a deck can recognise it as a card',
   const meshRot = (sl) => ((sl?.Components?.Data || [])
     .find((c) => short(TYPES[num(c.Type)]) === 'QuadMesh')?.Data.Rotation?.Data || []).map(num);
   const frontR = meshRot(tmpl), backR = meshRot(back);
-  check('the front mesh states its own facing', Math.abs(frontR[1] ?? 0) === 1 && Math.abs(frontR[3] ?? 1) < 1e-6);
-  check('and the back mesh states the opposite', Math.abs(backR[3] ?? 0) === 1 && Math.abs(backR[1] ?? 1) < 1e-6);
+  // Post-upgrade values. `QuadMesh` is version 1 and its version-0 loader rewrites
+  // Rotation to `Rotation * <half turn about Y>`, so a package written without the
+  // version has every quad flipped as it loads. This file used to rely on that:
+  // front [0,1,0,0], back identity, both flipped on the way in. Declaring the
+  // version stopped the flip and the card came out with its back on the front, so
+  // the stored values are the flipped ones now - which for this pair is a straight
+  // swap. Front identity, back a half turn.
+  check('the front mesh states its own facing', Math.abs(frontR[3] ?? 0) === 1 && Math.abs(frontR[1] ?? 1) < 1e-6);
+  check('and the back mesh states the opposite', Math.abs(backR[1] ?? 0) === 1 && Math.abs(backR[3] ?? 1) < 1e-6);
   check('no slot in the card is turned - facing lives on the mesh',
     [tmpl, back].every((sl) => Math.abs((sl?.Rotation?.Data || []).map(num)[1] ?? 0) < 1e-6));
   check('and set back from the front so the faces do not z-fight',
