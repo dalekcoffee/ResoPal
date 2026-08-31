@@ -103,6 +103,24 @@ export const DECK_CARD_HEIGHT = 0.25;
 export const DECK_CARD_THICKNESS = 0.0015911388909444213;
 
 /**
+ * Where a spawned deck sits, in the PANEL's frame — placed in-world by the owner
+ * and read back off the Scene Inspector.
+ *
+ * Rotation is `Euler(-90, -90, -90)`, which `floatQ.EulerRad` turns into
+ * `(0, -0.70710678, -0.70710678, 0)`: a half turn about the axis between -Y and
+ * -Z. It takes the deck's local +Z — the axis its buffers stack along — to panel
+ * UP, and its local +Y to panel FORWARD, so the deck lies as a stack with its card
+ * faces toward whoever is reading the panel. Identity left it standing on its side,
+ * because a deck is authored Y-up and the panel is a wall.
+ *
+ * Both live here rather than in either builder so the graft and the build cannot
+ * drift, and both are in panel space, so the deck follows the panel wherever it is
+ * put.
+ */
+export const DECKS_POSITION = [0.2, 0, -1.31];
+export const DECKS_ROTATION = [0, -0.7071067811865476, -0.7071067811865476, 0];
+
+/**
  * @param kit  emitters from whichever document this is going into:
  *             node(name, classpath, fields, pos), refNode(name, targetSlotId, pos),
  *             strIn/intIn/boolIn/f3In(name, value, pos), and the type table T.

@@ -42,7 +42,8 @@ import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
 import { memberOrder, isFluxNode, haveSource, typeVersion } from './members.mjs';
 import { asUrl } from './urlmarker.mjs';
-import { deckImport, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
+import { deckImport, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS,
+         DECKS_POSITION, DECKS_ROTATION } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -641,7 +642,10 @@ templateSlot.Active.Data = false;
 const cardsSlot = slot('Cards', [], [-((COLS - 1) / 2) * PITCH_X, -0.22, 0]);
 // A deck is a metre-wide object; it does not belong on the grid the loose cards
 // land on, so duplicates get their own parent beside it rather than sharing one.
-const decksSlot = slot('Decks', [], [0, -0.22, -0.25]);
+// Pose from DECKS_POSITION / DECKS_ROTATION - a deck is authored Y-up and the
+// panel is a wall, so identity left it standing on its side.
+const decksSlot = slot('Decks', [], DECKS_POSITION);
+decksSlot.Rotation.Data = DECKS_ROTATION.map((v) => D(v));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE GRAPH. One canvas. Everything a human needs is on it.

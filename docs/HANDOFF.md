@@ -815,6 +815,31 @@ Deck/MaterialFront | Deck/Ready | Deck/cardSize | InnerDeck/SmoothSpeed
 InnerDeck/grid X | InnerDeck/grid Y
 ```
 
+## Where a spawned deck sits, and why identity was wrong
+
+A deck is authored **Y-up** — its buffers stack along local +Z and its card faces look along
+local +Y — and the panel is a **wall**. So a `Decks` slot at identity rotation stands the deck
+on its side, which is what the first few imports did.
+
+The pose was set in-world by the owner and read back off the Scene Inspector:
+
+```
+Decks   position  0.2, 0, -1.31        (panel space)
+        rotation  Euler(-90, -90, -90) = (0, -0.70710678, -0.70710678, 0)
+```
+
+`floatQ.EulerRad` turns those three angles into a half turn about the axis between −Y and −Z.
+It maps the deck's local **+Z to panel up** and its local **+Y to panel forward**, so the deck
+lies as a stack with its card faces toward whoever is reading the panel. Both values live in
+`deck-import.mjs` so the builder and the graft cannot drift, and both are **panel-relative**,
+so the deck follows the panel wherever it is placed. `test-panel.mjs` holds the slot to them
+and checks the quaternion is still unit length.
+
+> **One number to confirm.** The owner read the position as `.2 1.3 -1.3`, but the inspector
+> shows `y = 1.31130226e-06` — that is 1.3 × 10⁻⁶, i.e. zero, and its mantissa happens to
+> match the z. `0.2, 0, -1.31` is what shipped. If the deck wants to be a metre and a third
+> **above** the panel rather than level with it, `DECKS_POSITION` is the one line to change.
+
 ## Square corners: the imported card is ours, not Ukilop's
 
 Open, and the fix is architectural rather than a value to change.

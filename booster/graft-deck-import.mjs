@@ -41,7 +41,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
 import { memberOrder, isFluxNode, typeVersion } from './members.mjs';
-import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
+import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS,
+         DECKS_POSITION, DECKS_ROTATION } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -250,8 +251,9 @@ if (!cardsSlot) throw new Error('no Cards slot on the panel root');
 // Beside the panel rather than under it: the loose-card grid grows DOWNWARD from
 // -0.22 and a 50-card import reaches about -0.70, so a deck parked below would
 // land inside it. A deck is also half a metre of furniture, which is why it does
-// not share the cards' parent.
-const decksSlot = slot('Decks', [], [0.45, -0.30, 0]);
+// not share the cards' parent. Pose from DECKS_POSITION / DECKS_ROTATION.
+const decksSlot = slot('Decks', [], DECKS_POSITION);
+decksSlot.Rotation.Data = DECKS_ROTATION.map(D);
 doc.Object.Children.push(decksSlot);
 
 // The panel's card is whatever `build-panel.mjs` built it as; its BoxCollider is

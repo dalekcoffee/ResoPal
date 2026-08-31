@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import JSZip from 'jszip';
 import { scanUrlFields } from './urlmarker.mjs';
 import { typeVersion } from './members.mjs';
+import { DECKS_POSITION, DECKS_ROTATION } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const decodeMjs = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
@@ -617,6 +618,30 @@ console.log(`${NEWLINE}the deck-import branch:`);
 {
   const finds = compsOfType('FindChildByName');
   check('the branch is present', finds.length === 4, `${finds.length} FindChildByName nodes`);
+
+  // A deck is authored Y-up and the panel is a wall, so a Decks slot at identity
+  // stands the deck on its side. The pose was set in-world and read back off the
+  // Scene Inspector; it lives in deck-import.mjs so the graft and the build agree.
+  {
+    const decks = (doc.Object.Children || []).find((sl) => nm(sl) === 'Decks');
+    check('there is a Decks slot for duplicates to land in', !!decks);
+    const p = (decks?.Position?.Data || []).map(num), r = (decks?.Rotation?.Data || []).map(num);
+    check('it carries the pose that faces a deck at the reader',
+      DECKS_POSITION.every((v, i) => Math.abs(p[i] - v) < 1e-6) &&
+      DECKS_ROTATION.every((v, i) => Math.abs(r[i] - v) < 1e-6),
+      `pos ${p.map((v) => v.toFixed(3))} rot ${r.map((v) => v.toFixed(3))}`);
+    // Euler(-90,-90,-90) through floatQ.EulerRad. A unit quaternion, checked so a
+    // hand-edited value cannot quietly stop being a rotation.
+    check('and that rotation is a unit quaternion',
+      Math.abs(Math.hypot(...DECKS_ROTATION) - 1) < 1e-6);
+    // And the deck duplicate is actually aimed at it: `make a deck` overrides its
+    // parent to Decks, which is what keeps a deck off the loose-card grid.
+    const deckDup = compsOfType('DuplicateSlot').find((d) => !intoPanelCards(d, 'OverrideParent') &&
+      short(byComp.get(arg(d, 'Template'))?.type) === 'SlotSource');
+    const parentRef = byComp.get(arg(byComp.get(arg(deckDup, 'OverrideParent')), 'Source'));
+    check('and the deck duplicate is parented into it',
+      !!decks && arg(parentRef, 'Reference') === decks.ID);
+  }
 
   // The gate hangs off "all cards placed" - the only point in the graph that knows
   // the import has finished - on ALL THREE outcomes, the way the response landings
