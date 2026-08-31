@@ -210,8 +210,14 @@ card i at col = i % 10, row = floor(i / 10) of the 10x7 grid
 cd booster
 RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe                # driven, the default
 RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe mode=static    # confirmed in-world
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe deck=td01   # a real 48-card deck
 RKL=/path/to/Resonite-Knowledge-Library npm run test:deck-probe
 ```
+
+`deck=td01`/`deck=td02` build the real trial decks from `data/decks.json` instead of a handful
+of codes. Worth using: three cards only occupy row 0 of the grid, where the row term of the
+offset is at its default, so a wrong `-(6 - row)` looks perfect. Forty-eight cards span rows
+0-4 and do not.
 
 Two modes, and the difference is the point. **`mode=static`** writes each card's texture URL
 at build time: it proves the UV remap and nothing else, and it is **confirmed in-world**.

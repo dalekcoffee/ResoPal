@@ -190,7 +190,15 @@ for (let i = 0; i < cardSlots.length; i++) {
 
 check('no two cards share a front material', seenMat.size === cardSlots.length, `${seenMat.size} distinct`);
 check('no two cards share a texture', seenTex.size === cardSlots.length, `${seenTex.size} distinct`);
-check('no two cards share an art url', seenUrl.size === cardSlots.length, `${seenUrl.size} distinct`);
+// URLs may legitimately repeat: a real decklist holds duplicates, and `2x
+// Grizzbolt` is two physical cards with the same art. What must NEVER repeat is
+// the material or the texture, because each card's ST is bound to its own atlas
+// cell - and those are gated above. So this only has to catch the collapse case,
+// where a wiring slip gives every card the same art.
+check('the cards do not all share one art url', cardSlots.length === 1 || seenUrl.size > 1,
+  `${seenUrl.size} distinct across ${cardSlots.length} cards`);
+note(`${seenUrl.size} distinct art urls over ${cardSlots.length} cards` +
+  (seenUrl.size < cardSlots.length ? ` (${cardSlots.length - seenUrl.size} duplicate printings)` : ''));
 
 // The edge and back stay shared - per-card materials are for the front only.
 const edges = new Set(), backs = new Set();

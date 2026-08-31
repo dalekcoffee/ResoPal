@@ -108,6 +108,18 @@ happens, `back=site` is the one that works.
 `tRNS` chunk. It is fetched once per player ever, since Resonite caches by URL, but it is
 larger than it needs to be — a 512-wide variant committed to the site would be a cheap win.
 
+### Row math confirmed by building a real deck
+
+The three-card probe only ever occupied **row 0** of the 10x7 grid, where the row term of the
+offset sits at its default — a wrong `-(6 - row)` would have looked perfect. `deck=td01` and
+`deck=td02` build the real 48- and 50-card trial decks out of `data/decks.json`, spanning rows
+0 to 4, and every card's ST is asserted against its own mesh's UV bounds. All 48 and all 50
+pass. A duplicate printing gets its own cell, so `2x Grizzbolt` is two cards, two meshes, two
+materials, two textures — and one shared art URL, which is why the test checks that the cards
+do not *all* share one URL rather than demanding they all differ.
+
+A 48-card deck is **1.8 MB** packaged, and pulls 24 distinct textures at `w=512`.
+
 ### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
 exactly what the importer will do, minus the loop that writes the variable.

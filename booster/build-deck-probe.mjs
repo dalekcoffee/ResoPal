@@ -72,7 +72,24 @@ const MODE = args.mode || 'driven';
 if (!['driven', 'static'].includes(MODE)) throw new Error(`mode must be driven or static, got ${MODE}`);
 const PROXY = args.proxy || process.env.PROXY || 'https://resopal-proxy.dalek.workers.dev';
 const IN_WORLD_WIDTH = 512;                       // worker/src/roll.js IN_WORLD_WIDTH
-const CODES = String(args.cards || 'TD01-001,TD01-002,TD01-003').split(',').map((s) => s.trim()).filter(Boolean);
+// `deck=td01` builds a REAL trial deck out of data/decks.json rather than a
+// handful of codes. That matters for more than realism: three cards only ever
+// occupy row 0 of the 10x7 grid, where the row term of the offset is at its
+// default, so a wrong `-(6 - row)` would look perfect. Forty-eight cards span
+// rows 0 to 4 and would not.
+//
+// A duplicate gets its own cell - `2x Grizzbolt` occupies two - because the atlas
+// is laid out in deck-list order and the mesh UVs follow it (docs/PIPELINE.md).
+const decks = JSON.parse(await readFile(path.join(ROOT, 'data', 'decks.json'), 'utf8')).decks;
+let CODES;
+if (args.deck) {
+  const d = decks[String(args.deck).toLowerCase()];
+  if (!d) throw new Error(`no deck "${args.deck}" in data/decks.json - have ${Object.keys(decks).join(', ')}`);
+  CODES = d.cards.flatMap((c) => Array(c.n).fill(c.code));
+  if (CODES.length !== d.total) throw new Error(`${d.id} expanded to ${CODES.length}, its own total says ${d.total}`);
+} else {
+  CODES = String(args.cards || 'TD01-001,TD01-002,TD01-003').split(',').map((s) => s.trim()).filter(Boolean);
+}
 const SRC = args.src || path.join(ROOT, 'data', 'template.resonitepackage');
 const DONOR = args.donor || path.join(ROOT, 'booster', 'out', 'ResoPal_Panel.resonitepackage');
 const OUT = args.out || path.join(ROOT, 'booster', 'out', 'ResoPal_DeckProbe.resonitepackage');
@@ -428,9 +445,28 @@ console.log(`  grid ${GRID_COLS}x${GRID_ROWS}, front material = renderer slot ${
   (MODE === 'driven' ? `, url driven from ${URL_VAR}` : ', url written at build time'));
 console.log(`  back  ${BACK_URL}` + (backArg === 'site' ? '   (a second host: expect two access prompts)' : '') +
   (backWasPackdb ? '   [replaced the template placeholder]' : '') + '\n');
-for (const r of report) {
-  console.log(`  card ${r.i}  ${r.code.padEnd(10)} cell(col ${r.col}, row ${r.row})` +
-    `  scale ${JSON.stringify(r.scale)}  offset ${JSON.stringify(r.offset)}` +
-    (r.landscape ? '   ** landscape: expect it sideways **' : ''));
+// A full deck is too long to list a card at a time; print the row boundaries,
+// which is where the offset arithmetic is actually worth eyeballing.
+const rows = [...new Set(report.map((r) => r.row))];
+if (report.length > 12) {
+  for (const row of rows) {
+    const inRow = report.filter((r) => r.row === row);
+    const a = inRow[0], z = inRow[inRow.length - 1];
+    console.log(`  row ${row}: cards ${a.i}-${z.i}  cols ${a.col}-${z.col}` +
+      `  offset ${JSON.stringify(a.offset)} .. ${JSON.stringify(z.offset)}`);
+  }
+  console.log(`  ${report.length} cards over ${rows.length} row(s) of the ${GRID_ROWS}-row grid`);
+} else {
+  for (const r of report) {
+    console.log(`  card ${r.i}  ${r.code.padEnd(10)} cell(col ${r.col}, row ${r.row})` +
+      `  scale ${JSON.stringify(r.scale)}  offset ${JSON.stringify(r.offset)}`);
+  }
+}
+const sideways = report.filter((r) => r.landscape);
+if (sideways.length) {
+  console.log(`\n  ** ${sideways.length} landscape printing(s) will render SIDEWAYS: ` +
+    `${[...new Set(sideways.map((r) => r.code))].join(', ')}`);
+  console.log(`     _Tex_ST can flip an axis but not swap two, so this needs a rotated`);
+  console.log(`     variant from the Worker or pre-rotated art on the site.`);
 }
 console.log();
