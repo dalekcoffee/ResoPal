@@ -19,6 +19,20 @@ const PROFILE_FLIGHT = '1:"$Sreact.fragment"\n'
   + '"children":[["$","div",null,{"className":"font-display","children":"Green/Purple Trial"}],["$","div",null,{"className":"text-xs","children":[50," cards"]}]]}]]}]\n';
 let lastUpstream = null;
 let rotatedExists = false;   // flipped per-case by the landscape suite
+// Which codes the stubbed Palify serves already-landscape. The Worker is not told;
+// it works this out from the bytes, which is the whole point of the change.
+let landscapeCodes = [];
+/** A minimal but REAL VP8 WebP container, so webpSize has a header to read. */
+function webp(w, h) {
+  const b = new Uint8Array(40);
+  const put = (o, s) => b.set([...s].map((c) => c.charCodeAt(0)), o);
+  put(0, 'RIFF'); put(8, 'WEBP'); put(12, 'VP8 ');
+  const dv = new DataView(b.buffer);
+  dv.setUint32(4, 32, true); dv.setUint32(16, 20, true);
+  b.set([0x9d, 0x01, 0x2a], 23);
+  dv.setUint16(26, w, true); dv.setUint16(28, h, true);
+  return b;
+}
 // Shaped like the real thing, trimmed to what the code reads. The parsers get
 // their own fixtures in resolve.mjs; these exist so the ROUTE can be exercised.
 const FLIGHT = '1b:{"deckId":"f2dd143c-8e6f-4142-87d2-051195185f96","deckName":"Green/Purple Trial",'
@@ -30,10 +44,12 @@ const CARDS = JSON.stringify({ count: 2, cards: [
 globalThis.fetch = async (u, init) => {
   lastUpstream = { url: String(u), headers: (init && init.headers) || {} };
   if (String(u).includes('/assets/rot/'))
-    return rotatedExists ? new Response(new Uint8Array([9,9,9]), { status: 200 })
+    return rotatedExists ? new Response(webp(732, 1024), { status: 200 })
                          : new Response('not generated yet', { status: 404 });
   if (String(u).includes('/assets/DefaultBack.png')) return new Response(new Uint8Array([7,7]), { status: 200 });
-  if (String(u).includes('/cards/w')) return new Response(new Uint8Array([1,2,3]), { status: 200 });
+  // Orientation is read from the header, so the stub has to serve real ones.
+  if (String(u).includes('/cards/w'))
+    return new Response(webp(...(landscapeCodes.some((c) => String(u).includes(c)) ? [1024, 732] : [732, 1024])), { status: 200 });
   if (String(u).includes('/api/cards?set=TD02')) return new Response(CARDS, { status: 200 });
   if (String(u).includes('/api/cards?set=')) return new Response(JSON.stringify({ count: 0, cards: [] }), { status: 200 });
   // Two deck fixtures, because two things read them: the flight parser wants the
@@ -46,6 +62,7 @@ globalThis.fetch = async (u, init) => {
   return new Response('nope', { status: 404 });
 };
 const { default: worker } = await import('../src/index.js');
+const { webpSize } = await import('../src/webp.js');
 const ctx = { waitUntil: () => {} };
 const ORIGIN = 'https://resopal.dalek.coffee';
 
@@ -277,11 +294,15 @@ globalThis.fetch = savedFetch;
 console.log('\nlandscape printings:');
 
 rotatedExists = true;
+landscapeCodes = ['TD01-008', 'TD01-009', 'ZZ99-001'];
 const turned = await get('/img/TD01-008?w=512');
 check('a landscape code is served the rotated copy',
   lastUpstream.url === 'https://resopal.dalek.coffee/assets/rot/w512/TD01-008.webp', lastUpstream.url);
 check('and that copy is cached forever', /immutable/.test(turned.headers.get('cache-control')),
   turned.headers.get('cache-control'));
+const turnedBytes = webpSize(new Uint8Array(await turned.clone().arrayBuffer()));
+check('and what comes back is the PORTRAIT copy, not the landscape one',
+  turnedBytes?.width === 732 && turnedBytes?.height === 1024, JSON.stringify(turnedBytes));
 
 const upright = await get('/img/TD01-001?w=512');
 check('a portrait code is untouched',
@@ -294,15 +315,30 @@ await get('/img/TD01-008?w=512&orig=1');
 check('orig=1 bypasses the substitution',
   lastUpstream.url === 'https://palify.org/cards/w512/TD01-008.webp', lastUpstream.url);
 
-// Deploying the route before the images exist must not break a card.
+// Deploying the route before the images exist must not break a card. Asserted on
+// the BYTES that come back, not on which url was fetched last: the route now
+// fetches Palify first and only then looks for a turned copy, so the last upstream
+// is the one that 404'd even when the fallback is what gets served.
 rotatedExists = false;
 const missing = await get('/img/TD01-009?w=512');
+const served = webpSize(new Uint8Array(await missing.clone().arrayBuffer()));
 check('a missing rotated copy falls back to palify rather than 404',
-  missing.status === 200 && lastUpstream.url === 'https://palify.org/cards/w512/TD01-009.webp',
-  `${missing.status} ${lastUpstream.url}`);
+  missing.status === 200 && served?.width === 1024 && served?.height === 732,
+  `${missing.status} ${JSON.stringify(served)}`);
 check('and the fallback is NOT cached forever, so it is picked up later',
   !/immutable/.test(missing.headers.get('cache-control')), missing.headers.get('cache-control'));
 rotatedExists = true;
+
+// The point of reading the header: a code from a set nobody has snapshotted still
+// gets turned. ZZ99-001 appears in no data/pool-*.json.
+await get('/img/ZZ99-001?w=512');
+check('a code in NO pool snapshot is still detected and turned',
+  lastUpstream.url === 'https://resopal.dalek.coffee/assets/rot/w512/ZZ99-001.webp', lastUpstream.url);
+
+// And the converse: a portrait card is never sent looking for a rotated copy.
+await get('/img/BP01-053?w=256');
+check('a portrait card never looks for a rotated copy',
+  lastUpstream.url === 'https://palify.org/cards/w256/BP01-053.webp', lastUpstream.url);
 
 // ── the card back ────────────────────────────────────────────────────────────
 const back = await get('/back');

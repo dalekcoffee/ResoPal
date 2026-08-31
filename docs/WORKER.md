@@ -60,13 +60,21 @@ Proxy one card image and attach CORS headers.
   import a card fetches it from Palify and every user after that is served from Cloudflare's edge.
   This is the single biggest thing you can do to be kind to Palify's servers.
 
-**Landscape substitution.** 26 printings — every one a Structure — are served by Palify
+**Landscape substitution.** Some printings — every one a Structure — are served by Palify
 already-landscape, against a portrait card cell. The browser bake turns them on the way into
 the atlas; the in-world path uses the image as it comes, and **no material setting in Resonite
 can turn it there** (`_Tex_ST` is `uv * scale + offset`: it scales and translates each axis,
 it cannot swap them). So `/img/` substitutes a pre-rotated copy from
-`resopal.dalek.coffee/assets/rot/w<width>/<CODE>.webp` for any code in a pool's `landscape`
-list.
+`resopal.dalek.coffee/assets/rot/w<width>/<CODE>.webp`.
+
+**Which cards need it is read from the image, never from a list.** `src/webp.js` parses the
+WebP container header — `VP8`, `VP8L` and `VP8X` — and the route turns anything wider than it
+is tall. That is byte inspection, not decoding, so the "moves bytes" rule holds. The
+`landscape` array in `data/pool-*.json` is a snapshot: a card from a set nobody has
+snapshotted is missing from it, so a list-driven rule would fail to turn exactly the cards a
+user's own import is most likely to bring. An unreadable header returns `null` and the image
+is passed through untouched — a header we cannot read must never be a reason to transform a
+picture.
 
 Two properties make this safe to deploy before the images exist:
 

@@ -13,7 +13,8 @@
  * few hundred bytes of arithmetic, and it has to live somewhere neither the
  * player's devtools nor the in-world tool can reach.
  */
-import { weights, poolBP01, poolTD01, poolTD02, decks } from './data.js';
+import { weights, poolBP01, decks } from './data.js';
+import { isLandscape } from './webp.js';
 import { parseDeck, parseProfile, isNotFound } from './flight.js';
 import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
 import { sniff, parseFlight, parseDeckList, expand, MAX_CARDS } from './resolve.js';
@@ -57,18 +58,22 @@ const fail = (status, msg, h) => new Response(JSON.stringify({ error: msg }), {
 });
 
 /**
- * The printings Palify serves already-landscape - every one a Structure.
+ * Where a pre-turned copy of a landscape printing lives.
  *
- * They arrive 1024x732 against a portrait card cell. The browser bake turns them
- * on the way into the atlas, but the in-world path uses the image as it comes, and
- * NOTHING in Resonite can turn it there: TextureScale/TextureOffset reach the
- * shader as _Tex_ST, applied as `uv * scale + offset`, which scales and translates
- * each axis but cannot swap them. So the rotation has to be in the pixels, and
- * this route is where a pre-turned copy gets substituted.
+ * Some printings - every one a Structure - are served by Palify already-landscape,
+ * 1024x732, against a portrait card cell. The browser bake turns them on the way
+ * into the atlas, but the in-world path uses the image as it comes, and NOTHING in
+ * Resonite can turn it there: TextureScale/TextureOffset reach the shader as
+ * _Tex_ST, applied as `uv * scale + offset`, which scales and translates each axis
+ * but cannot swap them. So the rotation has to be in the pixels.
+ *
+ * WHICH cards need it is read from the image itself, not from a list. The
+ * `landscape` array in data/pool-*.json is a snapshot, and a card from a set nobody
+ * has snapshotted is missing from it - so a list would fail to turn exactly the
+ * cards a user's own deck import is most likely to bring. `isLandscape` reads the
+ * WebP header we have already fetched, which is right for every card that exists
+ * now or later, with nothing to maintain.
  */
-const LANDSCAPE = new Set([
-  ...(poolBP01.landscape ?? []), ...(poolTD01.landscape ?? []), ...(poolTD02.landscape ?? []),
-]);
 const ROTATED = 'https://resopal.dalek.coffee/assets/rot';
 
 /** Card art. Immutable upstream, so cache it at the edge effectively forever. */
@@ -76,45 +81,44 @@ async function image(request, ctx, code, width, h, orig = false) {
   if (!CODE.test(code)) return fail(400, 'bad card code', h);
   if (!WIDTHS.has(width)) return fail(400, 'width must be 256, 512 or 1024', h);
 
-  // `orig=1` asks for Palify's copy whatever the code is. tools/rotate-landscape.html
-  // needs it: without it, re-running the generator after the turned images are live
-  // would read back its own output and turn it a second time.
-  const turn = !orig && LANDSCAPE.has(code);
-
+  // `orig=1` asks for Palify's copy untouched, whatever shape it is.
+  // tools/rotate-landscape.html reads through this route, so without the bypass a
+  // second run would read back its own output and turn it a second time.
   const cache = caches.default;
-  const key = new Request(`https://resopal-cache.invalid/img/${turn ? 'rot/' : ''}${width}/${code}`, { method: 'GET' });
+  const key = new Request(`https://resopal-cache.invalid/img/${orig ? 'orig/' : ''}${width}/${code}`, { method: 'GET' });
   let hit = await cache.match(key);
 
   if (!hit) {
-    let upstream = null, permanent = true;
+    const source = await fetch(`${UPSTREAM}/cards/w${width}/${code}.webp`, {
+      cf: { cacheEverything: true, cacheTtl: 31536000 },
+    });
+    if (!source.ok) return fail(source.status === 404 ? 404 : 502, `upstream ${source.status} for ${code}`, h);
 
-    if (turn) {
-      upstream = await fetch(`${ROTATED}/w${width}/${code}.webp`, {
+    // Buffered rather than streamed because the header has to be read before we
+    // know whether this is the image to serve. A card at these widths is tens of
+    // kilobytes; the edge cache means it is read once per card per colo.
+    let body = new Uint8Array(await source.arrayBuffer());
+    let permanent = true;
+
+    if (!orig && isLandscape(body)) {
+      const turned = await fetch(`${ROTATED}/w${width}/${code}.webp`, {
         cf: { cacheEverything: true, cacheTtl: 31536000 },
       });
-      // Not generated yet: fall through to Palify rather than 404. A landscape
-      // card that is merely squashed beats a card that does not load, and this
-      // makes deploying the route before the images exist a safe no-op.
-      if (!upstream.ok) { upstream = null; permanent = false; }
+      if (turned.ok) body = new Uint8Array(await turned.arrayBuffer());
+      // Not generated yet: serve Palify's copy rather than 404ing. A squashed card
+      // beats a card that does not load, so this route is a safe no-op until the
+      // turned images exist.
+      else permanent = false;
     }
 
-    if (!upstream) {
-      upstream = await fetch(`${UPSTREAM}/cards/w${width}/${code}.webp`, {
-        cf: { cacheEverything: true, cacheTtl: 31536000 },
-      });
-    }
-    if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `upstream ${upstream.status} for ${code}`, h);
-
-    hit = new Response(upstream.body, {
+    hit = new Response(body, {
       headers: {
         'content-type': 'image/webp',
         // A fallback is deliberately NOT immutable and NOT edge-cached: the turned
-        // copy is expected to appear later, and a year-long cache entry would hide
-        // it until the images were renamed.
+        // copy is expected to appear later, and a year-long entry would hide it.
         'cache-control': permanent ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
       },
     });
-    // the first user to import a card pays for it; everyone after is served here
     if (permanent) ctx.waitUntil(cache.put(key, hit.clone()));
   }
 

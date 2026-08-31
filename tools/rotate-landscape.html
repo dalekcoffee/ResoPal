@@ -43,8 +43,10 @@
 <div class="wrap">
   <h1>Rotate the landscape printings</h1>
   <p>
-    26 of 158 printings are landscape — every one a Structure — and Palify serves them
-    <em>already landscape</em>. The deck's card cells are portrait, so in-world they arrive
+    Some printings — every one a Structure — are served by Palify <em>already landscape</em>.
+    This checks <strong>every</strong> code in the committed pools and turns the ones that
+    measure wider than tall, which is the same rule the Worker applies, so a printing the
+    snapshot mislabels or omits is still caught. The deck's card cells are portrait, so in-world they arrive
     squashed rather than turned. Nothing in Resonite can fix that:
     <code>TextureScale</code>/<code>TextureOffset</code> reach the shader as
     <code>_Tex_ST</code> and are applied as <code>uv * scale + offset</code>, which can scale
@@ -64,6 +66,10 @@
   <div class="bar">
     <button id="go">Rotate all</button>
     <button id="dl" class="alt" disabled>Download zip</button>
+    <input id="extra" placeholder="extra codes, optional — BP02-014 …"
+           style="flex:1;min-width:230px;padding:10px 13px;border-radius:11px;
+                  border:1px solid rgba(150,170,230,.24);background:rgba(255,255,255,.04);
+                  color:#e8ecfa;font:400 13px ui-monospace,monospace">
     <span class="sum" id="sum">idle</span>
   </div>
 
@@ -155,14 +161,27 @@ function zip(entries) {
   return new Blob([...chunks, ...central, new Uint8Array(eocd.buffer)], { type: 'application/zip' });
 }
 
-async function poolCodes() {
-  // Never invent card data: the landscape lists are the committed snapshots.
+/**
+ * Every code in the committed pools, plus anything typed into the extra box.
+ *
+ * Deliberately NOT the pools' `landscape` arrays. Orientation is decided by
+ * measuring each image, the same rule the Worker applies, so a printing the
+ * snapshot mislabels or omits is still caught. The lists are only used to know
+ * which codes EXIST - which is what "never invent card data" asks for.
+ */
+async function allCodes() {
   const sets = ['bp01', 'td01', 'td02'];
   const codes = new Set();
   for (const s of sets) {
     const r = await fetch(`../data/pool-${s}.json`);
-    if (!r.ok) throw new Error(`../data/pool-${s}.json -> HTTP ${r.status}. Serve the repo root over http, don't open this file directly.`);
-    for (const c of (await r.json()).landscape ?? []) codes.add(c);
+    if (!r.ok) throw new Error(`../data/pool-${s}.json -> HTTP ${r.status}. Serve the repo root over http; don't open this file directly.`);
+    const pool = await r.json();
+    for (const tier of Object.values(pool.byRarity ?? {})) for (const c of tier) codes.add(c.code);
+    for (const c of pool.landscape ?? []) codes.add(c);          // belt and braces
+  }
+  for (const c of ($('#extra').value || '').split(/[\s,]+/)) {
+    const t = c.trim().toUpperCase();
+    if (/^[A-Z][A-Z0-9]{1,5}-[0-9]{1,4}[A-Z]{0,4}$/.test(t)) codes.add(t);
   }
   return [...codes].sort();
 }
@@ -171,14 +190,15 @@ $('#go').onclick = async () => {
   $('#go').disabled = true; $('#dl').disabled = true;
   out.innerHTML = ''; files = [];
   let codes;
-  try { codes = await poolCodes(); }
+  try { codes = await allCodes(); }
   catch (e) { sum.textContent = e.message; $('#go').disabled = false; return; }
 
   const grid = document.createElement('div');
   grid.className = 'grid';
-  out.append(Object.assign(document.createElement('h2'), { textContent: `${codes.length} landscape printings` }), grid);
+  const head = Object.assign(document.createElement('h2'), { textContent: `checking ${codes.length} printings` });
+  out.append(head, grid);
 
-  let done = 0, failed = 0;
+  let done = 0, failed = 0, skipped = 0;
   for (const code of codes) {
     const card = document.createElement('div');
     card.className = 'card';
@@ -196,8 +216,15 @@ $('#go').onclick = async () => {
       const blob = await r.blob();
       card.querySelector('img').src = URL.createObjectURL(blob);
       const bmp = await createImageBitmap(blob);
-      if (bmp.width < bmp.height)
-        throw new Error(`already portrait (${bmp.width}x${bmp.height}) — is it really landscape?`);
+
+      // The same rule the Worker applies: wider than tall, and nothing else.
+      if (bmp.width <= bmp.height) {
+        bmp.close?.();
+        card.remove();
+        skipped++;
+        sum.textContent = `${done} turned, ${skipped} already portrait, ${failed} failed`;
+        continue;
+      }
 
       const turned = rotated(bmp, ROT);
       bmp.close?.();
@@ -217,11 +244,14 @@ $('#go').onclick = async () => {
       st.textContent = e.message;
       failed++;
     }
-    sum.textContent = `${done} rotated, ${failed} failed, ${codes.length - done - failed} to go`;
+    sum.textContent = `${done} turned, ${skipped} already portrait, ${failed} failed, ` +
+      `${codes.length - done - skipped - failed} to go`;
   }
+  head.textContent = `${done} landscape printings, turned`;
 
   const bytes = files.reduce((n, f) => n + f.bytes.length, 0);
-  sum.textContent = `${done} rotated (${failed} failed) — ${files.length} files, ${(bytes / 1048576).toFixed(2)} MB`;
+  sum.textContent = `${done} turned of ${codes.length} checked (${skipped} portrait, ${failed} failed) — ` +
+    `${files.length} files, ${(bytes / 1048576).toFixed(2)} MB`;
   $('#go').disabled = false;
   $('#dl').disabled = files.length === 0;
 };

@@ -141,18 +141,22 @@ do not, see docs/PIPELINE.md).
 **The mechanism is built; the images are not generated yet.** Two halves:
 
 1. **`tools/rotate-landscape.html`** — a dependency-free browser tool, in the manner of
-   `tools/check-codes.html`. Serve the repo root over http, open it, press *Rotate all*: it
-   reads the `landscape` lists out of `data/pool-*.json`, pulls each printing through
-   `/img/?orig=1`, turns it **90° clockwise**, and writes 256/512/1024 WebPs into a zip laid
-   out as `assets/rot/w<width>/<CODE>.webp`. Unzip at the repo root and commit.
+   `tools/check-codes.html`. Serve the repo root over http (`python3 -m http.server 8000`,
+   which is already in the Worker's CORS allowlist), open it, press *Rotate all*: it checks
+   **every** code in `data/pool-*.json`, pulls each through `/img/?orig=1`, and turns the ones
+   that **measure** wider than tall **90° clockwise**, writing 256/512/1024 WebPs into a zip
+   laid out as `assets/rot/w<width>/<CODE>.webp`. Unzip at the repo root and commit. An extra
+   box takes codes from sets the snapshots do not cover.
 
    It shows each card **before and after, side by side**, on purpose: the rotation direction
    has been got wrong twice in this project and both times silently. Look at the pairs before
    committing. The rotation itself is `web/imgfix.js`'s `toImageData(src, 90)` copied
    verbatim rather than re-derived.
 
-2. **The Worker substitutes it.** `/img/<CODE>` serves the rotated copy for any code in a
-   `landscape` list. Deploying this before the images exist is a no-op: a missing rotated copy
+2. **The Worker substitutes it.** `/img/<CODE>` reads the WebP header of what Palify sent
+   (`worker/src/webp.js`) and serves the rotated copy for anything wider than it is tall —
+   **no list anywhere**, so a card from a set nobody has snapshotted is handled the same as a
+   trial-deck card. Deploying this before the images exist is a no-op: a missing rotated copy
    **falls back to Palify**, and that fallback is deliberately not cached (`max-age=300`, no
    edge cache) so it is replaced the moment the images land. `?orig=1` bypasses the whole
    thing, which is what the generator reads through.
