@@ -1079,7 +1079,10 @@ const res = await pf.exportPackage({
   name: 'ResoPal Panel',
   root, assets,
   embeddedAssets: [{ hash: FONT_HASH, bytes: fontBytes }, { hash: BACK_HASH, bytes: backBytes, metadata: backMeta }],
-  outPath: path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage'),
+  // out= so a comparison build cannot clobber the shipped package. It has been
+  // overwritten once by a build run only to check the tests, and out/ is tracked.
+  outPath: process.argv.slice(2).map((a) => a.split('=')).find(([k]) => k === 'out')?.[1]
+    ?? path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage'),
   version: '2026.6.24.835',
   typeVersions: TYPE_VERSIONS,
 });

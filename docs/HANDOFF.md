@@ -6,6 +6,16 @@ before touching anything that produces a deck package.
 
 ## The one thing that will bite you
 
+> **Stale as of 2026-08-31 — measured, not assumed.** A fresh `build-panel.mjs` was compared
+> against the committed `out/ResoPal_Panel.resonitepackage`: **152 slots identical** in name
+> and component set, and **all 122 positioned slots identical** to four decimals. The builder
+> reproduces the shipped panel, layout included, so a change can ship by rebuilding. The
+> section below is kept because the *reasoning* still applies the moment that stops being
+> true — re-run that comparison before trusting it.
+>
+> `build-panel.mjs` now takes `out=`, so a comparison build cannot overwrite the shipped
+> package. It has been overwritten once by a build run only to check the tests.
+
 **The shipped panel is a file the owner hand-packed in-world. The builder does not
 reproduce it.**
 
