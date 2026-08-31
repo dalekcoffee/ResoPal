@@ -120,6 +120,22 @@ do not *all* share one URL rather than demanding they all differ.
 
 A 48-card deck is **1.8 MB** packaged, and pulls 24 distinct textures at `w=512`.
 
+## Three caches sit between a fixed image and a card in-world
+
+Landscape stayed broken twice after the fix was correct, both times because
+something was still holding older bytes. Worth knowing all three before debugging
+anything image-shaped:
+
+| Cache | Keyed on | Cleared by |
+|---|---|---|
+| Cloudflare edge | the Worker's own cache key | bumping `IMAGE_CACHE_VERSION` in `worker/src/index.js` |
+| Resonite's asset store | the full URL, per install | changing the URL — `ART_VERSION` in `build-deck-probe.mjs`, which appends `&v=` |
+| Resonite's session | nothing that matters here | — a new world does **not** clear the store above |
+
+A new world proves nothing: the asset store is per install, so a card fetched days
+ago comes back from disk. When an image change does not show up, bump both versions
+before suspecting the code.
+
 ## Landscape cards — why no in-world setting can fix it
 
 Confirmed in-world 2026-08-31: the 8 landscape printings in TD01 import wrong, squashed

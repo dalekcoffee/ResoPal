@@ -145,7 +145,7 @@ for (let i = 0; i < cardSlots.length; i++) {
 
   if (MODE === 'static') {
     check(`card ${i}: art is a marked http url at the in-world width`,
-      /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(String(tex?.Data?.URL?.Data ?? '')),
+      /^@https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512&v=\d+$/.test(String(tex?.Data?.URL?.Data ?? '')),
       String(tex?.Data?.URL?.Data));
     seenUrl.add(String(tex?.Data?.URL?.Data ?? ''));
     continue;
@@ -165,7 +165,7 @@ for (let i = 0; i < cardSlots.length; i++) {
   // of the rule for a Sync<Uri>. StringToAbsoluteURI is what makes it a Uri.
   const held = String(urlVar?.Data?.Value?.Data ?? '');
   check(`card ${i}: its url is an unmarked plain string`,
-    /^https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512$/.test(held), held);
+    /^https?:\/\/\S+\/img\/[A-Z0-9-]+\?w=512&v=\d+$/.test(held), held);
   seenUrl.add(held);
 
   const globalRef = local.find((c) => /\.GlobalReference</.test(typeName(c)));

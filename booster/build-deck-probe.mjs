@@ -107,6 +107,22 @@ const BACK_SITE = 'https://resopal.dalek.coffee/assets/DefaultBack.png';
 const backArg = args.back || 'site';
 const BACK_URL = backArg === 'site' ? BACK_SITE : backArg === 'proxy' ? `${PROXY}/back` : backArg;
 
+/**
+ * Bump this to make Resonite refetch every card image.
+ *
+ * Resonite caches an asset by its URL, in the install, for as long as it likes -
+ * a new world does not clear it and neither does a fresh import. So when the bytes
+ * behind a URL change, every client that has already seen it keeps the old ones.
+ * That is what left landscape cards un-turned after the Worker was fixed: the
+ * route was correct, the edge cache was correct, and the headset still had the
+ * squashed copy it fetched days earlier.
+ *
+ * The Worker ignores unknown query parameters and keys its own cache on code and
+ * width, so this changes the asset's identity to Resonite without fragmenting
+ * anything upstream.
+ */
+const ART_VERSION = args.artv || '2';
+
 const GRID_COLS = 10, GRID_ROWS = 7;              // baked into the mesh UVs; see docs/PIPELINE.md
 const CUTOFF = 0.72;                              // docs/PIPELINE.md "White rim on card corners"
 const CARD_SPACE = 'Card';                        // Ukilop's own space, already on every card slot
@@ -384,7 +400,7 @@ const relocated = args.selfcontained === '1' || args.selfcontained === true ? re
 const report = [];
 CODES.forEach((code, i) => {
   const { scale, offset, col, row } = cellRemap(i);
-  const art = `${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}`;
+  const art = `${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}`;
 
   // buffer -> Card -> Visual (Baked) carries the MeshRenderer.
   const cardSlot = kids(kids(cardsParent)[i])[0];
@@ -493,6 +509,8 @@ if (appendedTypes.length) {
 console.log(`  grid ${GRID_COLS}x${GRID_ROWS}, front material = renderer slot ${FRONT_SLOT}` +
   (MODE === 'driven' ? `, url driven from ${URL_VAR}` : ', url written at build time'));
 if (relocated) console.log(`  ${relocated} card driver proxies moved inside their own card - DuplicateSlot carries them now`);
+console.log(`  art   ${PROXY}/img/<CODE>?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}` +
+  `   (v is the lever that makes Resonite refetch)`);
 console.log(`  back  ${BACK_URL}` + (backArg === 'site' ? '   (a second host: expect two access prompts)' : '') +
   (backWasPackdb ? '   [replaced the template placeholder]' : '') + '\n');
 // A full deck is too long to list a card at a time; print the row boundaries,
