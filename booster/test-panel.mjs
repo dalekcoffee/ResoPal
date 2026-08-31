@@ -369,6 +369,26 @@ check('and a deck can recognise it as a card',
   // The collider is a fixed size with real thickness. Driven from the quad it is
   // zero until TextureSizeDriver has seen the texture load, and a card you cannot
   // pick up until its art arrives reads as a card that does not work.
+  // The card is a quad, so its corners are square unless something clips them.
+  // Ukilop's cards carry the rounded outline in a baked mesh; a square card poked
+  // out past the holder and a stacked deck's edge came out as a sawtooth. The front
+  // material masks against the BACK's texture, whose alpha is the card silhouette
+  // already - rounded corners in DefaultBack.png's tRNS chunk - so the corners clip
+  // with no new asset and no mesh.
+  {
+    const front = hasT('UnlitMaterial')?.d;
+    const backTexId = (back?.Components?.Data || [])
+      .find((c) => short(TYPES[num(c.Type)]) === 'StaticTexture2D')?.Data.ID;
+    check('the front is masked against the back, so its corners are round',
+      !!backTexId && front?.MaskTexture?.Data === backTexId,
+      `${front?.MaskTexture?.Data} vs ${backTexId}`);
+    check('and multiplies alpha, which the Cutout it already runs then clips',
+      String(front?.MaskMode?.Data) === 'MultiplyAlpha' &&
+      String(front?.BlendMode?.Data) === 'Cutout');
+    // An omitted Sync<float2> loads as (0,0), which collapses the mask to one texel.
+    check('the mask covers the whole card, not one texel',
+      (front?.MaskScale?.Data || []).map(num).every((v) => Math.abs(v - 1) < 1e-6));
+  }
   const box = hasT('BoxCollider')?.d;
   check('the collider has real thickness', ((box?.Size?.Data || []).map(num)[2] ?? 0) > 0);
   check('and is not driven from the quad', !hasT('Float2ToFloat3SwizzleDriver'));

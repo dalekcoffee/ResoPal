@@ -857,9 +857,44 @@ checks the duplicate is parented into it.
 > match the z. `0.2, 0, -1.31` is what shipped. If the deck wants to be a metre and a third
 > **above** the panel rather than level with it, `DECK_POSITION` is the one line to change.
 
-## Square corners: the imported card is ours, not Ukilop's
+## Square corners — fixed with a mask, not a mesh
 
-Open, and the fix is architectural rather than a value to change.
+Ukilop's card is `Card/Visual (Baked)`: a baked mesh per card, rounded, with three submeshes
+(edge / front / back). The imported card is the panel's own — two `QuadMesh` quads — and a
+quad has square corners, so they poked out past the holder and a stacked deck's edge came out
+as a **sawtooth**.
+
+The fix turned out to be one reference, not an architecture change. `UnlitMaterial` carries a
+mask (`_MASK_TEXTURE_MUL` / `_MASK_TEXTURE_CLIP`), and the card already had a texture whose
+alpha **is** the card silhouette: `DefaultBack.png`, rounded corners in its `tRNS` chunk,
+embedded already because the back face uses it. So the FRONT material multiplies its alpha by
+the back's, and the `Cutout` at `AlphaCutoff 0.72` it already ran clips what is left.
+
+```
+front UnlitMaterial   MaskTexture = <the back's StaticTexture2D>
+                      MaskMode    = MultiplyAlpha
+                      MaskScale   = (1, 1)      MaskOffset = (0, 0)
+```
+
+No new asset, no mesh, no ProtoFlux. The back needed nothing — it samples that alpha directly
+and was always round.
+
+Two things worth keeping:
+
+- **`MaskScale` must be stated.** An omitted `Sync<float2>` loads as `(0, 0)`, which collapses
+  the mask to a single texel. The suite checks it is `(1, 1)`.
+- **The graft rebuilds the material's fields in declared order** rather than appending the four
+  new ones, the same rule `comp()` follows.
+
+The options that were on the table and are no longer needed: rounding the art at the Worker
+(ruled out by the invariant that the Worker moves bytes and nothing else), grafting one of
+Ukilop's baked meshes onto our card, and dropping the move-cards-in architecture to retexture
+his cards in place. The third is still the tidier end state if a card ever needs a real edge or
+a per-card back — but it is no longer the price of round corners.
+
+## (superseded) Square corners: the imported card is ours, not Ukilop's
+
+Kept for the measurements. The fix is architectural rather than a value to change.
 
 Ukilop's card is `Card/Visual (Baked)` — a **baked mesh per card**, rounded, with three
 submeshes (edge / front / back) and its atlas cell baked into the UVs. The imported card is
