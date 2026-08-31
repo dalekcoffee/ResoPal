@@ -83,7 +83,15 @@ const IN_WORLD_WIDTH = 512;                       // worker/src/roll.js IN_WORLD
 // is laid out in deck-list order and the mesh UVs follow it (docs/PIPELINE.md).
 const decks = JSON.parse(await readFile(path.join(ROOT, 'data', 'decks.json'), 'utf8')).decks;
 let CODES;
-if (args.deck) {
+if (args.blank) {
+  // A TEMPLATE, not a deck: N cards whose `Card/url` is empty and gets written at
+  // runtime. This is what the panel carries, because an importer's card codes
+  // arrive over the wire. The count is the deck's ceiling in-world, so it wants to
+  // be the template's full size - trimming down happens by destroying the extras.
+  const n = Number(args.blank);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`blank=${args.blank} must be a positive integer`);
+  CODES = Array(n).fill(null);
+} else if (args.deck) {
   const d = decks[String(args.deck).toLowerCase()];
   if (!d) throw new Error(`no deck "${args.deck}" in data/decks.json - have ${Object.keys(decks).join(', ')}`);
   CODES = d.cards.flatMap((c) => Array(c.n).fill(c.code));
@@ -138,6 +146,7 @@ for (const p of pools) {
   for (const tier of Object.values(p.byRarity ?? {})) for (const c of tier) known.add(c.code);
 }
 for (const code of CODES) {
+  if (code === null) continue;                     // a blank template card carries no code
   if (!known.has(code)) throw new Error(`${code} is not in any data/pool-*.json - verify it before using it`);
 }
 
@@ -261,7 +270,7 @@ const trimmed = trimToCards(doc, CODES.length);
 const report = [];
 CODES.forEach((code, i) => {
   const { scale, offset, col, row } = cellRemap(i);
-  const art = `${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}`;
+  const art = code === null ? '' : `${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}`;
 
   // buffer -> Card -> Visual (Baked) carries the MeshRenderer.
   const cardSlot = kids(kids(cardsParent)[i])[0];
@@ -278,6 +287,7 @@ CODES.forEach((code, i) => {
     // Texture in doc.Assets and material on /Assets, matching the template's own
     // layout. `asUrl` is not cosmetic: a Sync<Uri> value is `@` + the url and the
     // field loads as null without it. See urlmarker.mjs.
+    if (code === null) throw new Error('blank= needs mode=driven: a static build has no url to write');
     tex = cloneNode(frontTex, newId);
     tex.Data.URL.Data = asUrl(art);
     doc.Assets.push(tex);
@@ -331,7 +341,7 @@ CODES.forEach((code, i) => {
   matHome.push(mat);
 
   mats[FRONT_SLOT].Data = mat.Data.ID;
-  report.push({ i, code, col, row, scale, offset, landscape: landscape.has(code) });
+  report.push({ i, code: code ?? '(blank)', col, row, scale, offset, landscape: code !== null && landscape.has(code) });
 });
 
 addCredits(doc);

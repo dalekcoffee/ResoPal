@@ -1,0 +1,147 @@
+#!/usr/bin/env node
+/**
+ * Put a deck template inside the panel, so the importer has something to fill.
+ *
+ * The panel spawns loose cards today. A deck import needs a real Ukilop deck to
+ * duplicate and write into, and that deck has to travel inside the panel package -
+ * there is nothing to fetch it from at runtime.
+ *
+ * It is spliced at the document level rather than built by build-panel.mjs,
+ * because the deck is a foreign document: its ids and its `Types` table are local
+ * to itself, its meshes are `@packdb:///` blobs in its own zip, and the encoder
+ * builds `Types` from its own map. splice.mjs carries the rules that make moving
+ * a subtree between two documents safe.
+ *
+ * The deck arrives INACTIVE and at its full card count. Trimming happens in-world
+ * by destroying the extras, which is the supported way to change a deck's size:
+ * each card's buffer carries a `DestroyProxy` that removes its `/Assets` driver
+ * with it, so the two lists stay in step. Moving those drivers instead - to make a
+ * card duplicable - was tried and broke grabbing, because the deck reaches into
+ * `/Assets` by position (docs/HANDOFF.md).
+ *
+ *   node booster/graft-deck.mjs [panel=out/ResoPal_Panel.resonitepackage]
+ *                               [deck=out/ResoPal_DeckTemplate.resonitepackage]
+ *                               [out=out/ResoPal_Panel_Deck.resonitepackage]
+ */
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { cloneNode, allocator, typeMapper } from './splice.mjs';
+
+const require = createRequire(import.meta.url);
+const JSZip = require('jszip');
+const { Int32 } = require('bson');
+const sha256 = (b) => createHash('sha256').update(b).digest('hex');
+
+const ROOT = path.resolve(import.meta.dirname, '..');
+const RKL = process.env.RKL || path.resolve(ROOT, '..', 'Resonite-Knowledge-Library');
+const codec = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
+if (!existsSync(codec)) throw new Error(`No ${codec}. Set RKL=<knowledge library checkout>.`);
+const { frdtToBsonBytes, bsonBytesToFrdt, deserializeBson, serializeBson } = await import(`file://${codec}`);
+
+const args = Object.fromEntries(process.argv.slice(2).map((a) => {
+  const i = a.indexOf('='); return i < 0 ? [a, true] : [a.slice(0, i), a.slice(i + 1)];
+}));
+const PANEL = args.panel || path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage');
+const DECK = args.deck || path.join(import.meta.dirname, 'out', 'ResoPal_DeckTemplate.resonitepackage');
+const OUT = args.out || path.join(import.meta.dirname, 'out', 'ResoPal_Panel_Deck.resonitepackage');
+const SLOT_NAME = args.name || 'Deck template';
+
+const load = async (file) => {
+  const zip = await JSZip.loadAsync(await readFile(file));
+  const record = JSON.parse(await zip.file('R-Main.record').async('string'));
+  const hash = String(record.assetUri).replace(/^@?packdb:\/\/\//, '');
+  const doc = await deserializeBson(await frdtToBsonBytes(new Uint8Array(await zip.file(`Assets/${hash}`).async('uint8array'))));
+  return { zip, record, hash, doc };
+};
+
+const panel = await load(PANEL);
+const deck = await load(DECK);
+
+const nm = (s) => String(s?.Name?.Data ?? '');
+const idx = (v) => (v && typeof v === 'object') ? (v.value ?? v.valueOf?.()) : v;
+
+const newId = allocator(panel.doc);
+const mapType = typeMapper(panel.doc, deck.doc);
+
+// ── the assets it brings ─────────────────────────────────────────────────────
+// ── the deck, cloned whole ───────────────────────────────────────────────────
+// A deck's meshes, fonts and textures live in `doc.Assets`, a flat list beside the
+// slot tree, and the tree references them by id. So the tree and the assets have
+// to be cloned in ONE call: cloning them separately gives each its own id map, the
+// same asset comes out with two different ids, and every renderer ends up pointing
+// at the copy nobody kept. Nothing dangles and no card has a mesh.
+const wholeDoc = cloneNode({ Object: deck.doc.Object, Assets: deck.doc.Assets }, newId);
+(function remapAll(s) {
+  for (const c of s.Components?.Data ?? []) c.Type = new Int32(mapType(idx(c.Type)));
+  for (const ch of s.Children ?? []) remapAll(ch);
+})(wholeDoc.Object);
+for (const a of wholeDoc.Assets) a.Type = new Int32(mapType(idx(a.Type)));
+
+wholeDoc.Object.Name.Data = SLOT_NAME;
+wholeDoc.Object.Active.Data = false;
+
+(panel.doc.Object.Children ??= []).push(wholeDoc.Object);
+panel.doc.Assets = [...(panel.doc.Assets ?? []), ...wholeDoc.Assets];
+
+// ── the blobs those assets point at ──────────────────────────────────────────
+const wanted = new Set();
+(function w(o) {
+  if (Array.isArray(o)) return o.forEach(w);
+  if (!o || typeof o !== 'object') return;
+  for (const v of Object.values(o)) {
+    if (typeof v === 'string' && v.startsWith('@packdb:///')) wanted.add(v.slice(11));
+    else w(v);
+  }
+})({ Object: wholeDoc.Object, Assets: wholeDoc.Assets });
+
+const have = new Set(Object.keys(panel.zip.files).filter((n) => n.startsWith('Assets/')).map((n) => n.slice(7)));
+const carried = [], absent = [];
+for (const hash of wanted) {
+  if (have.has(hash)) continue;                       // already in the panel, shared
+  const blob = deck.zip.file(`Assets/${hash}`);
+  if (!blob) { absent.push(hash); continue; }         // a stripped placeholder; the bake fills it
+  carried.push({ hash, bytes: await blob.async('nodebuffer'),
+                 meta: deck.zip.file(`Metadata/${hash}.bitmap`) });
+}
+
+// ── write ────────────────────────────────────────────────────────────────────
+const newFrdt = Buffer.from(await bsonBytesToFrdt(await serializeBson(panel.doc)));
+const newHash = sha256(newFrdt);
+
+const out = new JSZip();
+for (const [n, f] of Object.entries(panel.zip.files)) {
+  if (f.dir || n === 'R-Main.record' || n === `Assets/${panel.hash}`) continue;
+  out.file(n, await f.async('nodebuffer'));
+}
+for (const c of carried) {
+  out.file(`Assets/${c.hash}`, c.bytes);
+  if (c.meta) out.file(`Metadata/${c.hash}.bitmap`, await c.meta.async('nodebuffer'));
+}
+out.file(`Assets/${newHash}`, newFrdt);
+
+panel.record.assetUri = `packdb:///${newHash}`;
+panel.record.name = args.recordName || 'ResoPal Panel';
+panel.record.assetManifest = [
+  ...panel.record.assetManifest.filter((e) => e.hash !== panel.hash),
+  ...carried.map((c) => ({ hash: c.hash, bytes: c.bytes.length })),
+  { hash: newHash, bytes: newFrdt.length },
+];
+out.file('R-Main.record', JSON.stringify(panel.record));
+
+await mkdir(path.dirname(OUT), { recursive: true });
+const bytes = await out.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+await writeFile(OUT, bytes);
+
+const cards = (() => {
+  const surface = (wholeDoc.Object.Children ?? []).find((c) => nm(c).startsWith('Surface'));
+  return ((surface?.Children ?? [])[0]?.Children ?? []).length;
+})();
+
+console.log(`\n✓ ${OUT}`);
+console.log(`  ${(bytes.length / 1048576).toFixed(2)} MB  (panel ${(await readFile(PANEL)).length / 1048576 | 0}+ MB, deck folded in)`);
+console.log(`  "${SLOT_NAME}" grafted inactive, ${cards} cards, ids from ${newId.start.toString(16)}`);
+console.log(`  ${mapType.appended.length} types appended, ${carried.length} blobs carried, ${absent.length} left to the bake`);
+console.log(`  ${wholeDoc.Assets.length} asset entries folded into doc.Assets\n`);
