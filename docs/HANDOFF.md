@@ -652,6 +652,39 @@ The deck also lands **beside** the panel now (`Decks` at `[0.45, -0.30, 0]`), no
 the loose-card grid grows downward from -0.22 and a 50-card import reaches about -0.70, so a
 deck parked below would land inside it.
 
+## `SetParent` preserves the GLOBAL position unless you say otherwise
+
+The one that made an imported deck read as three pieces lying apart, and the reason it took
+three imports to find: it is a **default**, not a wire, so nothing about the graph looks
+wrong.
+
+```cs
+[DefaultValueAttribute(true)]
+public ValueInput<bool> PreserveGlobalPosition;
+...
+slot.SetParent(slot2, PreserveGlobalPosition.Evaluate(context, defaultValue: true));
+```
+
+Unwired it is **true**. The slot keeps its world position and the engine recomputes a local
+offset to match. An export of the broken deck says it exactly:
+
+| | known-good | broken import |
+|---|---|---|
+| `Cards/buffer/Card` position | `[0, 0, 0]` | `[-0.319, 0.480, -0.031]` |
+| `filler` position | `[0, 0, 0]` | `[-0.161, 0.240, -0.010]` |
+
+The same offset on all 48 cards — because they had all been reset to the same point on the
+panel first — and `filler` at exactly **half** of it, because the deck drives its edge stack
+off the cards' bounds and followed them off the holder. The buttons never moved at all; the
+stack moved away from them. One unwired port, and the deck reads as a holder, a floating
+edge stack and a stray Search button.
+
+Ukilop's own handler leaves it unwired and gets away with it because it calls
+`SetLocalPositionRotation` **after** the reparent. This branch resets **before**, so that
+`GetChild` still names the same card (below), and therefore has to say `false` — on all three
+of its `SetParent`s, including the one that moves a buffer's packed proxy into `/Deck/Assets`,
+where a preserved world position writes junk onto the flux canvas instead.
+
 ## `GetChild` does not latch
 
 Worth its own heading, because one wrong assumption produced two symptoms that look

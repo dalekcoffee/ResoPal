@@ -165,7 +165,7 @@ export function deckImport(kit, hook) {
   };
   const surface = kid('the deck surface', deckDup.f.Duplicate, 'Surface/cards', atg(2, 0.65), atg(2, 0.91), at(1, 0.91));
   const deckCards = kid('the deck Cards slot', surface.id, 'Cards', at(4, 0.39), atg(4, 0.30), at(4, 0.65));
-  const deckBuffer = kid('the deck buffer template', deckDup.f.Duplicate, 'buffer', at(2, -2.08), atg(3, -1.93), atg(3, -2.19));
+  const deckBuffer = kid('the deck buffer template', deckDup.f.Duplicate, 'buffer', atg(4, -1.93), atg(3, -1.93), atg(3, -2.19));
   const deckAssets = kid('the deck Assets slot', deckDup.f.Duplicate, 'Assets', atg(4, -1.17), atg(4, -1.43), atg(4, -0.90));
 
   // The template ships at its full card count and the extras go in-world: that is
@@ -204,15 +204,15 @@ export function deckImport(kit, hook) {
   // wire back up to the gate's. A reference node is two components and no wire at
   // all; the wire it replaces ran three units down the spine column and through
   // four other nodes on the way.
-  const panelCardsB = push(refNode('the panel Cards slot', hook.panelCards, atg(2, -2.70)));
-  const countB = push(node('how many are still loose', T.ChildCount, { Instance: panelCardsB.id }, atg(2, -1.56)));
-  const none = push(intIn('none left', 0, atg(2, -1.30)));
+  const panelCardsB = push(refNode('the panel Cards slot', hook.panelCards, at(2, -2.40)));
+  const countB = push(node('how many are still loose', T.ChildCount, { Instance: panelCardsB.id }, atg(2, -1.43)));
+  const none = push(intIn('none left', 0, at(2, -1.17)));
   // The guard re-reads the count every pass, which is why this terminates: each
   // pass takes child 0 off the panel's Cards slot, so the count falls by one and
   // cannot be walked past. There is no index to get wrong.
-  const anyLeft = push(node('any cards still loose?', T.IntGt, { A: countB.id, B: none.id }, at(2, -1.43)));
+  const anyLeft = push(node('any cards still loose?', T.IntGt, { A: countB.id, B: none.id }, atg(2, -1.17)));
   const moveGate = push(node('a card left ? move it : done', T.If,
-    { OnTrue: null, OnFalse: null, Condition: anyLeft.id }, at(2, -1.04)));
+    { OnTrue: null, OnFalse: null, Condition: anyLeft.id }, at(4, -0.195)));
   breathe.slot.Components.Data[0].Data.Next.Data = moveGate.id;
 
   // The handler's own sequence, in the handler's own order. A buffer is duplicated
@@ -225,8 +225,29 @@ export function deckImport(kit, hook) {
   const firstA = push(intIn('the first one', 0, at(3, -3.00)));
   const bufProxy = push(node('the buffer’s packed flux', T.GetChild,
     { Instance: bufDup.f.Duplicate, ChildIndex: firstA.id }, at(3, -2.70)));
+
+  // ── every SetParent here keeps the LOCAL transform, and it has to say so ──
+  // `PreserveGlobalPosition` is `[DefaultValue(true)]` on the runtime class, and
+  // `Do` passes `defaultValue: true` a second time for good measure. Left unwired
+  // it is TRUE: the slot keeps its WORLD position and the engine recomputes a local
+  // offset to match. Every card came out of the first working import at a local
+  // [-0.319, 0.480, …] inside its buffer for exactly this reason - the same offset
+  // on all 48, because they had all been reset to the same point on the panel
+  // first - and `filler` then measured half of that, because the deck drives its
+  // edge stack off the cards' bounds and dutifully followed them off the holder.
+  // One unwired port, and the deck reads as three pieces lying apart.
+  //
+  // Ukilop's own handler leaves it unwired and gets away with it because it calls
+  // `SetLocalPositionRotation` AFTER the reparent. This branch resets BEFORE, so
+  // that `GetChild` still names the same card, and therefore has to say `false`.
+  // A local copy per SetParent rather than one constant fanning three ways: these
+  // three sit at opposite corners of the band, and one shared `false` sends wires
+  // straight through the nodes between them - the same reason each name lookup
+  // above carries its own.
+  const keepLocal = (pos) => push(boolIn('keep the local transform', false, pos)).id;
   const proxyHome = push(node('its flux goes to Assets', T.SetParent,
-    { Next: null, Instance: bufProxy.id, NewParent: deckAssets.id, PreserveGlobalPosition: null }, at(3, -1.43)));
+    { Next: null, Instance: bufProxy.id, NewParent: deckAssets.id,
+      PreserveGlobalPosition: keepLocal(atg(3, -1.56)) }, at(3, -1.56)));
   bufDup.slot.Components.Data[0].Data.Next.Data = proxyHome.id;
 
   const firstB = push(intIn('the first one', 0, at(1, -3.00)));
@@ -263,28 +284,28 @@ export function deckImport(kit, hook) {
 
   // And make it the size of the slot it is going into, rather than the size a
   // loose card wants in front of the panel. See DECK_CARD_HEIGHT.
-  const cardScale = push(f3In('the deck\'s card size', hook.cardScale, atg(1, -1.80)));
+  const cardScale = push(f3In('the deck\'s card size', hook.cardScale, atg(1, -3.00)));
   const cardBig = push(node('and the size of a deck card', T.SetLocalScale,
-    { Next: null, Instance: nextCard.id, Scale: cardScale.id }, at(0, -2.08)));
+    { Next: null, Instance: nextCard.id, Scale: cardScale.id }, atg(1, -2.70)));
   cardHome.slot.Components.Data[0].Data.Next.Data = cardBig.id;
 
   const cardIn = push(node('the card goes in the buffer', T.SetParent,
-    { Next: null, Instance: nextCard.id, NewParent: bufDup.f.Duplicate, PreserveGlobalPosition: null }, atg(1, -2.40)));
+    { Next: null, Instance: nextCard.id, NewParent: bufDup.f.Duplicate, PreserveGlobalPosition: keepLocal(atg(1, -2.08)) }, atg(1, -2.40)));
   cardBig.slot.Components.Data[0].Data.Next.Data = cardIn.id;
 
   const bufIn = push(node('and the buffer joins the deck', T.SetParent,
-    { Next: null, Instance: bufDup.f.Duplicate, NewParent: deckCards.id, PreserveGlobalPosition: null }, at(1, -2.40)));
+    { Next: null, Instance: bufDup.f.Duplicate, NewParent: deckCards.id, PreserveGlobalPosition: keepLocal(atg(2, -2.70)) }, at(1, -2.40)));
   cardIn.slot.Components.Data[0].Data.Next.Data = bufIn.id;
 
   const againAsync = push(node('and on to the next card, asynchronously', T.StartAsync,
-    { TaskStart: null, OnStarted: null, OnFailed: null }, at(2, -2.40)));
+    { TaskStart: null, OnStarted: null, OnFailed: null }, atg(2, -2.40)));
   bufIn.slot.Components.Data[0].Data.Next.Data = againAsync.id;
   // Three corners, not one diagonal: out along the band, up the right edge, and
   // back along an empty row into the top of the loop. A straight line from the end
   // of a pass to the start of it cuts through every data row in between - and up
   // the spine column it would cut through the loop's own nodes.
-  const backA = push(node('go round again', T.FlowRelay, { Next: null }, atg(3, -2.47)));
-  const backB = push(node('back to the top', T.FlowRelay, { Next: null }, at(2, -2.70)));
+  const backA = push(node('go round again', T.FlowRelay, { Next: null }, at(1, -1.80)));
+  const backB = push(node('back to the top', T.FlowRelay, { Next: null }, at(1, -1.56)));
   const backC = push(node('and in again', T.FlowRelay, { Next: moveTop.id }, atg(1, -1.17)));
   againAsync.slot.Components.Data[0].Data.TaskStart.Data = backA.id;
   backA.slot.Components.Data[0].Data.Next.Data = backB.id;
