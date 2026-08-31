@@ -78,21 +78,52 @@ wrote into that same file (so member order cannot be wrong). It works.
 
 ## Next step
 
-**Drag the `mode=driven` probe in and look at it.** The remap is confirmed; what is
-unproven now is the *drive* inside a deck card. Same three cards, but each card's texture URL
+**Drive CONFIRMED in-world 2026-08-31.** All three fronts loaded from `Card/url` through the
+cloned chain. Per-card art is finished: remap, drive and all. What is left for the importer is
+the loop that writes the variable, and trimming the deck to N.
+
+The same test showed the backs were still Ukilop's placeholder, because nothing had ever
+touched the back material. Now fixed — see "The card back" below. **That is what the current
+probe changes, and the only thing left to eyeball.**
+
+### The card back
+
+One texture and one material shared by every card, so it is the one thing on a card that is
+not per-card. Its submesh covers a 1x1 atlas, so unlike the front it needs no ST remap — only
+a texture to point at. The URL is written at build time, so it takes the `@` marker.
+
+`back=` picks where it comes from:
+
+| | | |
+|---|---|---|
+| `back=site` | default | straight off `resopal.dalek.coffee`. Works with no deploy, but it is a **second host**, so Resonite asks for two access permissions. |
+| `back=proxy` | preferred | the Worker's new `/back` route. Same origin as the card art, so **one prompt** for the whole deck. Needs the Worker deployed first. |
+| `back=<url>` | | used verbatim. |
+
+The Worker route is written and bundled but **not deployed** — deployment is a dashboard
+paste (`node worker/bundle.mjs`, then paste `worker/dist/resopal-worker.js`). Until that
+happens, `back=site` is the one that works.
+
+`DefaultBack.png` is 1287x1800 and 464 KB, carrying its corner transparency in a palette
+`tRNS` chunk. It is fetched once per player ever, since Resonite caches by URL, but it is
+larger than it needs to be — a 512-wide variant committed to the site would be a cheap win.
+
+### Still unproven Same three cards, but each card's texture URL
 is null and driven from a `Card/url` variable through the panel's five-component chain —
 exactly what the importer will do, minus the loop that writes the variable.
 
 | what you see | what it means |
 |---|---|
-| each card shows its own card | the drive works — only the loop is left |
-| every card shows the same art | the chain is cross-wired; see "Two bugs" above |
-| blank fronts | the drive did not resolve — check `Card/url` is set and the texture URL is being driven |
+| fronts right, backs are the ResoPal back | done — on to the loop and trimming |
+| backs blank | the back URL did not load; check the second host prompt was accepted |
+| backs still the Deck Maker's | the build did not replace the placeholder — the test gates this |
+| every card shows the same front | the chain is cross-wired; see "Two bugs" above |
 
 ```bash
 cd booster
-RKL=… npm run build:deck-probe                 # mode=driven is the default
-RKL=… npm run build:deck-probe mode=static     # the confirmed build, to isolate the remap again
+RKL=… npm run build:deck-probe                      # mode=driven, back=site
+RKL=… npm run build:deck-probe back=proxy           # once the Worker /back route is deployed
+RKL=… npm run build:deck-probe mode=static          # isolates the remap, no flux at all
 RKL=… npm run test:deck-probe
 ```
 

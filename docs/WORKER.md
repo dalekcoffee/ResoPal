@@ -60,6 +60,21 @@ Proxy one card image and attach CORS headers.
   import a card fetches it from Palify and every user after that is served from Cloudflare's edge.
   This is the single biggest thing you can do to be kind to Palify's servers.
 
+### `GET /back`
+
+The card back. Every Palworld card has the same one, so it is a single shared texture behind
+every card of every deck, and because Resonite caches by URL it is one fetch per player ever.
+
+It is proxied here rather than linked straight off the site so a deck needs access to exactly
+**one host**. Card art already comes from the Worker; a back served from
+`resopal.dalek.coffee` would make Resonite ask the player for a second host permission for a
+single shared image.
+
+Source is `https://resopal.dalek.coffee/assets/DefaultBack.png`, edge-cached immutably like
+`/img/`. The Worker moves bytes and nothing else, so it cannot downscale — the source is
+1287x1800 and that is what a player gets. Point `BACK_SOURCE` at a smaller variant if that
+starts to matter.
+
 ### `GET /deck/:uuid` and `GET /profile/:handle`
 
 Fetch the Palify page with `RSC: 1`, parse the flight payload, return clean JSON. Built —

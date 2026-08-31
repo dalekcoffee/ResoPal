@@ -84,6 +84,44 @@ async function image(request, ctx, code, width, h) {
 }
 
 /**
+ * The card back.
+ *
+ * Every Palworld card has the same back, so this is one image shared by every
+ * card of every deck - and because Resonite caches by URL, one fetch per player
+ * ever, however many decks they hold.
+ *
+ * It lives here rather than being fetched straight off the site so that a deck
+ * needs access to exactly ONE host. Card art already comes from this Worker, so
+ * a back served from `resopal.dalek.coffee` would make Resonite ask the player
+ * for a second host permission for a single shared image. Same origin, one prompt.
+ *
+ * The Worker moves bytes and nothing else (docs/WORKER.md), so this cannot
+ * downscale: the source is 1287x1800 and that is what a player gets. If that
+ * matters, commit a smaller variant to the site and point SOURCE at it.
+ */
+const BACK_SOURCE = 'https://resopal.dalek.coffee/assets/DefaultBack.png';
+
+async function cardBack(request, ctx, h) {
+  const cache = caches.default;
+  const key = new Request('https://resopal-cache.invalid/back', { method: 'GET' });
+  let hit = await cache.match(key);
+
+  if (!hit) {
+    const upstream = await fetch(BACK_SOURCE, { cf: { cacheEverything: true, cacheTtl: 31536000 } });
+    if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `upstream ${upstream.status} for the card back`, h);
+    hit = new Response(upstream.body, {
+      headers: {
+        'content-type': 'image/png',
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
+    });
+    ctx.waitUntil(cache.put(key, hit.clone()));
+  }
+
+  return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...h } });
+}
+
+/**
  * Per-IP throttle.
  *
  * Honest about what it is: this counts inside ONE isolate, and Cloudflare runs
@@ -398,6 +436,8 @@ export default {
       return new Response(JSON.stringify({ ok: true, service: 'resopal-proxy' }), {
         headers: { ...h, 'content-type': 'application/json' },
       });
+
+    if (p === '/back') return cardBack(request, ctx, h);
 
     if (p === '/api/pull') return pull(request, url, h);
     if (p === '/api/deck') return deck(request, url, h);

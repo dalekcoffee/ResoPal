@@ -77,6 +77,19 @@ const SRC = args.src || path.join(ROOT, 'data', 'template.resonitepackage');
 const DONOR = args.donor || path.join(ROOT, 'booster', 'out', 'ResoPal_Panel.resonitepackage');
 const OUT = args.out || path.join(ROOT, 'booster', 'out', 'ResoPal_DeckProbe.resonitepackage');
 
+// The card back. Every Palworld card has the same one, so it is a single shared
+// texture and a single shared material - the ONE thing on a card that is not
+// per-card. Ukilop's export ships a placeholder; this replaces it.
+//
+//   back=site    (default) straight off the site. Works with no deploy, but it is
+//                a second host, so Resonite asks for a second host permission.
+//   back=proxy   through the Worker's /back route: same origin as the card art, so
+//                one prompt for the whole deck. Needs the Worker deployed first.
+//   back=<url>   anything else is used verbatim.
+const BACK_SITE = 'https://resopal.dalek.coffee/assets/DefaultBack.png';
+const backArg = args.back || 'site';
+const BACK_URL = backArg === 'site' ? BACK_SITE : backArg === 'proxy' ? `${PROXY}/back` : backArg;
+
 const GRID_COLS = 10, GRID_ROWS = 7;              // baked into the mesh UVs; see docs/PIPELINE.md
 const CUTOFF = 0.72;                              // docs/PIPELINE.md "White rim on card corners"
 const CARD_SPACE = 'Card';                        // Ukilop's own space, already on every card slot
@@ -252,6 +265,27 @@ const frontMat = assetsSlot.Components.Data.find((c) => c?.Data?.ID === frontMat
 const frontTex = doc.Assets.find((a) => a?.Data?.ID === frontMat.Data.Texture.Data);
 if (!frontTex) throw new Error(`front material's Texture is not in doc.Assets`);
 
+// ── the back: one texture, one material, shared by every card ────────────────
+// Its submesh has UV [0,1] against a 1x1 atlas, so unlike the front it needs no
+// ST remap - only a texture to point at. The URL is written at build time, so it
+// takes the `@` marker that a Sync<Uri> requires; without it the field loads as
+// null and the back is blank. See urlmarker.mjs.
+const backMatId = varRef('Deck/MaterialBack');
+if (!backMatId) throw new Error('Deck/MaterialBack not found - is this a Deck Maker export?');
+const backMat = assetsSlot.Components.Data.find((c) => c?.Data?.ID === backMatId);
+const backTex = doc.Assets.find((a) => a?.Data?.ID === backMat.Data.Texture.Data);
+if (!backTex) throw new Error(`back material's Texture is not in doc.Assets`);
+
+const backWasPackdb = String(backTex.Data.URL.Data ?? '').includes('packdb:///');
+backTex.Data.URL.Data = asUrl(BACK_URL);
+backTex.Data.WrapModeU.Data = 'Clamp';
+backTex.Data.WrapModeV.Data = 'Clamp';
+// Match the front. The back face is a flat quad too - the rounded corners come
+// from the alpha cutout, not from geometry - and DefaultBack.png carries its
+// corner transparency in a palette tRNS chunk.
+backMat.Data.BlendMode.Data = 'Cutout';
+backMat.Data.AlphaCutoff.Data = new Double(CUTOFF);
+
 // ── the donor chain (driven mode) ────────────────────────────────────────────
 // From the panel's card template: the url variable, the texture, and the three
 // named slots holding the five flux components that turn one into the other.
@@ -391,7 +425,9 @@ if (appendedTypes.length) {
   for (const t of appendedTypes) console.log(`      ${t}`);
 }
 console.log(`  grid ${GRID_COLS}x${GRID_ROWS}, front material = renderer slot ${FRONT_SLOT}` +
-  (MODE === 'driven' ? `, url driven from ${URL_VAR}` : ', url written at build time') + '\n');
+  (MODE === 'driven' ? `, url driven from ${URL_VAR}` : ', url written at build time'));
+console.log(`  back  ${BACK_URL}` + (backArg === 'site' ? '   (a second host: expect two access prompts)' : '') +
+  (backWasPackdb ? '   [replaced the template placeholder]' : '') + '\n');
 for (const r of report) {
   console.log(`  card ${r.i}  ${r.code.padEnd(10)} cell(col ${r.col}, row ${r.row})` +
     `  scale ${JSON.stringify(r.scale)}  offset ${JSON.stringify(r.offset)}` +

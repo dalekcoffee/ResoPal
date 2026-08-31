@@ -219,6 +219,11 @@ at build time: it proves the UV remap and nothing else, and it is **confirmed in
 five-component chain cloned out of the panel — which is what the importer needs, because card
 codes arrive over the wire and cannot be baked.
 
+The **card back** is the one thing that is not per-card: one texture and one material shared
+by every card, on a submesh with a 1x1 atlas, so it needs no ST remap. `back=site` (default)
+takes it straight off the site and costs a second host prompt; `back=proxy` uses the Worker's
+`/back` route for a single origin, once that is deployed.
+
 Everything a driven card needs hangs off its **`Visual (Baked)`** slot, never off `Card`: the
 deck chains `GetChild` (eleven, three of them taking another `GetChild` as their instance) so
 it walks `Cards -> buffer -> Card`, and those child orderings are load-bearing. `Visual

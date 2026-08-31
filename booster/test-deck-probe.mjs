@@ -201,6 +201,31 @@ for (let i = 0; i < cardSlots.length; i++) {
 check('all cards still share one edge material', edges.size === 1);
 check('all cards still share one back material', backs.size === 1);
 
+// ── the back: one shared texture, and it must be OURS ────────────────────────
+// The template ships a placeholder whose blob strip_template.mjs removes, so a
+// deck that still points at it shows the Deck Maker's back - which is exactly
+// what the first driven build did.
+const backMat = matById.get([...backs][0]);
+check('the back material resolves', !!backMat, [...backs][0]);
+if (backMat) {
+  const backTex = assetById.get(backMat.Data.Texture.Data);
+  const backUrl = String(backTex?.Data?.URL?.Data ?? '');
+  check('the back is no longer the template placeholder', !backUrl.includes('packdb:///'), backUrl);
+  check('the back is a marked http url', /^@https?:\/\/\S+$/.test(backUrl), backUrl);
+  check('the back clamps rather than repeats',
+    backTex?.Data?.WrapModeU?.Data === 'Clamp' && backTex?.Data?.WrapModeV?.Data === 'Clamp',
+    `${backTex?.Data?.WrapModeU?.Data}/${backTex?.Data?.WrapModeV?.Data}`);
+  check('the back is Cutout at 0.72, like the front',
+    backMat.Data.BlendMode.Data === 'Cutout' && Math.abs(num(backMat.Data.AlphaCutoff.Data) - 0.72) < 1e-9,
+    `${backMat.Data.BlendMode.Data} @ ${num(backMat.Data.AlphaCutoff.Data)}`);
+  // The back submesh covers a 1x1 atlas, so unlike the front it takes no remap.
+  const [bsx, bsy] = f2(backMat.Data.TextureScale.Data);
+  const [box, boy] = f2(backMat.Data.TextureOffset.Data);
+  check('the back takes no ST remap', bsx === 1 && bsy === 1 && box === 0 && boy === 0,
+    `scale [${bsx},${bsy}] offset [${box},${boy}]`);
+  note(`back: ${backUrl.slice(1)}`);
+}
+
 // The deck chains GetChild - eleven of them, three taking another GetChild as
 // their instance - so it walks Cards -> buffer -> Card and those child orderings
 // are load-bearing. Everything new hangs off `Visual (Baked)`, which had none.
