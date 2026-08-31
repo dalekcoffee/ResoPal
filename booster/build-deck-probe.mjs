@@ -50,6 +50,7 @@ import path from 'node:path';
 import { addCredits } from '../tools/credits.mjs';
 import { trimToCards } from '../tools/trim.mjs';
 import { asUrl } from './urlmarker.mjs';
+import { cloneNode, allocator, typeMapper } from './splice.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -162,108 +163,17 @@ const kids = (s) => s.Children ?? [];
 const idx = (v) => (v && typeof v === 'object') ? (v.value ?? v.valueOf?.()) : v;
 const typeName = (e, d = doc) => String(d.Types?.[idx(e?.Type)] ?? '');
 
-// ── id allocation ────────────────────────────────────────────────────────────
-// Deck Maker ids are `0000xxxx-0000-...`, allocated sequentially. New ones go
-// strictly above the high-water mark, with a gap so probe ids read as probe ids.
-let high = 0;
-(function w(o) {
-  if (Array.isArray(o)) return o.forEach(w);
-  if (!o || typeof o !== 'object') return;
-  for (const k of Object.keys(o)) {
-    const v = o[k];
-    if (typeof v === 'string') {
-      const m = /^([0-9a-f]{8})-0000-0000-0000-000000000000$/.exec(v);
-      if (m) high = Math.max(high, parseInt(m[1], 16));   // references included: they name real ids
-    } else w(v);
-  }
-})(doc);
-let next = high + 0x1000;
-const newId = () => `${(++next).toString(16).padStart(8, '0')}-0000-0000-0000-000000000000`;
+// ── id allocation and splicing ───────────────────────────────────────────────
+// The rules these encode - the five id-declaration key spellings, cloning a
+// self-referencing group in ONE call, exact-string type matching - each cost a
+// bug. They live in splice.mjs so the panel builder shares one copy.
+const newId = allocator(doc);
+const deckTypeIndex = donor ? typeMapper(doc, donor) : null;
+const appendedTypes = deckTypeIndex ? deckTypeIndex.appended : [];
 
-/**
- * A key whose value DECLARES an id rather than referencing one. There is more than
- * one spelling and missing any of them duplicates an id: `ID` on components and
- * fields, `persistent-ID` on a component's persistence flag, `Persistent-ID` and
- * `ParentReference` on slots, and a `<name>-ID` form for a type's private fields -
- * `UnlitMaterial` alone carries `_shader-ID`, `_unlit-ID`, `_unlitBillboard-ID`
- * and `__legacyZWrite-ID`. Remapping only `ID`/`persistent-ID` left every material
- * clone sharing the original's `_unlit-ID`. See docs/PIPELINE.md.
- */
-export const isDeclarationKey = (k) => k === 'ID' || k === 'ParentReference' || /-ID$/i.test(k);
-
-// A deep clone that leaves BSON's typed wrappers alone: they are immutable and only
-// ever replaced wholesale, so sharing them is safe. A structural clone loses them.
-const dclone = (v) => {
-  if (v === null || typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map(dclone);
-  const c = v.constructor?.name;
-  if (c === 'Int32' || c === 'Double' || c === 'Long' || c === 'Binary' || c === 'Date') return v;
-  const o = {};
-  for (const [k, val] of Object.entries(v)) o[k] = dclone(val);
-  return o;
-};
-
-/**
- * Clone any node - a component entry or a whole slot subtree - giving every id
- * declared inside it a fresh one and rewriting the references that point at those.
- * A reference OUT of the clone is left pointing where it pointed, so the caller
- * decides what to re-point.
- */
-function cloneNode(node) {
-  const copy = dclone(node);
-  const map = new Map();
-  (function declare(o) {
-    if (Array.isArray(o)) return o.forEach(declare);
-    if (!o || typeof o !== 'object') return;
-    for (const [k, v] of Object.entries(o)) {
-      if (typeof v === 'string' && isDeclarationKey(k) && !map.has(v)) map.set(v, newId());
-      else declare(v);
-    }
-  })(copy);
-  (function rewrite(o) {
-    if (Array.isArray(o)) return o.forEach(rewrite);
-    if (!o || typeof o !== 'object') return;
-    for (const k of Object.keys(o)) {
-      const v = o[k];
-      if (typeof v === 'string' && map.has(v)) o[k] = map.get(v);
-      else rewrite(v);
-    }
-  })(copy);
-  return copy;
-}
-
-// ── type mapping, by exact string ────────────────────────────────────────────
-// Never by substring. `UnlitMaterial` is a substring of `UI_UnlitMaterial` and
-// `GlobalReference<IValue<string>>` of nothing the deck has - it carries
-// `GlobalReference<Slot>`, a different type. This is the same trap as CLAUDE.md's
-// "a classpath is a path, not a name", one level down.
-const appendedTypes = [];
-function deckTypeIndex(donorTypeIndex) {
-  const name = String(donor.Types[donorTypeIndex]);
-  let i = doc.Types.indexOf(name);
-  if (i < 0) {
-    i = doc.Types.length;
-    doc.Types.push(name);
-    appendedTypes.push(name);
-    const v = donor.TypeVersions?.[name];
-    if (v !== undefined) (doc.TypeVersions ??= {})[name] = v;
-  }
-  return i;
-}
-
-/**
- * Clone a GROUP of donor slots as one unit, remapping ids and type indices.
- *
- * As one unit, because the chain's slots reference each other: the
- * `StringToAbsoluteURI` on "as a Uri" takes its `Input` from the
- * `ObjectValueSource` on "CARD/url -> texture". Cloning each slot with its own id
- * map leaves those cross-slot references pointing at the DONOR's ids - and since
- * the deck's own ids occupy the same low range, they land on real but unrelated
- * components. Nothing dangles, nothing fails validation, and the graph is wired to
- * the wrong things. test-deck-probe.mjs caught exactly that.
- */
+/** Clone a GROUP of donor slots into this document, remapping ids and types. */
 function cloneDonorSlots(slots) {
-  const group = cloneNode({ Children: slots });
+  const group = cloneNode({ Children: slots }, newId);
   for (const s of group.Children) {
     (function remap(x) {
       for (const c of x.Components?.Data ?? []) c.Type = new Int32(deckTypeIndex(idx(c.Type)));
@@ -275,11 +185,10 @@ function cloneDonorSlots(slots) {
 
 /** Clone a donor component entry into this document. */
 function cloneDonorComp(entry) {
-  const copy = cloneNode(entry);
+  const copy = cloneNode(entry, newId);
   copy.Type = new Int32(deckTypeIndex(idx(entry.Type)));
   return copy;
 }
-
 // ── locate the pieces ────────────────────────────────────────────────────────
 const rootKids = kids(doc.Object);
 const assetsSlot = rootKids.find((c) => nm(c) === 'Assets');
@@ -369,7 +278,7 @@ CODES.forEach((code, i) => {
     // Texture in doc.Assets and material on /Assets, matching the template's own
     // layout. `asUrl` is not cosmetic: a Sync<Uri> value is `@` + the url and the
     // field loads as null without it. See urlmarker.mjs.
-    tex = cloneNode(frontTex);
+    tex = cloneNode(frontTex, newId);
     tex.Data.URL.Data = asUrl(art);
     doc.Assets.push(tex);
     matHome = assetsSlot.Components.Data;
@@ -413,7 +322,7 @@ CODES.forEach((code, i) => {
   tex.Data.WrapModeU.Data = 'Clamp';
   tex.Data.WrapModeV.Data = 'Clamp';
 
-  const mat = cloneNode(frontMat);
+  const mat = cloneNode(frontMat, newId);
   mat.Data.Texture.Data = tex.Data.ID;
   mat.Data.TextureScale.Data = scale.map((n) => new Double(n));
   mat.Data.TextureOffset.Data = offset.map((n) => new Double(n));
@@ -453,7 +362,7 @@ const bytes = await out.generateAsync({ type: 'nodebuffer', compression: 'DEFLAT
 await writeFile(OUT, bytes);
 
 console.log(`\n✓ ${OUT}`);
-console.log(`  mode=${MODE}   ${(bytes.length / 1048576).toFixed(2)} MB   ${CODES.length} cards   ids from ${(high + 0x1001).toString(16)}`);
+console.log(`  mode=${MODE}   ${(bytes.length / 1048576).toFixed(2)} MB   ${CODES.length} cards   ids from ${newId.start.toString(16)}`);
 if (appendedTypes.length) {
   console.log(`  ${appendedTypes.length} types appended for the drive chain:`);
   for (const t of appendedTypes) console.log(`      ${t}`);
