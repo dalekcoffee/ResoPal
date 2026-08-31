@@ -911,13 +911,24 @@ const backB = node('back to the top', T.FlowRelay, { Next: null }, at(12.4, R + 
 // row below everything, and back up the left edge. A straight line from the end
 // of the loop to the start cuts through every data row in between.
 const backC = node('and in again', T.FlowRelay, { Next: loopTop.id }, at(-0.6, R + 13));
-eat.slot.Components.Data[0].Data.OnWritten.Data = backA.id;
+// The loop-back edge needs its OWN async context. `breathe` is a DelayUpdates -
+// an AsyncActionNode - and the top of the loop only reaches it through
+// `loopAsync`. Coming round again from `eat.OnWritten` re-enters that same async
+// node from a SYNCHRONOUS continuation, which runs nothing: the first record
+// spawns a card and every record after it dies silently. Found by the owner in
+// world, not by any check here - verify-classpaths walks impulse edges from the
+// entry points and treats the cycle as already-visited, so it never re-tests the
+// edge that closes the loop.
+const loopAgainAsync = node('and again, asynchronously', T.StartAsync,
+  { TaskStart: null, OnStarted: null, OnFailed: null }, at(10.2, R));
+eat.slot.Components.Data[0].Data.OnWritten.Data = loopAgainAsync.id;
+loopAgainAsync.slot.Components.Data[0].Data.TaskStart.Data = backA.id;
 backA.slot.Components.Data[0].Data.Next.Data = backB.id;
 backB.slot.Components.Data[0].Data.Next.Data = backC.id;
 loopTop.slot.Components.Data[0].Data.Next.Data = breathe.id;
 breathe.slot.Components.Data[0].Data.Next.Data = gate.id;
 
-const spawnNodes = [restStore, bodyStore, cardsNode, tmplNode, startLoop, getBody, getRest, postBody, postRest,
+const spawnNodes = [loopAgainAsync, restStore, bodyStore, cardsNode, tmplNode, startLoop, getBody, getRest, postBody, postRest,
   clear, loopAsync, loopTop, oneFrame, breathe, newline, nlAt, nlTrunk, shortest, another, gate,
   restTap, zero, record, artUrl, afterNl, remainder, dup, cardPath, setUrl,
   cardFailText, cardFailPath, cardFailSay, howMany, idx, perRow,

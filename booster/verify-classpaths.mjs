@@ -251,6 +251,45 @@ for (const id of syncReached) {
   if (isAsync(name)) problems.push([c.type, 'is an AsyncActionNode but is reachable from a synchronous impulse without a StartAsyncTask in between']);
 }
 
+// Reachability is not enough on its own. It walks forward from the synchronous
+// entry points and stops at every StartAsyncTask, so anything past one is assumed
+// to be in an async context for good - and a LOOP that comes back round into an
+// async node is never re-tested, because the walk has already visited it.
+//
+// That is a real bug this missed: the spawn loop's `DelayUpdates` was entered
+// through a StartAsyncTask at the top, and the loop-back edge re-entered the same
+// node from a plain continuation. The first record spawned a card and every record
+// after it died silently. The owner found it in-world.
+//
+// So check the edges instead of the walk: EVERY impulse edge arriving at an async
+// node must originate at a StartAsyncTask, following back through relays only.
+const inbound = new Map();                     // target id -> [source id]
+for (const [id, c] of comps) for (const [, to] of outEdges(c)) {
+  if (!inbound.has(to)) inbound.set(to, []);
+  inbound.get(to).push(id);
+}
+const originOf = (id, seen = new Set()) => {
+  // Walk back through relays; a relay is plumbing and carries whatever ran it.
+  if (seen.has(id)) return null;
+  seen.add(id);
+  const c = comps.get(id);
+  if (!c) return null;
+  const n = shortName(c.type);
+  if (n === 'StartAsyncTask') return 'async';
+  if (!/Relay$/.test(n)) return n;
+  const froms = inbound.get(id) ?? [];
+  if (!froms.length) return null;
+  return froms.map((f) => originOf(f, seen)).find((r) => r !== 'async') ?? 'async';
+};
+for (const [id, c] of comps) {
+  if (!isAsync(shortName(c.type))) continue;
+  for (const from of inbound.get(id) ?? []) {
+    const origin = originOf(from);
+    if (origin && origin !== 'async')
+      problems.push([c.type, `an impulse from ${origin} reaches this async node without a StartAsyncTask - a loop back into an async node needs its own`]);
+  }
+}
+
 // ── member order ─────────────────────────────────────────────────────────────
 // The check that would have caught the whole-package failure: the panel encoded
 // cleanly, validated with zero dangling references, and in-world every node was
