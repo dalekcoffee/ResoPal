@@ -14,6 +14,7 @@
  * player's devtools nor the in-world tool can reach.
  */
 import { weights, poolBP01, decks } from './data.js';
+import { isLandscape } from './webp.js';
 import { parseDeck, parseProfile, isNotFound } from './flight.js';
 import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
 import { sniff, parseFlight, parseDeckList, expand, MAX_CARDS } from './resolve.js';
@@ -56,27 +57,106 @@ const fail = (status, msg, h) => new Response(JSON.stringify({ error: msg }), {
   status, headers: { ...h, 'content-type': 'application/json' },
 });
 
+/**
+ * Where a pre-turned copy of a landscape printing lives.
+ *
+ * Some printings - every one a Structure - are served by Palify already-landscape,
+ * 1024x732, against a portrait card cell. The browser bake turns them on the way
+ * into the atlas, but the in-world path uses the image as it comes, and NOTHING in
+ * Resonite can turn it there: TextureScale/TextureOffset reach the shader as
+ * _Tex_ST, applied as `uv * scale + offset`, which scales and translates each axis
+ * but cannot swap them. So the rotation has to be in the pixels.
+ *
+ * WHICH cards need it is read from the image itself, not from a list. The
+ * `landscape` array in data/pool-*.json is a snapshot, and a card from a set nobody
+ * has snapshotted is missing from it - so a list would fail to turn exactly the
+ * cards a user's own deck import is most likely to bring. `isLandscape` reads the
+ * WebP header we have already fetched, which is right for every card that exists
+ * now or later, with nothing to maintain.
+ */
+const ROTATED = 'https://resopal.dalek.coffee/assets/rot';
+
 /** Card art. Immutable upstream, so cache it at the edge effectively forever. */
-async function image(request, ctx, code, width, h) {
+async function image(request, ctx, code, width, h, orig = false) {
   if (!CODE.test(code)) return fail(400, 'bad card code', h);
   if (!WIDTHS.has(width)) return fail(400, 'width must be 256, 512 or 1024', h);
 
+  // `orig=1` asks for Palify's copy untouched, whatever shape it is.
+  // tools/rotate-landscape.html reads through this route, so without the bypass a
+  // second run would read back its own output and turn it a second time.
   const cache = caches.default;
-  const key = new Request(`https://resopal-cache.invalid/img/${width}/${code}`, { method: 'GET' });
+  const key = new Request(`https://resopal-cache.invalid/img/${orig ? 'orig/' : ''}${width}/${code}`, { method: 'GET' });
   let hit = await cache.match(key);
 
   if (!hit) {
-    const upstream = await fetch(`${UPSTREAM}/cards/w${width}/${code}.webp`, {
+    const source = await fetch(`${UPSTREAM}/cards/w${width}/${code}.webp`, {
       cf: { cacheEverything: true, cacheTtl: 31536000 },
     });
-    if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `upstream ${upstream.status} for ${code}`, h);
-    hit = new Response(upstream.body, {
+    if (!source.ok) return fail(source.status === 404 ? 404 : 502, `upstream ${source.status} for ${code}`, h);
+
+    // Buffered rather than streamed because the header has to be read before we
+    // know whether this is the image to serve. A card at these widths is tens of
+    // kilobytes; the edge cache means it is read once per card per colo.
+    let body = new Uint8Array(await source.arrayBuffer());
+    let permanent = true;
+
+    if (!orig && isLandscape(body)) {
+      const turned = await fetch(`${ROTATED}/w${width}/${code}.webp`, {
+        cf: { cacheEverything: true, cacheTtl: 31536000 },
+      });
+      if (turned.ok) body = new Uint8Array(await turned.arrayBuffer());
+      // Not generated yet: serve Palify's copy rather than 404ing. A squashed card
+      // beats a card that does not load, so this route is a safe no-op until the
+      // turned images exist.
+      else permanent = false;
+    }
+
+    hit = new Response(body, {
       headers: {
         'content-type': 'image/webp',
+        // A fallback is deliberately NOT immutable and NOT edge-cached: the turned
+        // copy is expected to appear later, and a year-long entry would hide it.
+        'cache-control': permanent ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+      },
+    });
+    if (permanent) ctx.waitUntil(cache.put(key, hit.clone()));
+  }
+
+  return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...h } });
+}
+
+/**
+ * The card back.
+ *
+ * Every Palworld card has the same back, so this is one image shared by every
+ * card of every deck - and because Resonite caches by URL, one fetch per player
+ * ever, however many decks they hold.
+ *
+ * It lives here rather than being fetched straight off the site so that a deck
+ * needs access to exactly ONE host. Card art already comes from this Worker, so
+ * a back served from `resopal.dalek.coffee` would make Resonite ask the player
+ * for a second host permission for a single shared image. Same origin, one prompt.
+ *
+ * The Worker moves bytes and nothing else (docs/WORKER.md), so this cannot
+ * downscale: the source is 1287x1800 and that is what a player gets. If that
+ * matters, commit a smaller variant to the site and point SOURCE at it.
+ */
+const BACK_SOURCE = 'https://resopal.dalek.coffee/assets/DefaultBack.png';
+
+async function cardBack(request, ctx, h) {
+  const cache = caches.default;
+  const key = new Request('https://resopal-cache.invalid/back', { method: 'GET' });
+  let hit = await cache.match(key);
+
+  if (!hit) {
+    const upstream = await fetch(BACK_SOURCE, { cf: { cacheEverything: true, cacheTtl: 31536000 } });
+    if (!upstream.ok) return fail(upstream.status === 404 ? 404 : 502, `upstream ${upstream.status} for the card back`, h);
+    hit = new Response(upstream.body, {
+      headers: {
+        'content-type': 'image/png',
         'cache-control': 'public, max-age=31536000, immutable',
       },
     });
-    // the first user to import a card pays for it; everyone after is served here
     ctx.waitUntil(cache.put(key, hit.clone()));
   }
 
@@ -399,6 +479,8 @@ export default {
         headers: { ...h, 'content-type': 'application/json' },
       });
 
+    if (p === '/back') return cardBack(request, ctx, h);
+
     if (p === '/api/pull') return pull(request, url, h);
     if (p === '/api/deck') return deck(request, url, h);
     if (p === '/api/resolve') return resolve(request, url, h, ctx, url.searchParams.get('deck') || url.searchParams.get('url') || url.searchParams.get('list') || '');
@@ -406,7 +488,7 @@ export default {
     let m;
     if ((m = p.match(/^\/img\/([^/]+)$/)))
       return image(request, ctx, decodeURIComponent(m[1]).replace(/\.webp$/i, '').toUpperCase(),
-        url.searchParams.get('w') || '1024', h);
+        url.searchParams.get('w') || '1024', h, url.searchParams.get('orig') === '1');
 
     const raw = url.searchParams.get('raw') === '1';
 

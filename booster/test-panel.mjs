@@ -14,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import JSZip from 'jszip';
+import { scanUrlFields } from './urlmarker.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const decodeMjs = path.join(RKL, 'protoflux', 'skill', 'scripts', 'decode.mjs');
@@ -875,6 +876,15 @@ for (const c of byComp.values())
     if (typeof d === 'string' && d === NULL_GUID) rootRefs.push(`${short(c.type)}.${k}`);
   }
 check('nothing references the root slot / null GUID', rootRefs.length === 0, rootRefs.join(', '));
+
+// ── every Sync<Uri> value carries its @ marker ───────────────────────────────
+// `@` is the DataTree's type tag for a url, not decoration: without it the field
+// loads as null and the asset silently never appears. See booster/urlmarker.mjs.
+console.log('\nurl fields:');
+const urls = scanUrlFields(doc);
+check('every url field carries its @ marker', urls.unmarked.length === 0,
+  urls.unmarked.map((u) => `${u.field}=${u.value}`).join(', '));
+console.log(`  note ${urls.marked.length} marked, ${urls.unmarked.length} unmarked`);
 
 console.log(bad ? `${NEWLINE}${bad} FAILURES` : `${NEWLINE}panel verified`);
 process.exitCode = bad ? 1 : 0;
