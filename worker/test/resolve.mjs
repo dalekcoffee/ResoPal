@@ -120,5 +120,20 @@ check('which the route turns into a 502 naming the parser, not an empty deck', t
 eq('junk in, nothing out', parseFlight('not a flight payload at all').entries, []);
 eq('and it does not throw on a truncated array', parseFlight('"list":[{"n":2,"code":"TD02-001"').entries, []);
 
+// A single card, pasted as its Palify page url. The slug carries the code, so
+// this already resolved; what it did not do was leave the name alone - stripping
+// the code out of a url leaves the url.
+console.log('\na pasted card url:');
+{
+  const e = parseDeckList('https://palify.org/card/bp01-091-wooden-wall').entries;
+  check('one card, code read from the slug', e.length === 1 && e[0].code === 'BP01-091', JSON.stringify(e));
+  check('quantity 1', e[0]?.n === 1);
+  check('no name invented from the url', e[0]?.name === null, JSON.stringify(e[0]?.name));
+  const t = parseDeckList('https://palify.org/card/td01-008-stone-pit').entries;
+  check('and it works for a landscape printing too', t[0]?.code === 'TD01-008', JSON.stringify(t));
+  const d = parseDeckList('2x Mossanda – Guard Captain [TD02-001]').entries;
+  check('a real decklist line still keeps its name', d[0]?.name === 'Mossanda – Guard Captain', JSON.stringify(d[0]));
+}
+
 console.log(bad ? `\n${bad} FAILURES` : '\nresolve parses palify links and pasted lists');
 process.exitCode = bad ? 1 : 0;

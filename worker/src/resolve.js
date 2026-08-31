@@ -144,7 +144,13 @@ export function parseDeckList(text) {
       continue;
     }
 
-    entries.push({ code, n: quantityOf(line, code), name: labelOf(line, code) });
+    // A pasted card URL - https://palify.org/card/bp01-091-wooden-wall - already
+    // yields the right code, because the slug carries it. What it does NOT carry
+    // is a usable name: stripping the code out of the url leaves the url. Names
+    // are resolved against data/pool-*.json anyway (CLAUDE.md: never carry a name
+    // over from whatever the source claimed), so null is the honest value.
+    const fromUrl = /^https?:\/\/\S*\/card\/\S+$/i.test(line.trim());
+    entries.push({ code, n: quantityOf(line, code), name: fromUrl ? null : labelOf(line, code) });
   }
   return { name, entries, unrecognised };
 }
