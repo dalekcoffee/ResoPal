@@ -42,7 +42,7 @@ import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
 import { memberOrder, isFluxNode, haveSource } from './members.mjs';
 import { asUrl } from './urlmarker.mjs';
-import { deckImport } from './deck-import.mjs';
+import { deckImport, DECK_CARD_HEIGHT } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -133,6 +133,9 @@ const T = {
   ChildCount:  PB + 'FrooxEngine.Slots.ChildrenCount',
   GetChild:    PB + 'FrooxEngine.Slots.GetChild',
   SetParent:   PB + 'FrooxEngine.Slots.SetParent',
+  SetLocalPosRot: PB + 'FrooxEngine.Transform.SetLocalPositionRotation',
+  SetLocalScale: PB + 'FrooxEngine.Transform.SetLocalScale',
+  F3In:        PB + 'ValueInput<float3>',
   FindChild:   PB + 'FrooxEngine.Slots.FindChildByName',
   BoolIn:      PB + 'ValueInput<bool>',
   WriteBoolVar: PB + 'FrooxEngine.Variables.WriteDynamicValueVariable<bool>',
@@ -1023,6 +1026,7 @@ const deckKit = {
   },
   strIn, intIn,
   boolIn: (name, v, pos) => node(name, T.BoolIn, { Value: v }, pos),
+  f3In: (name, v, pos) => node(name, T.F3In, { Value: V3(v, v, v) }, pos),
 };
 const deck = deckImport(deckKit, {
   panelCards: cardsSlot._slot.id,
@@ -1031,6 +1035,7 @@ const deck = deckImport(deckKit, {
   // this reference in. Null here is an unbound external hook, not a dangling one.
   deckTemplate: null,
   decksHolder: decksSlot._slot.id,
+  cardScale: DECK_CARD_HEIGHT / CARD_H,
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   doneSay.slot.Components.Data[0].Data[k].Data = deck.entryId;

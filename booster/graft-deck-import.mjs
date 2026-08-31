@@ -41,7 +41,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
 import { memberOrder, isFluxNode } from './members.mjs';
-import { deckImport, COL_X } from './deck-import.mjs';
+import { deckImport, COL_X, DECK_CARD_HEIGHT } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -123,6 +123,9 @@ const T = {
   ChildCount: PB + 'FrooxEngine.Slots.ChildrenCount',
   GetChild: PB + 'FrooxEngine.Slots.GetChild',
   SetParent: PB + 'FrooxEngine.Slots.SetParent',
+  SetLocalPosRot: PB + 'FrooxEngine.Transform.SetLocalPositionRotation',
+  SetLocalScale: PB + 'FrooxEngine.Transform.SetLocalScale',
+  F3In: PB + 'ValueInput<float3>',
   FindChild: PB + 'FrooxEngine.Slots.FindChildByName',
   StartAsync: PB + 'FrooxEngine.Async.StartAsyncTask',
   DelayFrames: PB + 'FrooxEngine.Async.DelayUpdates',
@@ -165,6 +168,7 @@ const kit = {
   strIn: (name, v, pos) => kit.node(name, T.StrIn, { Value: v }, pos),
   intIn: (name, v, pos) => kit.node(name, T.IntIn, { Value: new Int32(v) }, pos),
   boolIn: (name, v, pos) => kit.node(name, T.BoolIn, { Value: v }, pos),
+  f3In: (name, v, pos) => kit.node(name, T.F3In, { Value: [D(v), D(v), D(v)] }, pos),
 };
 
 // ── find what the branch has to reach in the packed panel ────────────────────
@@ -176,8 +180,24 @@ if (!cardsSlot) throw new Error('no Cards slot on the panel root');
 
 // A deck is a metre-wide object; it does not belong in the grid the loose cards
 // land on, so it gets its own slot beside it rather than sharing that parent.
-const decksSlot = slot('Decks', [], [0, -0.22, -0.25]);
+// Beside the panel rather than under it: the loose-card grid grows DOWNWARD from
+// -0.22 and a 50-card import reaches about -0.70, so a deck parked below would
+// land inside it. A deck is also half a metre of furniture, which is why it does
+// not share the cards' parent.
+const decksSlot = slot('Decks', [], [0.45, -0.30, 0]);
 doc.Object.Children.push(decksSlot);
+
+// The panel's card is whatever `build-panel.mjs` built it as; its BoxCollider is
+// authored at that size and is the one place it is written down as a number.
+const cardTemplate = (function find(s) {
+  if (nm(s) === 'card') return s;
+  for (const c of s.Children ?? []) { const r = find(c); if (r) return r; }
+  return null;
+})(doc.Object);
+const cardCollider = (cardTemplate?.Components?.Data ?? [])
+  .find((c) => /FrooxEngine\.BoxCollider$/.test(String(doc.Types[idx(c.Type)])));
+const cardHeight = Number(cardCollider?.Data?.Size?.Data?.[1]);
+if (!(cardHeight > 0)) throw new Error('cannot read the card template height off its collider');
 
 const nodeOf = (s) => ({ slot: s, type: String(doc.Types[idx(s.Components?.Data?.[0]?.Type ?? 0)]), data: s.Components?.Data?.[0]?.Data });
 const nodes = (canvas.Children || []).filter((s) => nm(s) !== 'Meta: Comments').map(nodeOf);
@@ -236,6 +256,10 @@ const { nodes: branch, entryId } = deckImport(kit, {
   panelCards: cardsSlot.ID,
   deckTemplate: null,
   decksHolder: decksSlot.ID,
+  // Read off the card template's own collider rather than restated here, so the
+  // two cannot drift: the collider is authored at the card's real size, which is
+  // the thing the deck's cell has to be reconciled with.
+  cardScale: DECK_CARD_HEIGHT / cardHeight,
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   if (donePlaced.data[k]) donePlaced.data[k].Data = entryId;

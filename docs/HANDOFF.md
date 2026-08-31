@@ -558,20 +558,10 @@ where several people may be opening at once.
 ## Open tasks
 
 1. **The card back** — above.
-2. ~~**Decks into a real Ukilop deck.**~~ Built 2026-08-31; see the section above.
-   **Not yet drag-tested in-world** — everything here is read out of the engine source and
-   the deck's own file, and gated by the suites, but no one has imported it yet. The three
-   things to watch on the first import, in order of how likely they are to be the thing
-   that is wrong:
-   - **the cards land but do not lay out** → the buffer's packed `proxy` did not reach
-     `/Deck/Assets`, or reached it out of step with `Cards`. The deck indexes that list by
-     position.
-   - **the deck stays stacked** → `InnerDeck/spread` did not bind. Check the
-     `DynamicField<bool>` is on `Surface/cards` itself, not on a child: the space is
-     `OnlyDirectBinding`.
-   - **nothing happens at all past 30 cards** → the branch's deck-template reference is
-     null, which happens if `graft-deck-import.mjs` ran without `graft-deck.mjs` after it.
-     `npm run ship` runs both; `test:graft-deck` fails on an unbound reference.
+2. ~~**Decks into a real Ukilop deck.**~~ Built 2026-08-31, **drag-tested the same day**.
+   The mechanism is confirmed: cards spawn, move into a real deck, and the spread engages.
+   Three placement bugs came out of that first import and are fixed — see "Three things a
+   Deck Maker export brings with it" below. Worth another import to confirm the fixes.
 3. **The router regression.** A fresh `build-panel.mjs` emits 148 relays for 51 logic nodes
    and fails the layout gates outright. Nothing in this round touched it and the shipping
    path routes around it by grafting, but the builder's own output is not importable until
@@ -580,6 +570,54 @@ where several people may be opening at once.
    in the browser instead. `serverDown` is set at line 905 and never read anywhere, so the
    fallback is invisible — it hid a ten-day-stale Worker deploy. The comment above
    `fillPacks` promises pulls are "marked `local` and the export says so"; neither exists.
+
+## Three things a Deck Maker export brings with it
+
+All three came out of the first in-world import, which otherwise worked: the cards spawned,
+moved into a deck, and the spread engaged. The deck was twenty metres away, the cards were
+scattered off it, and every card was a third of the size of the slot it sat in.
+
+**1. The export carries the world transform it was saved from.** The deck template measured
+
+```
+pos [-20.2569, 2.1762, 10.5210]   rot ~[-0.19, -0.23, -0.59, 0.75]   scale 0.91
+```
+
+and `DuplicateSlot` copies a template's local transform verbatim, so the duplicate landed
+twenty metres away, rotated, at 0.91. The **Deck Maker itself** measures `pos [-28.68, 2.59,
+26.38] scale 0.91` from a different session — which is what says the 0.91 is the same
+saved-in-world residue as the position rather than an authored size. `Deck/cardSize` is
+written as `0.175 x 0.25`, and that means metres at scale 1. `graft-deck.mjs` resets all
+three. **Anything re-exported from Deck Maker will bring its own, so this reset is not
+optional and not one-off.**
+
+**2. `SetParent` keeps the LOCAL transform, so a card arrives holding its grid position.**
+`PreserveGlobalPosition` unwired is `false`. Each card reaches the deck still carrying the
+position `SetLocalPosition` gave it on the panel's grid, so it sits that far off its own
+buffer and the deck spreads into a cloud beside the holder. The deck's own handler solves
+this and it is easy to read as a no-op:
+
+```
+SetLocalPositionRotation( Instance = the received card, Position = null, Rotation = null )
+```
+
+Both inputs are **deliberately unwired** — an unconnected `ValueInput` evaluates to its
+type's default, `float3.Zero` and `floatQ.Identity`. The node *is* the reset. The importer
+does the same thing now, in the same place in the sequence.
+
+**3. A panel card is a third of a deck card.** The panel's card is 0.088 m tall, which is
+what a grid of loose cards wants in front of a 0.36 m panel; the deck's cell is
+`Deck/cardSize`.Y = 0.25. Dropped in unchanged the spread reads as small cards with wide
+gaps — measurable straight off the screenshot, where the spacing was about 2.8 card widths
+and 0.25/0.088 is 2.84. The card is scaled to the cell on the way in
+(`SetLocalScale`), because the deck's furniture — its collider, its baked edge mesh, its
+spacing — is all built around 0.175 x 0.25 and shrinking `cardSize` instead would move all
+of it. `test-panel.mjs` reads the card height off the template's own `BoxCollider` and
+checks the emitted scale lands on 0.25, so the two cannot drift apart.
+
+The deck also lands **beside** the panel now (`Decks` at `[0.45, -0.30, 0]`), not under it:
+the loose-card grid grows downward from -0.22 and a 50-card import reaches about -0.70, so a
+deck parked below would land inside it.
 
 ## The record width was drifting
 

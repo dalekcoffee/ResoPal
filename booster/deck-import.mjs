@@ -77,18 +77,33 @@ const atg = (col, row) => [gut(col), row, 0];
 export const DECK_MIN_CARDS = 30;
 
 /**
+ * The height of a card slot in Ukilop's deck, in metres: `Deck/cardSize`.Y, read
+ * out of `/Deck` in the template, where it is [0.175, 0.25, 0.0016].
+ *
+ * The panel's own card is 0.088 tall, because that is the size a grid of loose
+ * cards wants in front of a 0.36 m panel. Dropped into the deck unchanged it is a
+ * third of the cell it sits in - the spread comes out as small cards with wide
+ * gaps, which is exactly what the first in-world import looked like. The card is
+ * scaled to the cell on its way in; the deck's own furniture (its collider, its
+ * baked edge mesh, its spacing) is all built around 0.175 x 0.25 and is left
+ * alone, which is why the CARD moves and not the cell.
+ */
+export const DECK_CARD_HEIGHT = 0.25;
+
+/**
  * @param kit  emitters from whichever document this is going into:
  *             node(name, classpath, fields, pos), refNode(name, targetSlotId, pos),
- *             strIn/intIn/boolIn(name, value, pos), and the type table T.
+ *             strIn/intIn/boolIn/f3In(name, value, pos), and the type table T.
  * @param hook ids in that document this branch has to reach:
  *             panelCards - the panel's own Cards slot (where loose cards land)
  *             deckTemplate - the grafted deck's ROOT slot
  *             decksHolder - the slot deck duplicates are parented under
+ *             cardScale - uniform scale taking a panel card to a deck card
  * @returns { nodes, entryId } - entryId is what the "all cards placed" write
  *          continues into.
  */
 export function deckImport(kit, hook) {
-  const { node, refNode, strIn, intIn, boolIn, T } = kit;
+  const { node, refNode, strIn, intIn, boolIn, f3In, T } = kit;
   const n = [];
   const push = (x) => { n.push(x); return x; };
 
@@ -209,9 +224,30 @@ export function deckImport(kit, hook) {
     { Next: null, Instance: nextCard.id, NewParent: bufDup.f.Duplicate, PreserveGlobalPosition: null }, atg(1, -2.40)));
   proxyHome.slot.Components.Data[0].Data.Next.Data = cardIn.id;
 
+  // Sit it AT the buffer. `SetParent` with PreserveGlobalPosition unwired keeps the
+  // card's LOCAL transform, and the card arrives carrying the grid position the
+  // spawn loop gave it under the panel - so every card ends up offset from its own
+  // buffer by wherever it happened to be on the panel's grid, and the deck spreads
+  // into a cloud sitting well off the holder. That is the first in-world import's
+  // "the cards are far away from it as well".
+  //
+  // The handler does exactly this and it is easy to read as a no-op: BOTH inputs
+  // are deliberately left unwired, because an unconnected ValueInput evaluates to
+  // its type's default - float3.Zero and floatQ.Identity. The node IS the reset.
+  const cardHome = push(node('sit it at the buffer', T.SetLocalPosRot,
+    { Next: null, Instance: nextCard.id, Position: null, Rotation: null }, at(0, -2.40)));
+  cardIn.slot.Components.Data[0].Data.Next.Data = cardHome.id;
+
+  // And make it the size of the slot it is in, rather than the size a loose card
+  // wants in front of the panel. See DECK_CARD_HEIGHT.
+  const cardScale = push(f3In('the deck\'s card size', hook.cardScale, atg(1, -1.80)));
+  const cardBig = push(node('and the size of a deck card', T.SetLocalScale,
+    { Next: null, Instance: nextCard.id, Scale: cardScale.id }, at(0, -2.08)));
+  cardHome.slot.Components.Data[0].Data.Next.Data = cardBig.id;
+
   const bufIn = push(node('and the buffer joins the deck', T.SetParent,
     { Next: null, Instance: bufDup.f.Duplicate, NewParent: deckCards.id, PreserveGlobalPosition: null }, at(1, -2.40)));
-  cardIn.slot.Components.Data[0].Data.Next.Data = bufIn.id;
+  cardBig.slot.Components.Data[0].Data.Next.Data = bufIn.id;
 
   const againAsync = push(node('and on to the next card, asynchronously', T.StartAsync,
     { TaskStart: null, OnStarted: null, OnFailed: null }, at(2, -2.40)));

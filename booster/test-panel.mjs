@@ -631,12 +631,34 @@ console.log(`${NEWLINE}the deck-import branch:`);
     return short(t?.type) === 'FindChildByName' && String(arg(deref(arg(t, 'Name')), 'Value')) === 'buffer';
   });
   check('a buffer is duplicated per card', !!bufDup);
-  const moveOrder = chainFrom(bufDup?.id, 6).map((c) => short(c.type));
-  check('its flux moves to Assets, then the card goes in it, then it joins the deck',
-    moveOrder[0] === 'DuplicateSlot' && moveOrder[1] === 'SetParent' &&
-    moveOrder[2] === 'SetParent' && moveOrder[3] === 'SetParent',
-    moveOrder.slice(0, 5).join(' -> '));
-  const [, toAssets, cardIn, bufIn] = chainFrom(bufDup?.id, 6);
+  const moveOrder = chainFrom(bufDup?.id, 8).map((c) => short(c.type));
+  check('its flux moves to Assets, the card goes in it, is reset and resized, then it joins the deck',
+    ['DuplicateSlot', 'SetParent', 'SetParent', 'SetLocalPositionRotation', 'SetLocalScale', 'SetParent']
+      .every((t, i) => moveOrder[i] === t),
+    moveOrder.slice(0, 7).join(' -> '));
+  const [, toAssets, cardIn, cardHome, cardBig, bufIn] = chainFrom(bufDup?.id, 8);
+
+  // A card arrives carrying the grid position the spawn loop gave it under the
+  // panel. Left alone it keeps it - SetParent preserves the LOCAL transform - and
+  // every card sits that far off its own buffer. Both inputs unwired is the reset:
+  // an unconnected ValueInput reads float3.Zero and floatQ.Identity.
+  check('the card is reset to sit AT its buffer, not where it was on the grid',
+    !byComp.has(arg(cardHome, 'Position')) && !byComp.has(arg(cardHome, 'Rotation')) &&
+    arg(cardHome, 'Instance') === arg(cardIn, 'Instance'));
+  // And scaled to the cell it now occupies: the panel's card is 0.088 tall against
+  // the deck's 0.25, so unscaled it is a third of its slot.
+  {
+    const k = arg(deref(arg(cardBig, 'Scale')), 'Value')?.map(Number) ?? [];
+    // Read off the card template's own collider - the one place the card's real
+    // size is written as a number - so this cannot pass by restating a constant.
+    const cardSlot = findSlot('card');
+    const box = (cardSlot?.Components?.Data ?? [])
+      .map((c) => byComp.get(c.Data.ID)).find((c) => short(c?.type) === 'BoxCollider');
+    const cardH = (arg(box, 'Size') || []).map(num)[1];
+    check('and scaled to the deck\'s card height, not left at the panel\'s',
+      k.length === 3 && k.every((v) => Math.abs(v - k[0]) < 1e-6) &&
+      Math.abs(k[0] * cardH - 0.25) < 1e-4, `${k.map((v) => v.toFixed(3)).join(', ')} x ${cardH}`);
+  }
   check('the buffer\'s packed flux lands in the deck Assets slot',
     String(arg(deref(arg(byComp.get(arg(toAssets, 'NewParent')), 'Name')), 'Value')) === 'Assets');
   check('the card lands inside the buffer',

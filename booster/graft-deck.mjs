@@ -75,6 +75,7 @@ const load = async (file) => {
 
 const panel = await load(PANEL);
 const deck = await load(DECK);
+const fmtExported = `pos [${(deck.doc.Object.Position?.Data ?? []).map(Number).map((v) => v.toFixed(2)).join(', ')}] scale ${Number((deck.doc.Object.Scale?.Data ?? [1])[0]).toFixed(2)}`;
 
 const nm = (s) => String(s?.Name?.Data ?? '');
 const idx = (v) => (v && typeof v === 'object') ? (v.value ?? v.valueOf?.()) : v;
@@ -132,6 +133,20 @@ surface.Components.Data.push({
 // template is. `DuplicateSlot` copies `Active` verbatim: hand it an inactive deck
 // and the copy is invisible too, with nothing downstream to turn it on.
 wholeDoc.Object.Name.Data = 'Deck';
+// ── zero the transform it was exported with ──────────────────────────────────
+// A Deck Maker export carries the world transform the object had in the session
+// it was saved from, and `DuplicateSlot` copies a template's local transform
+// verbatim. The template here came out at
+//   pos [-20.2569, 2.1762, 10.5210]  rot ~[-0.19,-0.23,-0.59,0.75]  scale 0.91
+// so the first in-world import put the deck twenty metres away, rotated, at 0.91 -
+// "the deck is far away from me". The Deck Maker itself measures
+// pos [-28.68, 2.59, 26.38] scale 0.91, from a different session, which is what
+// says the 0.91 is the same saved-in-world residue as the position rather than an
+// authored size: `Deck/cardSize` is written at 0.175 x 0.25 and means metres at
+// scale 1. All three are reset, so a duplicate lands exactly where its parent is.
+wholeDoc.Object.Position.Data = [0, 0, 0].map((v) => new Double(v));
+wholeDoc.Object.Rotation.Data = [0, 0, 0, 1].map((v) => new Double(v));
+wholeDoc.Object.Scale.Data = [1, 1, 1].map((v) => new Double(v));
 const holder = {
   ID: newId(),
   Components: { ID: newId(), Data: [] },
@@ -223,5 +238,6 @@ console.log(`\n✓ ${OUT}`);
 console.log(`  ${(bytes.length / 1048576).toFixed(2)} MB  (panel ${(await readFile(PANEL)).length / 1048576 | 0}+ MB, deck folded in)`);
 console.log(`  "${SLOT_NAME}" holder inactive, deck active, ${cards} cards, ids from ${newId.start.toString(16)}`);
 console.log(`  ${SPREAD_VAR} bound to the spread toggle; ${bound} importer reference(s) pointed at the deck`);
+console.log(`  deck transform reset to origin / identity / scale 1 (it exported at ${fmtExported})`);
 console.log(`  ${mapType.appended.length} types appended, ${carried.length} blobs carried, ${absent.length} left to the bake`);
 console.log(`  ${wholeDoc.Assets.length} asset entries folded into doc.Assets\n`);
