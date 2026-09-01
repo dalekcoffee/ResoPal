@@ -873,6 +873,49 @@ is `undefined`. Take it off the emitted component — `cardGrab.comp.Data.Enable
 
 `test-panel.mjs` now fails on any of the three, including the null target.
 
+### The fourth one: the slot TAG, which is the gate the deck applies first
+
+Those three were all real and none of them was enough — placement was still broken after all
+three shipped. The one that actually stops a deck taking a card is not a component at all.
+
+`GrabbableReceiverSurface.GetReceiveDistance` opens with:
+
+```cs
+if (!TagFilter.ValidateTag(grabbable.Slot)) return null;
+```
+
+and both of the deck's surfaces — `Deck/Surface/cards` and `Deck/Surface/cards/Cards` — carry
+a **Whitelist** `TagFilter` containing exactly one entry, `"Card"`. Whitelist mode is:
+
+```cs
+case ListFilterMode.Whitelist:
+    if (slot.Tag != null && List.Contains(slot.Tag)) return true;
+    return false;
+```
+
+Our card slot had **no tag at all**, so it was refused on the first line — before position,
+distance, direction or collider were looked at. `InformOfReleasedObjects` collects the
+surface, asks it for a receive distance, gets `null`, finds no receiver and drops the card.
+All 52 of Ukilop's cards carry `Tag = "Card"` on the `Card` slot itself; ours carried it on
+nothing. `slot()` has always taken a `tag` argument and the card was the one place it mattered.
+
+**These are two independent gates and one does not imply the other:**
+
+| | what it is | who reads it | what it gates |
+|---|---|---|---|
+| `Snapper.Keywords` | a component field | `SnapTarget.Whitelisted` | snapping to a **playmat** |
+| `Slot.Tag` | a slot property | `TagFilter.ValidateTag` | being received by a **deck** |
+
+Both say `"Card"`, which is exactly why this was easy to miss — the Snapper's keyword was
+right the whole time and looks like it covers the case.
+
+`test-graft-deck.mjs` reads the whitelist **out of the deck** in the shipped package and
+checks our card's tag against it, rather than restating `"Card"` on our side: the two have to
+agree and only one of them is ours. Match the exact classpath when finding the surfaces —
+`GrabbableReceiverSurface` as a substring also matches the flux's
+`OnGrabbableReceiverSurfaceReceived` nodes and its `GlobalRef<GrabbableReceiverSurface>`s,
+which found ten surfaces where there are two.
+
 ### What is deliberately NOT copied, and why it is safe
 
 Ukilop's card also carries `ValueCopy<bool>`, a `BooleanReferenceDriver<IField<bool>>` and a

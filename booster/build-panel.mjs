@@ -670,7 +670,19 @@ const cardTemplate = slot('card', [
   slot('CARD/url -> texture', [cardSrc.comp, cardSrcRef.comp], [0, 0, 0]),
   slot('as a Uri', [cardUri.comp], [COL, 0, 0]),
   slot('drive the texture URL', [cardDrive.comp, cardDriveProxy.comp], [COL * 2, 0, 0]),
-]);
+// ── the slot TAG, which is what a deck actually filters on ───────────────────
+// `GrabbableReceiverSurface.GetReceiveDistance` starts with
+// `TagFilter.ValidateTag(grabbable.Slot)`, and both of the deck's surfaces are a
+// WHITELIST containing exactly one entry, "Card". `ValidateTag` in whitelist mode
+// is `slot.Tag != null && List.Contains(slot.Tag)` - so an untagged card is
+// rejected on the first line, before position, distance or collider are looked
+// at, and the deck can never be handed a card. Every one of Ukilop's 52 cards
+// carries this tag on the Card slot itself.
+//
+// This is a SECOND, separate gate from the Snapper's `Keywords`. The keyword is
+// what a SnapTarget whitelists (playmats); the tag is what a receiver surface
+// whitelists (decks). Having one does not get you the other.
+], 'Card');
 // The CARD stays active and its HOLDER is switched off. `DuplicateSlot` calls
 // `slot.Duplicate()`, which copies `Active` verbatim - duplicating an inactive
 // card gives an inactive card, and nothing in the spawn chain turns it back on.

@@ -74,6 +74,13 @@ any receiver surface heard about it; and the card's space was `CARD`, not `Card`
 of the deck's per-card writes resolved to nothing. Match a known-good artifact field for field
 before assuming an absent member is harmless.
 
+**A deck reads the card's slot TAG, not just its Snapper keyword.** Two independent gates that
+both say `"Card"`: `Snapper.Keywords` is what a playmat's `SnapTarget` whitelists, and
+`Slot.Tag` is what a deck's `GrabbableReceiverSurface` whitelists —
+`GetReceiveDistance` returns null on `!TagFilter.ValidateTag(slot)` before anything else is
+considered. Having the keyword right is why the missing tag went unnoticed through three
+rounds of fixes.
+
 **BSON deserializes numbers as `Double` objects.** Assigning a `Double` where a plain JS number is
 expected is a silent no-op. `AlphaCutoff` was never applied twice for this reason.
 

@@ -337,6 +337,14 @@ check('and a deck can recognise it as a card',
 // "to keep its default" gets the opposite of the default you meant. Three of
 // these shipped at once and between them a card could not be picked up, put
 // down on a deck, or snapped to a playmat.
+// The tag is a gate of its own, and the FIRST one a deck applies:
+// `GrabbableReceiverSurface.GetReceiveDistance` opens with
+// `TagFilter.ValidateTag(grabbable.Slot)`, and the deck's two surfaces whitelist
+// exactly "Card". An untagged card is refused before anything else is looked at.
+// Separate from the Snapper keyword - keyword is playmats, tag is decks.
+check('the card slot is tagged Card, or no deck will take it back',
+  String(tmpl?.Tag?.Data ?? '') === 'Card', JSON.stringify(tmpl?.Tag?.Data ?? null));
+
 const allT = (t) => tmplComps.filter((c) => c.t === t);
 const snapRadius = Number(hasT('Snapper')?.d.SnapCheckRadius?.Data ?? 0);
 check('the snap radius is not zero, or it finds no deck and no playmat', snapRadius > 0,

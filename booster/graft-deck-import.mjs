@@ -282,7 +282,23 @@ for (const t of doc.Types.map(String)) {
   // variable the deck writes happily, to no effect.
   attach(FE + 'DynamicField<bool>', {
     VariableName: 'Card/Grabbable', TargetField: String(grab.Data.Enabled.ID), OverrideOnLink: false });
-  console.log('  card given the deck contract: Card space, Card/index, Card/Grabbable; Snapper radius 0.01');
+
+  // ── the slot TAG, which is what the deck actually filters on ──────────────
+  // `GrabbableReceiverSurface.GetReceiveDistance` opens with
+  // `TagFilter.ValidateTag(grabbable.Slot)`, and BOTH of the deck's surfaces
+  // (`Deck/Surface/cards` and `.../Cards`) are a WHITELIST of exactly one entry,
+  // "Card". Whitelist mode is `slot.Tag != null && List.Contains(slot.Tag)`, so
+  // an untagged card is rejected on the first line - before position, distance
+  // or collider are considered - and the deck can never be handed one back.
+  // All 52 of Ukilop's cards carry this on the Card slot itself.
+  //
+  // A SECOND gate, separate from the Snapper's `Keywords`: the keyword is what a
+  // SnapTarget whitelists (playmats), the tag is what a receiver surface
+  // whitelists (decks). Having one does not get you the other, and the card
+  // needed both.
+  if (cardSlot.Tag === null || cardSlot.Tag === undefined) cardSlot.Tag = fd('Card');
+  else cardSlot.Tag.Data = 'Card';
+  console.log('  card given the deck contract: tag "Card", Card space, Card/index, Card/Grabbable; Snapper radius 0.01');
 }
 
 const emitted = [];

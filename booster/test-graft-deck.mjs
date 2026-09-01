@@ -121,6 +121,46 @@ note(`${cards.length} cards`);
     `${bound}/${refs} bound`);
 }
 
+// ── the card's tag against the deck's own whitelist ──────────────────────────
+// Read the filter OUT OF THE DECK rather than restating "Card" here, because the
+// two have to agree and only one of them is ours. Every
+// `GrabbableReceiverSurface.GetReceiveDistance` opens with
+// `TagFilter.ValidateTag(grabbable.Slot)`, which in Whitelist mode is
+// `slot.Tag != null && List.Contains(slot.Tag)` - so a card whose tag is not in
+// the list is refused before position or collider are even considered, and the
+// deck can never be handed one back. This is a separate gate from the Snapper's
+// keyword: keyword is what a playmat's SnapTarget whitelists, tag is what a deck's
+// receiver surface whitelists.
+{
+  // The exact classpath, not a substring: the deck's flux carries
+  // `OnGrabbableReceiverSurfaceReceived` nodes and `GlobalRef<...>`s that all
+  // contain the name and none of which is a surface. Matching loosely found ten
+  // and called eight of them a refusal.
+  const SURFACE = '[FrooxEngine]FrooxEngine.GrabbableReceiverSurface';
+  const surfaces = [];
+  (function w(sl) {
+    for (const c of sl.Components?.Data ?? [])
+      if (typeName(c) === SURFACE) surfaces.push(c);
+    for (const c of kids(sl)) w(c);
+  })(doc.Object);
+  check('the deck has its receiver surfaces', surfaces.length > 0, `${surfaces.length}`);
+
+  let card = null;
+  (function w(sl) { if (nm(sl) === 'card') card = sl; for (const c of kids(sl)) w(c); })(doc.Object);
+  const tag = card?.Tag?.Data == null ? null : String(card.Tag.Data);
+  check('the imported card template carries a tag at all', tag !== null && tag !== '',
+    JSON.stringify(tag));
+
+  const accepts = (f) => {
+    const list = (f?.List?.Data ?? []).map((e) => String(e?.Data ?? e));
+    const listed = tag !== null && list.includes(tag);
+    return String(f?.Mode?.Data) === 'Blacklist' ? !listed : listed;
+  };
+  const refused = surfaces.filter((s) => !accepts(s.Data.TagFilter));
+  check('and every one of the deck\'s surfaces would accept it', refused.length === 0,
+    `${refused.length}/${surfaces.length} would refuse tag ${JSON.stringify(tag)}`);
+}
+
 // Every card must still reach a mesh, a material and a texture that exist here.
 const assetById = new Map((doc.Assets ?? []).map((a) => [a.Data.ID, a]));
 const matById = new Map((deckAssets?.Components?.Data ?? []).map((c) => [c.Data.ID, c]));
