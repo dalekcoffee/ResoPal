@@ -213,6 +213,36 @@ check('every card carries its own Card/url to be written', artOk === cards.lengt
     textures.size === cards.length, `${textures.size} textures for ${cards.length} cards`);
 }
 
+// ── the corner mask ──────────────────────────────────────────────────────────
+// The front FACE of a Ukilop card is a flat 4-vertex quad spanning the whole card
+// - only the 528-vertex rim is rounded, at 0.01750 m - so the corner is whatever
+// the art's alpha leaves after Cutout at 0.72, and a raw card image guarantees
+// nothing. Every front material masks against the shared back image, whose corners
+// decode to alpha 0, at the SAME ST as its own art: the mesh UVs are atlas-cell
+// coordinates, so a mask left at (1,1)/(0,0) samples one cell of a card-sized
+// image and comes out as noise. That is how the first attempt at this failed.
+{
+  let masked = 0, aligned = 0, sharedMask = new Set();
+  for (const buf of cards) {
+    const card = kids(buf)[0], visual = card && kids(card)[0];
+    const r = (visual?.Components?.Data ?? []).find((c) => /\.MeshRenderer$/.test(typeName(c)));
+    const id = r?.Data?.Materials?.Data?.[1]?.Data;
+    const mat = [...(doc.Assets ?? []), ...(visual ? kids(visual).flatMap((s) => s.Components?.Data ?? []) : [])]
+      .find((c) => c?.Data?.ID === id);
+    if (!mat) continue;
+    const mk = mat.Data.MaskTexture?.Data;
+    if (!mk || String(mat.Data.MaskMode?.Data) !== 'MultiplyAlpha') continue;
+    masked++; sharedMask.add(String(mk));
+    const st = (k) => (mat.Data[k]?.Data ?? []).map(num).join(',');
+    if (st('MaskScale') === st('TextureScale') && st('MaskOffset') === st('TextureOffset')) aligned++;
+  }
+  check('every card masks its corners', masked === cards.length, `${masked}/${cards.length}`);
+  check('with the mask on the same ST as its art, or it samples one atlas cell',
+    aligned === cards.length, `${aligned}/${cards.length}`);
+  check('and one shared mask image, not one per card', sharedMask.size === 1,
+    `${sharedMask.size} mask textures`);
+}
+
 // What the importer DOES need from the stock cards is that they can be thrown
 // away cleanly. Ukilop built the hook: each buffer carries a DestroyProxy aimed at
 // that card's driver proxy in `/Deck/Assets`, so destroying the buffer takes its

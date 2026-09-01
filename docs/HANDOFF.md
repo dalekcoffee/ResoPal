@@ -1093,54 +1093,64 @@ The stock buffers already carry `OrderOffset` 0..51, so trimming the tail leaves
 and shuffle works with nothing added. The loose cards are only ever the carrier for the urls
 and are destroyed once read.
 
-### The corners did NOT close with it — and here is why
+### The corners: the front face is a flat quad, and the fix is a MASK
 
-Recorded because the claim was made in the same breath as the rewrite and was wrong.
+Recorded because "square corners close with it" was claimed in the same breath as the
+rewrite and was wrong, and because three attempts before this one guessed instead of
+measuring.
 
-A Ukilop card's front face is a **flat 4-vertex quad**. Measured off the MeshX of a card
-pulled out of the Green example:
-
-```
-submesh 0: 512 Triangles, 528 verts   uv u[0,1]      v[0,1]          the EDGE, rounded
-submesh 1:   2 Triangles,   4 verts   uv u[0,0.1]    v[0.2857,0.4286]  the FRONT, one cell
-submesh 2:   2 Triangles,   4 verts   uv u[0,1]      v[0,1]          the BACK
-```
-
-Only the **edge** is rounded geometry. The front's rounded corner comes entirely from the
-**art's alpha**, cut by `BlendMode: Cutout` at `AlphaCutoff 0.72`. So swapping our quad for
-Ukilop's mesh could never have fixed the corners on its own — the front was a quad either way.
-
-What is confirmed on our side: the per-card front material is `Cutout` at 0.72, cloned from
-Ukilop's own, and the ST remap is verified per card against the mesh's UV bounds. The one
-field that differed was the texture's `PreferredProfile` — ours was `sRGB` where the deck's
-is `sRGBAlpha` — and that is fixed by cloning the deck's own texture rather than the panel
-card's. **It is not claimed as the cause**: `ColorProfileHelper` shows the two differ only in
-whether the alpha channel is gamma-transformed, and neither drops alpha.
-
-The unresolved question is whether the card art carries alpha at the width we ask for.
-The evidence points both ways and neither side can be settled from this machine (no egress
-to palify.org):
-
-* **For:** `imgfix.js` exists solely to fix "antialiased edge pixels" and carries alpha
-  through untouched; nothing in `compose.js` draws a rounded rect; and the Green/Blue decks
-  are baked by our site from that art and DO have round corners.
-* **Against:** the note below this section records "Palify's art is a square image with no
-  alpha", apparently measured earlier.
-
-They cannot both be right. `build-deck-probe.mjs variants=<CODE>` settles it in one drag:
-four copies of one card, differing only in the front texture setup —
+**The geometry.** Off the MeshX of a card pulled out of the Green example:
 
 ```
-card 0  art w=512,  sRGB       what the panel ships
-card 1  art w=512,  sRGBAlpha  the deck's own profile
-card 2  art w=1024, sRGBAlpha  the width the SITE bakes from
-card 3  DefaultBack.png on the FRONT face - a KNOWN-ALPHA control
+submesh 0: 512 Triangles, 528 verts  x[-0.1750,0.1750] y[-0.2500,0.2500] z[-0.0016,0.0016]
+submesh 1:   2 Triangles,   4 verts  the WHOLE card, flat, at z=-0.0016   <- the front FACE
+submesh 2:   2 Triangles,   4 verts  the WHOLE card, flat, at z=+0.0016   <- the back FACE
 ```
 
-Card 3 is the one that decides it. Round there and square on 0–2 means the mesh, the
-material and the ST are all sound and the art has no alpha at that width. Square on all four
-means the fault is in the path and the art is innocent. **Do not change anything about the
-corners again without running it.**
+Only submesh 0 — the rim — is rounded. Its outline runs straight up the right edge to
+y = 0.2325 and then curves, so the **corner radius is 0.01750 m**, 5% of the card's width.
+Both faces are plain rectangles with square corners.
+
+So the rounded corner of a card FACE is not geometry at all. It is whatever the front
+texture's alpha leaves behind after `BlendMode: Cutout` at `AlphaCutoff 0.72`. The Deck
+Maker's `radius` slider shapes the RIM; it never touches the texture, which it passes
+straight through from its `FrontTexture` input to the baked material. Ukilop gets rounded
+faces because the atlas he is handed already has rounded transparent corners.
+
+We hand each card a raw card image, and nothing guarantees that alpha — so a square corner
+on the face pokes out past the rounded rim. That is what "harsh corners" is.
+
+**The fix is the material's own feature, and Ukilop's card already has it half-set:**
+`MaskMode` is `MultiplyAlpha` and `MaskTexture` is null. `UnlitMaterial` writes
+`_MaskTex_ST = float4(MaskScale, MaskOffset)` and multiplies the texture's alpha by the
+mask's. So every front material now masks against the **shared back image** —
+`DefaultBack.png`, whose corners decode to alpha 0 against 255 at the centre (measured, by
+inflating the PNG and reading the palette `tRNS`) — and the corner is cut whatever the art
+does. Where the art is already transparent the mask is too, so it cannot make a good card
+worse.
+
+**The mask must carry the SAME ST as the texture.** The mesh UVs are atlas-CELL
+coordinates, so a mask left at `(1,1)/(0,0)` samples one cell of a card-sized image and
+comes out as noise. That is how the first attempt at this failed — "corners still square,
+and now image fronts do not load" — and it is checked now, per card, in
+`test-graft-deck.mjs`.
+
+The panel's own loose card takes the same mask at `(1,1)/(0,0)`, because its quad's UVs
+already run 0..1.
+
+**What is still not known** is whether the card art has alpha of its own. It cannot be
+settled from this machine — no egress to palify.org — and the evidence points both ways:
+every committed `assets/rot/w*/*.webp` carries an `ALPH` chunk at all three widths, which
+says the art does have transparency; the note below says it does not. The mask makes the
+answer stop mattering. `build-deck-probe.mjs variants=<CODE>` still isolates it if it ever
+does:
+
+```
+card 0  art w=512,  sRGB, NO MASK  the "before"
+card 1  art w=512,  sRGBAlpha, MASKED  the fix
+card 2  art w=1024, sRGBAlpha, MASKED
+card 3  DefaultBack.png on the FRONT face, MASKED  a known-alpha control
+```
 
 ### Two limits, recorded not solved
 

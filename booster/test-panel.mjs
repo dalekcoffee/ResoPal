@@ -337,6 +337,21 @@ check('and a deck can recognise it as a card',
 // "to keep its default" gets the opposite of the default you meant. Three of
 // these shipped at once and between them a card could not be picked up, put
 // down on a deck, or snapped to a playmat.
+// The corner is not geometry. A quad has four square corners and so does the FRONT
+// FACE of Ukilop's own baked card - measured off its MeshX, the face is 4 verts
+// spanning the whole card and only the 528-vertex rim is rounded. So the corner is
+// whatever the art's alpha leaves after Cutout, and the material masks against the
+// back image, whose corners are alpha 0, to guarantee one.
+{
+  const mat = hasT('UnlitMaterial');
+  const backTex = ((tmpl?.Children || []).find((c) => nm(c) === 'back')?.Components?.Data ?? [])
+    .find((c) => short(TYPES[num(c.Type)]) === 'StaticTexture2D');
+  check('the card front masks its corners', String(mat?.d.MaskMode?.Data) === 'MultiplyAlpha' &&
+    !!mat?.d.MaskTexture?.Data, String(mat?.d.MaskMode?.Data));
+  check('against the back image, the one picture here with alpha corners',
+    String(mat?.d.MaskTexture?.Data) === String(backTex?.Data?.ID));
+}
+
 // The tag is a gate of its own, and the FIRST one a deck applies:
 // `GrabbableReceiverSurface.GetReceiveDistance` opens with
 // `TagFilter.ValidateTag(grabbable.Slot)`, and the deck's two surfaces whitelist

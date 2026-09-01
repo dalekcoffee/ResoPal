@@ -513,8 +513,20 @@ const cardTexture = comp(T.Texture, {
 });
 // Cutout at 0.72, the values the deck bake settled on: Palify art carries its
 // rounded corners in the alpha, and is matted against white so 0.5 leaves a rim.
+// Cutout at 0.72 is only half of it. The card's rounded corner is not geometry -
+// a quad has four square corners, and so does the FRONT FACE of Ukilop's baked
+// card, measured off its MeshX: only the 528-vertex rim is rounded, at 0.01750 m.
+// The corner is whatever the art's alpha leaves behind. So the material also
+// carries a MASK - `DefaultBack.png`, whose corners decode to alpha 0 against 255
+// at the centre - and `MultiplyAlpha` multiplies the art's alpha by it. The corner
+// is then cut whatever the art does, and where the art is already transparent the
+// mask is too, so it cannot make a good card worse.
+//
+// `MaskTexture` is filled in below, once the back image exists; the quad's UVs run
+// 0..1 so the mask needs no ST of its own.
 const cardMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: cardTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
+  MaskTexture: null, MaskScale: V2(1, 1), MaskOffset: V2(0, 0), MaskMode: 'MultiplyAlpha',
   UseVertexColors: false, ZWrite: 'Auto',
 });
 // QuadMesh carries its OWN Rotation, and this one field decides which way a card
@@ -592,6 +604,9 @@ const backTexture = comp(T.Texture, {
   WrapModeU: 'Clamp', WrapModeV: 'Clamp', PowerOfTwoAlignThreshold: D(0.05),
   CrunchCompressed: true, MipMaps: true, KeepOriginalMipMaps: false, MipMapFilter: 'Box', Readable: false,
 });
+// The card front masks against this same image - see `cardMat` above.
+cardMat.comp.Data.MaskTexture.Data = backTexture.id;
+
 const backMat = comp(T.Unlit, {
   TintColor: C([1, 1, 1, 1]), Texture: backTexture.id, BlendMode: 'Cutout', AlphaCutoff: D(0.72),
   UseVertexColors: false, ZWrite: 'Auto',

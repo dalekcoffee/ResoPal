@@ -83,6 +83,15 @@ front material at its cell's ST and a texture driven from `Card/url`; the import
 counts, trims and writes urls. Six separate bugs came from the design before it, which spawned
 our own quads and moved them in - every one of them a property a Ukilop card already had.
 
+**A card's rounded corner is not geometry — it is the texture's alpha.** Both FACES of a Deck
+Maker card are flat 4-vertex rectangles; only the 528-vertex rim is rounded, at 0.01750 m,
+5% of the card's width. The face's corner is whatever the art's alpha leaves after
+`BlendMode: Cutout` at 0.72, and the Deck Maker's `radius` slider shapes the RIM only — it
+passes `FrontTexture` through untouched. So every front material carries a `MaskTexture`
+(the back image, whose corners are alpha 0) at `MaskMode: MultiplyAlpha`, **on the same ST as
+the texture** — the mesh UVs are atlas-cell coordinates, so a mask at `(1,1)/(0,0)` samples
+one cell of a card-sized image and comes out as noise.
+
 **A deck reads the card's slot TAG, not just its Snapper keyword.** Two independent gates that
 both say `"Card"`: `Snapper.Keywords` is what a playmat's `SnapTarget` whitelists, and
 `Slot.Tag` is what a deck's `GrabbableReceiverSurface` whitelists —

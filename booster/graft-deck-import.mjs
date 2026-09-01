@@ -307,6 +307,30 @@ for (const t of doc.Types.map(String)) {
   if (cardSlot.Tag === null || cardSlot.Tag === undefined) cardSlot.Tag = fd('Card');
   else cardSlot.Tag.Data = 'Card';
 
+  // ── the corner mask ───────────────────────────────────────────────────────
+  // The card's rounded corner is not geometry. A quad has four square corners and
+  // so does the FRONT FACE of Ukilop's own baked card - measured off its MeshX,
+  // the face is 4 verts spanning the whole card and only the 528-vertex rim is
+  // rounded, at 0.01750 m. The corner is whatever the art's alpha leaves after
+  // `Cutout` at 0.72, and nothing guarantees a raw card image has one.
+  //
+  // So the front material masks against the card BACK image - `DefaultBack.png`,
+  // whose corners decode to alpha 0 against 255 at the centre - with
+  // `MaskMode: MultiplyAlpha`. The quad's UVs run 0..1, so the mask takes no ST of
+  // its own. Where the art is already transparent the mask is too, so this cannot
+  // make a good card worse.
+  {
+    const front = cardSlot.Components.Data.find((c) => typeIs(c, FE + 'UnlitMaterial'));
+    if (!front) throw new Error('the card template has no front material to mask');
+    const backSlot = (cardSlot.Children ?? []).find((c) => nm(c) === 'back');
+    const backTex = (backSlot?.Components?.Data ?? []).find((c) => typeIs(c, FE + 'StaticTexture2D'));
+    if (!backTex) throw new Error('the back face has no texture to mask with');
+    withFields(front, FE + 'UnlitMaterial', {
+      MaskTexture: String(backTex.Data.ID), MaskScale: [D(1), D(1)], MaskOffset: [D(0), D(0)],
+      MaskMode: 'MultiplyAlpha',
+    });
+  }
+
   // ── re-author the card THIN, so the scale into a deck cell can be uniform ──
   // The packed card's collider is 0.002 deep and the scale that took it into a
   // cell was [2.84, 2.84, 0.7956] - X and Y to the cell, Z down to the buffer

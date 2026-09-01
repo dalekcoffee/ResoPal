@@ -157,14 +157,14 @@ const ART_VERSION = args.artv || '2';
 
 // The four setups the corner probe compares. See `variants=` above.
 const VARIANTS = [
-  { url: (c) => `${PROXY}/img/${c}?w=512&v=${ART_VERSION}`,  profile: 'sRGB',
-    say: { what: 'art w=512, sRGB       (what the panel ships)' } },
+  { url: (c) => `${PROXY}/img/${c}?w=512&v=${ART_VERSION}`,  profile: 'sRGB', mask: false,
+    say: { what: 'art w=512, sRGB, NO MASK  (the "before" - what was harsh)' } },
   { url: (c) => `${PROXY}/img/${c}?w=512&v=${ART_VERSION}`,  profile: 'sRGBAlpha',
-    say: { what: "art w=512, sRGBAlpha  (the deck's own profile)" } },
+    say: { what: "art w=512, sRGBAlpha, MASKED  (the fix)" } },
   { url: (c) => `${PROXY}/img/${c}?w=1024&v=${ART_VERSION}`, profile: 'sRGBAlpha',
-    say: { what: 'art w=1024, sRGBAlpha (the width the site bakes from)' } },
+    say: { what: 'art w=1024, sRGBAlpha, MASKED' } },
   { url: () => BACK_URL,                                     profile: 'sRGBAlpha',
-    say: { what: 'DefaultBack.png on the front (KNOWN-ALPHA control)' } },
+    say: { what: 'DefaultBack.png on the front, MASKED (control)' } },
 ];
 
 const GRID_COLS = 10, GRID_ROWS = 7;              // baked into the mesh UVs; see docs/PIPELINE.md
@@ -392,6 +392,39 @@ CODES.forEach((code, i) => {
   mat.Data.TextureOffset.Data = offset.map((n) => new Double(n));
   mat.Data.BlendMode.Data = 'Cutout';
   mat.Data.AlphaCutoff.Data = new Double(CUTOFF);
+
+  // ── the corner mask ─────────────────────────────────────────────────────────
+  // A Ukilop card's FRONT FACE IS A FLAT 4-VERTEX QUAD spanning the whole card -
+  // measured off the MeshX, positions x[-0.175,0.175] y[-0.25,0.25]. Only the
+  // 528-vertex rim is rounded, and its arc measures 0.01750 m, 5% of the card's
+  // width. So the corner of the FACE is not geometry at all: it is whatever the
+  // front texture's alpha leaves behind after `BlendMode: Cutout` at 0.72. Ukilop
+  // gets away with it because the atlas he is handed already has rounded
+  // transparent corners; the deck maker's `radius` slider shapes the RIM.
+  //
+  // We hand each card a raw card image instead, so nothing guarantees that alpha -
+  // and a square corner on the face pokes out past the rounded rim, which is what
+  // "harsh corners" is.
+  //
+  // `UnlitMaterial` has the answer built in and Ukilop's own material already has
+  // it half-set: `MaskMode` is `MultiplyAlpha` and `MaskTexture` is null. Point the
+  // mask at the DECK'S OWN BACK TEXTURE - `DefaultBack.png`, whose corners decode
+  // to alpha 0 against 255 at the centre - and the shader multiplies the art's
+  // alpha by it. The corner is then cut whatever the art does.
+  //
+  // The mask needs the SAME ST as the texture, and that is where the last attempt
+  // at this went wrong: the mesh UVs are ATLAS-CELL coordinates, so a mask left at
+  // (1,1)/(0,0) samples one cell of a card-sized image and comes out as noise.
+  //
+  // It cannot make a good card worse: where the art is already transparent the
+  // mask is too, and the interior of the mask is opaque.
+  // `variants` can switch the mask off, so the probe keeps a "before" to compare.
+  if (!args.variants || VARIANTS[i].mask !== false) {
+    mat.Data.MaskTexture.Data = backTex.Data.ID;
+    mat.Data.MaskScale.Data = scale.map((n) => new Double(n));
+    mat.Data.MaskOffset.Data = offset.map((n) => new Double(n));
+    mat.Data.MaskMode.Data = 'MultiplyAlpha';
+  }
   matHome.push(mat);
 
   mats[FRONT_SLOT].Data = mat.Data.ID;
