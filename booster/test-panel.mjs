@@ -331,6 +331,34 @@ for (const t of ['BoxCollider', 'Grabbable', 'Snapper'])
 check('and a deck can recognise it as a card',
   (hasT('Snapper')?.d.Keywords?.Data || []).some((k) => String(k?.Data ?? k) === 'Card'));
 
+// ── the fields whose ABSENCE is the bug ──────────────────────────────────────
+// `OnAwake` does not run on load. An omitted `Sync<T>` comes back as the TYPE
+// default, not the value the constructor would have set - so a member left out
+// "to keep its default" gets the opposite of the default you meant. Three of
+// these shipped at once and between them a card could not be picked up, put
+// down on a deck, or snapped to a playmat.
+const allT = (t) => tmplComps.filter((c) => c.t === t);
+const snapRadius = Number(hasT('Snapper')?.d.SnapCheckRadius?.Data ?? 0);
+check('the snap radius is not zero, or it finds no deck and no playmat', snapRadius > 0,
+  `SnapCheckRadius ${snapRadius}`);
+check('it is receivable, or a receiver surface never hears the release',
+  hasT('Grabbable')?.d.Receivable?.Data === true);
+check('and it is dropped when its Grabbable is switched off',
+  hasT('Grabbable')?.d.DropOnDisable?.Data === true);
+
+// The deck writes `Card/index` and `Card/Grabbable` into a space called `Card`.
+// Ours was called `CARD` - a different name - so every one of those writes
+// resolved to no space and did nothing. Both spaces live on the slot now.
+const spaces = allT('DynamicVariableSpace').map((c) => String(c.d.SpaceName?.Data));
+check('it has the deck\'s Card space as well as its own CARD space',
+  spaces.includes('Card') && spaces.includes('CARD'), spaces.join(', '));
+const varNamed = (n) => tmplComps.find((c) => String(c.d.VariableName?.Data ?? '') === n);
+check('with Card/index for the deck to order by', !!varNamed('Card/index'));
+const grabVar = varNamed('Card/Grabbable');
+check('and Card/Grabbable for the deck to gate grabbing with', !!grabVar);
+check('which points at the Grabbable\'s own Enabled, not at nothing',
+  !!grabVar && String(grabVar.d.TargetField?.Data) === String(hasT('Grabbable')?.d.Enabled?.ID));
+
 // The collider follows the quad instead of being a fixed rectangle, because
 // TextureSizeDriver rewrites that quad for landscape cards - BP01 has 19, and a
 // portrait collider on a landscape card is a hit area hanging off both ends.

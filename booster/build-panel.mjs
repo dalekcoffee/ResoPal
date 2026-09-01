@@ -197,6 +197,8 @@ const T = {
   Grabbable: FE + 'Grabbable',
   ObjectRoot: FE + 'ObjectRoot',
   VarSpace: FE + 'DynamicVariableSpace',
+  IntVar: FE + 'DynamicValueVariable<int>',
+  BoolField: FE + 'DynamicField<bool>',
   StrVar: FE + 'DynamicValueVariable<string>',
   F3x3Var: FE + 'DynamicValueVariable<float3x3>',
   VarDriver: FE + 'DynamicValueVariableDriver<string>',
@@ -611,16 +613,58 @@ const cardCollider = comp(T.BoxCollider, {
   Offset: V3(0, 0, 0), Type: 'Static', Mass: D(1),
   CharacterCollider: false, IgnoreRaycasts: false, Size: V3(CARD_W, CARD_H, 0.002),
 });
-const cardGrab = comp(T.Grabbable, { Scalable: false, ReparentOnRelease: true, PreserveUserSpace: true });
-// Keyword "Card" is what a deck's receiver surface looks for. Nothing uses it
-// yet - the deck holder is the next piece - but a card that cannot be recognised
-// as a card would have to be rebuilt to join one.
-const cardSnapper = comp(T.Snapper, { Keywords: pf.list(['Card']) });
+// `Receivable` and `DropOnDisable` are the two members `Grabbable.OnAwake` turns
+// on, and OnAwake does not run on load: an omitted `Sync<bool>` loads as FALSE.
+// A card with `Receivable` false is dropped from `Grabber._grabbedObjects` on
+// release (Grabber.cs:372) before `InformOfReleasedObjects` runs, so no receiver
+// surface ever hears about it - the deck could not be given a card back, and
+// neither could anything else. There is a legacy rescue in `Grabbable.OnLoading`,
+// but it only fires at type version 0, and we now write the true version.
+// The rest of the members match a Ukilop card already, by being type defaults.
+const cardGrab = comp(T.Grabbable, {
+  Scalable: false, ReparentOnRelease: true, PreserveUserSpace: true,
+  DropOnDisable: true, Receivable: true,
+});
+// ── the Snapper, stated in full ──────────────────────────────────────────────
+// Keyword "Card" is what a deck's receiver surface and a playmat's snap targets
+// both look for; it is a defined standard and every deck in the wild uses it.
+//
+// The other four fields used to be left out, and `SnapCheckRadius` is why a card
+// would not snap to anything: `Snapper.OnAwake` sets it to 0.01, but an omitted
+// `Sync<float>` loads as ZERO, and a snap radius of zero finds no target ever.
+// Read off a known-good deck rather than reasoned about - Ukilop's cards carry
+// exactly these five values, and ours now match them field for field.
+const cardSnapper = comp(T.Snapper, {
+  UseBoundingBoxCenter: false, SnapCheckRadius: D(0.01), CheckStaticColliders: false,
+  SnapTargetWhitelist: [], Keywords: pf.list(['Card']),
+});
+
+// ── the deck's per-card contract ─────────────────────────────────────────────
+// A Ukilop card carries a `Card` space with `Card/index` and `Card/Grabbable`, and
+// the deck writes both: the index is what it orders by, and `Card/Grabbable` is
+// how it turns grabbing on for the cards you are allowed to pick up and off for
+// the rest. Our card had neither - its own space is `CARD`, a DIFFERENT name - so
+// every one of those writes landed on no space at all, and an imported card could
+// not be taken out of the deck or put back into it.
+//
+// `CARD` stays as it is: it is the panel's own space, holding `CARD/url`, and
+// GRAPH.md's warning about keeping it off the panel still applies. The two spaces
+// are named differently and coexist on the slot.
+const cardDeckSpace = comp(T.VarSpace, { SpaceName: 'Card', OnlyDirectBinding: true });
+const cardIndex = comp(T.IntVar, { VariableName: 'Card/index', Value: I(0), OverrideOnLink: false });
+// `comp()` only records a field id in `.f` for members it WRITES; `Enabled` comes
+// from the component header, so `cardGrab.f.Enabled` is undefined and this would
+// have shipped a DynamicField pointing at nothing - a variable the deck writes
+// happily, to no effect. Take the id off the emitted component.
+const cardGrabVar = comp(T.BoolField, {
+  VariableName: 'Card/Grabbable', TargetField: cardGrab.comp.Data.Enabled.ID, OverrideOnLink: false,
+});
 
 const cardTemplate = slot('card', [
   cardVarSpace.comp, cardUrlVar.comp, cardTexture.comp, cardMat.comp,
   cardMesh.comp, cardRenderer.comp, cardSize.comp,
   cardCollider.comp, cardGrab.comp, cardSnapper.comp,
+  cardDeckSpace.comp, cardIndex.comp, cardGrabVar.comp,
 ], [0, 0, 0], [
   backFace,
   slot('CARD/url -> texture', [cardSrc.comp, cardSrcRef.comp], [0, 0, 0]),
@@ -1312,10 +1356,16 @@ const res = await pf.exportPackage({
   name: 'ResoPal Panel',
   root, assets,
   embeddedAssets: [{ hash: FONT_HASH, bytes: fontBytes }, { hash: BACK_HASH, bytes: backBytes, metadata: backMeta }],
-  // out= so a comparison build cannot clobber the shipped package. It has been
-  // overwritten once by a build run only to check the tests, and out/ is tracked.
+  // The shipped panel is HAND-PACKED and this builder does not reproduce it -
+  // a fresh build is 333 nodes and 156 relays against the packed 116 and 16.
+  // Every graft reads `out/ResoPal_Panel.resonitepackage` as its base, so a
+  // build that lands there quietly replaces the thing being grafted into, and
+  // the next graft produces a different panel. That has now happened twice,
+  // once from a build run only to check the tests. So the default goes
+  // somewhere harmless and overwriting the shipped file has to be asked for:
+  //   node build-panel.mjs out=out/ResoPal_Panel.resonitepackage
   outPath: process.argv.slice(2).map((a) => a.split('=')).find(([k]) => k === 'out')?.[1]
-    ?? path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage'),
+    ?? path.join(import.meta.dirname, 'out', 'ResoPal_Panel_Build.resonitepackage'),
   version: '2026.6.24.835',
   typeVersions: TYPE_VERSIONS,
 });

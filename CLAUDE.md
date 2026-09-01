@@ -66,6 +66,14 @@ impulse, `SyncRef<INode*Output<T>>` is a data input, and a bare `Node*Output<T>`
 output — which exists to be addressed by its **field** id. `booster/verify-classpaths.mjs` checks
 both directions.
 
+**`OnAwake` does not run on load — an omitted `Sync<T>` comes back as the TYPE default.** So a
+member left out "to keep its default" gets the opposite of the default that was meant. Three
+shipped at once: `Snapper.SnapCheckRadius` loaded 0 instead of 0.01, so a card found no snap
+target ever; `Grabbable.Receivable` loaded false, so `Grabber.Release` dropped the card before
+any receiver surface heard about it; and the card's space was `CARD`, not `Card`, so every one
+of the deck's per-card writes resolved to nothing. Match a known-good artifact field for field
+before assuming an absent member is harmless.
+
 **BSON deserializes numbers as `Double` objects.** Assigning a `Double` where a plain JS number is
 expected is a silent no-op. `AlphaCutoff` was never applied twice for this reason.
 

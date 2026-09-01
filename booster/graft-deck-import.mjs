@@ -216,6 +216,75 @@ for (const t of doc.Types.map(String)) {
   console.log(`  ${flipped} QuadMesh rotations upgraded to match QuadMesh version 1`);
 }
 
+// ── the deck's per-card contract, and a Snapper that can actually snap ───────
+// Measured against the owner's own Green/Blue decks, component by component. A
+// Ukilop card carries a `Card` space with `Card/index` and `Card/Grabbable`, and
+// the deck writes both - the index is what it orders by, `Card/Grabbable` is how
+// it turns grabbing on for the cards you may pick up and off for the rest. Our
+// card had NEITHER: its own space is `CARD`, a different name, so every one of
+// those writes landed on no space at all. That is why an imported card could not
+// be taken out of the deck or put back into it.
+//
+// And the Snapper: it was emitted with `Keywords` and nothing else. `OnAwake` sets
+// `SnapCheckRadius` to 0.01, but an omitted `Sync<float>` LOADS AS ZERO, and a
+// snap radius of zero finds no target ever - not the deck, not a playmat. All five
+// fields are stated now, matching a known-good card field for field.
+//
+// `CARD` stays as it is - the panel's own space, holding `CARD/url`. The two are
+// named differently and coexist on the slot.
+{
+  const cardSlot = (function find(sl) {
+    if (nm(sl) === 'card') return sl;
+    for (const c of sl.Children ?? []) { const r = find(c); if (r) return r; }
+    return null;
+  })(doc.Object);
+  if (!cardSlot) throw new Error('cannot find the card template');
+  const typeIs = (c, t) => String(doc.Types[idx(c.Type)]) === t;
+  const grab = (cardSlot.Components.Data).find((c) => typeIs(c, FE + 'Grabbable'));
+  const snap = (cardSlot.Components.Data).find((c) => typeIs(c, FE + 'Snapper'));
+  if (!grab || !snap) throw new Error('the card template has no Grabbable/Snapper to build on');
+
+  // Rebuild in declared order, KEEPING every key already there. Dropping an
+  // unrecognised one is how a material lost its shader refs once; anything the
+  // order does not name is carried through untouched.
+  const withFields = (c, classpath, add) => {
+    const order = memberOrder(classpath, 'component');
+    const out = { ID: c.Data.ID, 'persistent-ID': c.Data['persistent-ID'] };
+    for (const k of order.slice(1)) {
+      if (k in add) out[k] = fd(add[k]);
+      else if (k in c.Data) out[k] = c.Data[k];
+    }
+    for (const [k, v] of Object.entries(c.Data)) if (!(k in out)) out[k] = v;
+    c.Data = out;
+  };
+  withFields(snap, FE + 'Snapper', {
+    UseBoundingBoxCenter: false, SnapCheckRadius: D(0.01), CheckStaticColliders: false,
+    SnapTargetWhitelist: [],
+  });
+  // Same shape of bug on the Grabbable. `Receivable` and `DropOnDisable` are set
+  // by `OnAwake`, which does not run on load - an omitted `Sync<bool>` loads FALSE.
+  // A card with `Receivable` false is dropped from `Grabber._grabbedObjects` on
+  // release (Grabber.cs:372) BEFORE `InformOfReleasedObjects` runs, so no receiver
+  // surface ever hears about it: the deck could not be handed a card back, and
+  // nor could anything else. `Grabbable.OnLoading` has a rescue for exactly this,
+  // but it fires only at type version 0 and we now write the true version, 2.
+  withFields(grab, FE + 'Grabbable', { DropOnDisable: true, Receivable: true });
+
+  const attach = (classpath, fields) => {
+    const c = comp(classpath, fields);
+    cardSlot.Components.Data.push(c.comp);
+    return c;
+  };
+  attach(FE + 'DynamicVariableSpace', { SpaceName: 'Card', OnlyDirectBinding: true });
+  attach(FE + 'DynamicValueVariable<int>', {
+    VariableName: 'Card/index', Value: new Int32(0), OverrideOnLink: false });
+  // The TARGET is the Grabbable's own `Enabled` field. Pointing it at nothing is a
+  // variable the deck writes happily, to no effect.
+  attach(FE + 'DynamicField<bool>', {
+    VariableName: 'Card/Grabbable', TargetField: String(grab.Data.Enabled.ID), OverrideOnLink: false });
+  console.log('  card given the deck contract: Card space, Card/index, Card/Grabbable; Snapper radius 0.01');
+}
+
 const emitted = [];
 const kit = {
   T,

@@ -23,7 +23,20 @@ before touching anything that produces a deck package.
 > That router regression is a separate, untouched problem. It is the reason `npm test` now
 > runs against the grafted artifact rather than a build.
 >
-> `build-panel.mjs` takes `out=`, so a comparison build cannot overwrite a shipped package.
+> **`npm run build` no longer writes the shipped file.** `build-panel.mjs` has always taken
+> `out=`, but its *default* was `out/ResoPal_Panel.resonitepackage` — which is also what
+> every graft reads as its base. So a build run only to check the tests replaced the thing
+> being grafted into, and the next graft produced a different panel from a different base.
+> That happened twice. The default is now `out/ResoPal_Panel_Build.resonitepackage`, which
+> is gitignored, and overwriting the shipped panel has to be asked for:
+>
+> ```
+> node build-panel.mjs out=out/ResoPal_Panel.resonitepackage
+> ```
+>
+> Symptom if it happens anyway: `verify-classpaths` starts reporting orphan
+> `ContinuationRelay`s, because the router's relays are not in the hand-packed graph.
+> `git checkout -- booster/out/ResoPal_Panel.resonitepackage` and re-graft.
 
 **The shipped panel is a file the owner hand-packed in-world. The builder does not
 reproduce it.**
@@ -558,6 +571,13 @@ where several people may be opening at once.
 ## Open tasks
 
 1. **The card back** — above.
+1b. **Square card corners.** The imported card is our own quad, so it has none of the corner
+   rounding Ukilop's baked card mesh carries. One attempt — an `AlphaMask` on the card
+   material — shipped without a way to verify it and made things worse: corners still
+   square, fronts no longer loading. Reverted (`f2f5f83`), and the decoded document was
+   confirmed byte-identical to the commit before it. See "Square corners" below for the two
+   routes that remain. **Build a probe first** — one card, one variable, importable in
+   seconds — rather than folding a guess into the panel.
 2. ~~**Decks into a real Ukilop deck.**~~ Built 2026-08-31, **drag-tested the same day**.
    The mechanism is confirmed: cards spawn, move into a real deck, and the spread engages.
    Three placement bugs came out of that first import and are fixed — see "Three things a
@@ -803,10 +823,7 @@ come out 0, 1, 2 … in insertion order, keeping list index equal to stack posit
 
 **The wider lesson: the deck has a per-card contract and it is worth reading before adding to
 it.** Every `Card` slot Ukilop makes carries a `Card` space with `Card/index` and
-`Card/Grabbable`, and the buffer around it carries the `OrderOffset`. Our imported cards
-satisfy none of the `Card/*` half — they carry `CARD`/`CARD/url`, which is the panel's own
-space and deliberately not the deck's. Nothing has needed those two yet; if a deck feature
-turns out dead on an imported deck, that is the first place to look. The full list of
+`Card/Grabbable`, and the buffer around it carries the `OrderOffset`. The full list of
 variable names the deck defines:
 
 ```
@@ -814,6 +831,69 @@ Card/Grabbable | Card/index | Deck/Filler | Deck/MaterialBack | Deck/MaterialEdg
 Deck/MaterialFront | Deck/Ready | Deck/cardSize | InnerDeck/SmoothSpeed
 InnerDeck/grid X | InnerDeck/grid Y
 ```
+
+## The card contract, and the three fields whose absence was the bug
+
+The paragraph above ended "nothing has needed those two yet; if a deck feature turns out dead
+on an imported deck, that is the first place to look." It was the first place to look. The
+report was: cards can no longer be put back into the deck, cards spread out by the search
+cannot be picked up and put back, and cards no longer snap to a playmat.
+
+Found by diffing Ukilop's `Card` slot against ours **component by component, field by field**,
+out of the Green example deck. Three separate causes, one shape:
+
+**`OnAwake` does not run when a component is loaded from a file.** An omitted `Sync<T>` comes
+back as the **type** default — `false`, `0`, `(0,0)` — not the value the constructor sets. So
+a member left out "to keep its default" gets the opposite of the default that was meant. The
+builder's `comp()` writes only the members it is given, which is right for value members that
+really are zero and wrong for every member `OnAwake` touches.
+
+1. **`Snapper.SnapCheckRadius`.** `OnAwake` sets `0.01f`; we wrote only `Keywords`, so it
+   loaded as **0**. `Snapper.OnReleased` does a `SphereOverlap` of that radius to find a
+   `SnapTarget`, so a zero radius finds nothing, ever — not a deck, not a playmat. The
+   keyword was right the whole time and could never be read.
+
+2. **`Grabbable.Receivable`.** `OnAwake` sets it true; we omitted it, so it loaded **false**.
+   `Grabber.Release` does `_grabbedObjects.RemoveAll(g => !g.Receivable)` *before*
+   `InformOfReleasedObjects`, so a non-receivable card is dropped from the list and **no
+   receiver surface is ever told about it** — which is precisely "cannot be put back into the
+   deck". There is a rescue in `Grabbable.OnLoading`, but it fires only at type version 0, and
+   we now write the true version (2). Fixing the TypeVersions table is what exposed this.
+   `DropOnDisable` is the same shape and is now written too.
+
+3. **The space is named `Card`, not `CARD`.** Ours carried `CARD` with `CARD/url` — the
+   panel's own space — so the deck's writes of `Card/index` and `Card/Grabbable` resolved to
+   no space at all and did nothing. `CARD` stays exactly as it is; the two are different
+   names and coexist on the slot. The card now also carries `Card/index` and a
+   `DynamicField<bool>` `Card/Grabbable` pointed at **the Grabbable's own `Enabled` field**.
+
+That last one nearly shipped pointed at nothing: `comp()` only records an id in `.f` for
+members it *writes*, and `Enabled` comes from the component header, so `cardGrab.f.Enabled`
+is `undefined`. Take it off the emitted component — `cardGrab.comp.Data.Enabled.ID`.
+
+`test-panel.mjs` now fails on any of the three, including the null target.
+
+### What is deliberately NOT copied, and why it is safe
+
+Ukilop's card also carries `ValueCopy<bool>`, a `BooleanReferenceDriver<IField<bool>>` and a
+`DynamicValueVariableDriver<bool>` for `Deck/Filler`. That is filler machinery and it resolves
+to nothing on a real card:
+
+```
+Deck/Filler ─drives→ BooleanReferenceDriver.State
+   State true  → ValueCopy.Source := Grabbable.Enabled     (a filler hides when not grabbable)
+   State false → ValueCopy.Source := the driver's own Enabled   (always true)
+ValueCopy.Target = Slot.Active,  WriteBack = true
+```
+
+`Deck/Filler` defaults false, so for a normal card the chain reduces to "Slot.Active = true",
+which is what our cards already are. Copying it would gain nothing and risks hiding cards.
+
+`Card/index` is written for parity but left at 0: **nothing in the deck template reads it** —
+no `WriteDynamicValueVariable<int>` exists anywhere in Ukilop's graph, and no reference to
+`Card/index` outside the cards themselves. It is presumably written by the Deck Maker at
+authoring time, or read by some other tool. If something turns out to want it, the importer
+already computes the value — `inDeck`, the child count read before the buffer joins.
 
 ## Where a spawned deck sits — and why the pose goes on the TEMPLATE
 
