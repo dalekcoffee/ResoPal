@@ -564,19 +564,25 @@ check('the grid index is the card\'s own, not a count taken after it exists',
 check('a card that will not take its art says so instead of stopping silently',
   evtWritesEarly().some((w) => arg(setUrl, 'OnNotFound') === w.id && arg(setUrl, 'OnFailed') === w.id));
 check('and runs inside a StartAsyncTask', compsOfType('StartAsyncTask').length >= 3);
-// One clears the panel's Cards before an import; the deck branch's clears the
-// stock cards out of a freshly duplicated deck. Only the first is this check's.
+// Two clear the panel's Cards, and they are opposite ends of the same import: one
+// empties the grid BEFORE a fetch, the other takes the loose cards away AFTER the
+// deck branch has read their urls. This check owns the first - the one the loop's
+// own chain runs.
 {
   const clears = compsOfType('DestroySlotChildren');
   const ofPanelCards = clears.filter((c) => intoPanelCards(c, 'Instance'));
-  check('the previous import is cleared first', ofPanelCards.length === 1,
+  check('the previous import is cleared first', ofPanelCards.length === 2,
     `${ofPanelCards.length} of ${clears.length} DestroySlotChildren nodes`);
 }
 // The bug this missed: a refactor moved OnResponse onto the event stub and took
 // the unpack chain's only trigger with it. Every operation must have something
 // that runs it.
+// `LoopStart`/`LoopIteration`/`LoopEnd` are a `For` node's three impulse outputs.
+// Without them every node a loop body runs reads as orphaned - which is what the
+// deck branch's two loops looked like the first time this ran.
 const IMPULSE_ANY = ['Next', 'OnSuccess', 'OnWritten', 'OnTrue', 'OnFalse', 'TaskStart', 'OnTriggered',
-  'OnResponse', 'OnError', 'OnDenied', 'OnNotFound', 'OnFailed', 'OnStarted'];
+  'OnResponse', 'OnError', 'OnDenied', 'OnNotFound', 'OnFailed', 'OnStarted',
+  'LoopStart', 'LoopIteration', 'LoopEnd'];
 const drivenIds = new Set();
 for (const c of byComp.values())
   for (const f of IMPULSE_ANY.concat(['Calls'])) {
@@ -584,7 +590,7 @@ for (const c of byComp.values())
     for (const t of Array.isArray(d) ? d.map((e) => (e && typeof e === 'object' ? e.Data : e)) : [d])
       if (typeof t === 'string') drivenIds.add(t);
   }
-const OPS = /^(ContinuationRelay|Sequence|If|StartAsyncTask|DelayUpdates|DuplicateSlot|DestroySlotChildren|SetLocalPosition|GET_String|POST_String|WriteDynamicObjectVariable<string>)$/;
+const OPS = /^(ContinuationRelay|Sequence|If|StartAsyncTask|DelayUpdates|DuplicateSlot|DestroySlotChildren|DestroySlot|For|SetLocalPosition|GET_String|POST_String|WriteDynamicObjectVariable<string>)$/;
 const orphans = [...byComp.values()].filter((c) =>
   (OPS.test(short(c.type)) || /^ObjectWrite</.test(String(c.type).replace(/^.*Nodes\./, ''))) && !drivenIds.has(c.id));
 check('nothing in the graph sits there with no impulse running it', orphans.length === 0,
@@ -653,7 +659,7 @@ console.log(`${NEWLINE}type versions:`);
 console.log(`${NEWLINE}the deck-import branch:`);
 {
   const finds = compsOfType('FindChildByName');
-  check('the branch is present', finds.length === 4, `${finds.length} FindChildByName nodes`);
+  check('the branch is present', finds.length === 2, `${finds.length} FindChildByName nodes`);
 
   // `Slot.Duplicate(parent, keepGlobalTransform = true)` - and the ProtoFlux node
   // takes that default - so a duplicate keeps the TEMPLATE's world transform and is
@@ -711,102 +717,114 @@ console.log(`${NEWLINE}the deck-import branch:`);
   }));
   check('and searches direct children only', finds.every((f) => !byComp.has(arg(f, 'SearchDepth'))));
   const names = finds.map((f) => String(arg(deref(arg(f, 'Name')), 'Value'))).sort();
-  check('it looks up exactly the four slots it needs',
-    names.join() === ['Assets', 'Cards', 'Surface/cards', 'buffer'].sort().join(), names.join(', '));
+  check('it looks up exactly the two slots it needs',
+    names.join() === ['Cards', 'Surface/cards'].sort().join(), names.join(', '));
 
-  // The order the deck's own receiver-surface handler uses, read out of
-  // /Deck/logixs/add/remove handling. A card reparented onto `Cards` WITHOUT a
-  // buffer has no position driver and no OrderOffset: the handler cannot be
-  // triggered from ProtoFlux, because OnLocalReceived fires only from
-  // Grabber.Receive - a person letting go of something.
-  const bufDup = dups.find((d) => {
-    const t = deref(arg(d, 'Template'));
-    return short(t?.type) === 'FindChildByName' && String(arg(deref(arg(t, 'Name')), 'Value')) === 'buffer';
-  });
-  check('a buffer is duplicated per card', !!bufDup);
-  const moveOrder = chainFrom(bufDup?.id, 8).map((c) => short(c.type));
-  // The card is reset and scaled BEFORE it is moved, and that order is load-bearing:
-  // `GetChild` re-evaluates on every read, so once SetParent has taken the card out
-  // of Cards the same expression names the NEXT card. Reversed, the first card is
-  // never scaled and the last pass reads null - which breaks the chain and strands
-  // the last card. Asserting the ORDER is asserting both of those cannot come back.
-  check('the card is reset and resized while it is still the one GetChild names',
-    ['DuplicateSlot', 'SetParent', 'SetLocalPositionRotation', 'SetLocalScale', 'SetParent',
-     'SetSlotOrderOffset', 'SetParent'].every((t, i) => moveOrder[i] === t),
-    moveOrder.slice(0, 8).join(' -> '));
-  const [, toAssets, cardHome, cardBig, cardIn, setOrder, bufIn] = chainFrom(bufDup?.id, 9);
+  // ── nothing is moved, nothing is rescaled ─────────────────────────────────
+  // The branch used to throw away the deck's 52 stock cards and move the panel's
+  // own quads in. That was the wrong shape: a Deck Maker card's art is baked into
+  // its mesh UVs against a shared atlas, so a Ukilop card can only show our art by
+  // carrying its own front material at that cell's ST - which is what
+  // `build-deck-probe.mjs` gives the template, per card. So the deck's own cards
+  // ARE the import now, and every scale, pose, snapper, tag and contract on them is
+  // Ukilop's own. Three rounds of bugs came out of reproducing those on a card of
+  // ours; if a SetParent or a SetLocalScale ever reappears here, they come back.
+  check('no card is moved into the deck', compsOfType('SetParent').length === 0,
+    `${compsOfType('SetParent').length} SetParent nodes`);
+  check('and none is rescaled', compsOfType('SetLocalScale').length === 0,
+    `${compsOfType('SetLocalScale').length} SetLocalScale nodes`);
+  check('and no buffer is duplicated - only the deck itself is', dups.length === 2,
+    `${dups.length} DuplicateSlot nodes`);
 
-  // Shuffle SWAPS OrderOffsets between buffers and never touches the cards, so a
-  // deck whose buffers all carry the same offset shuffles and changes nothing.
-  // `DuplicateSlot` copies the template buffer's 0 to every copy, so the importer
-  // has to assign one. The count of what is already in the deck, read BEFORE this
-  // buffer joins, gives 0, 1, 2 … in insertion order - list index equal to stack
-  // position, which the atlas order and the reveal order both rest on.
-  check('each buffer gets its own OrderOffset, or shuffle is a no-op',
-    short(setOrder?.type) === 'SetSlotOrderOffset' &&
-    byField.get(arg(setOrder, 'Instance'))?.name === 'Duplicate');
+  // ── how many cards to keep ────────────────────────────────────────────────
+  // The smaller of the two counts. A deck longer than the template cannot be held,
+  // and the extras have to stay loose rather than be written past the end.
+  const keep = compsOfType('ValueMin<int>')[0];
+  check('the card count is the smaller of the two lists', !!keep);
+  const keepFrom = ['A', 'B'].map((k) => deref(arg(keep, k)));
+  check('the panel\'s count and the deck\'s',
+    keepFrom.every((c) => short(c?.type) === 'ChildrenCount') &&
+    keepFrom.some((c) => intoPanelCards(c, 'Instance')) &&
+    keepFrom.some((c) => short(byComp.get(arg(c, 'Instance'))?.type) === 'FindChildByName'),
+    keepFrom.map((c) => short(c?.type)).join(', '));
+
+  // ── the trim ──────────────────────────────────────────────────────────────
+  const fors = compsOfType('For');
+  check('two loops: one to trim, one to fill', fors.length === 2, `${fors.length} For nodes`);
+  const trimLoop = fors.find((f) => short(deref(arg(f, 'Count'))?.type) === 'ValueSub<int>');
+  check('the trim loop runs on the spare count', !!trimLoop);
   {
-    const src = deref(arg(setOrder, 'OrderOffset'));
-    const counted = deref(arg(src, 'Input'));
-    check('and it is the deck\'s own card count, not a constant',
-      short(src?.type) === 'Cast_int_To_long' && short(counted?.type) === 'ChildrenCount',
-      `${short(src?.type)} <- ${short(counted?.type)}`);
-    check('read off the deck Cards slot, before the buffer joins it',
-      short(byComp.get(arg(counted, 'Instance'))?.type) === 'FindChildByName' &&
-      chainFrom(arg(setOrder, 'Next'), 1)[0]?.id === bufIn?.id);
+    const sub = deref(arg(trimLoop, 'Count'));
+    check('which is the deck\'s count less the cards kept',
+      short(byComp.get(arg(sub, 'A'))?.type) === 'ChildrenCount' && arg(sub, 'B') === keep.id);
   }
-  check('all three act on the same card', arg(cardHome, 'Instance') === arg(cardIn, 'Instance') &&
-    arg(cardBig, 'Instance') === arg(cardIn, 'Instance'));
-
-  // Both inputs unwired is the reset: an unconnected ValueInput reads float3.Zero
-  // and floatQ.Identity. Without it a card arrives carrying the grid position the
-  // spawn loop gave it, because SetParent preserves the LOCAL transform.
-  check('the card is reset to sit AT its buffer, not where it was on the grid',
-    !byComp.has(arg(cardHome, 'Position')) && !byComp.has(arg(cardHome, 'Rotation')));
-  // And scaled to the cell it now occupies: the panel's card is 0.088 tall against
-  // the deck's 0.25, so unscaled it is a third of its slot.
+  const drop = chainFrom(arg(trimLoop, 'LoopIteration'), 1)[0];
+  check('each pass destroys one card', short(drop?.type) === 'DestroySlot', short(drop?.type));
+  // Ukilop's own trim hook: each buffer carries a DestroyProxy aimed at that card's
+  // driver under /Deck/Assets, and SendDestroyingEvent is what fires it. Without it
+  // the drivers pile up and the two lists fall out of step.
+  check('and tells the deck it is going, so its driver goes with it',
+    arg(deref(arg(drop, 'SendDestroyingEvent')), 'Value') === true);
+  // The index is CONSTANT at `keep` and the loop runs `spare` times: GetChild
+  // re-evaluates every pass, so destroying child `keep` walks the tail off one at a
+  // time. Indexing by iteration would run past the end as the list shrank under it.
   {
-    const k = arg(deref(arg(cardBig, 'Scale')), 'Value')?.map(Number) ?? [];
-    // The scale MUST be uniform. It was [2.84, 2.84, 0.7956] - X and Y to the
-    // cell, Z down to the 1.6 mm buffer pitch - which is correct arithmetic and a
-    // transform that cannot survive the deck's own global-preserving reparent:
-    // a non-uniform scale under a relative rotation gives a sheared matrix, and
-    // `Slot` decomposes it into position/rotation/scale, dropping the shear and
-    // getting the scale wrong. The thinness lives in the authored card instead.
-    check('the scale into a deck cell is uniform, or the deck\'s reparent shears it',
-      k.length === 3 && Math.abs(k[1] - k[0]) < 1e-6 && Math.abs(k[2] - k[0]) < 1e-6,
-      `${k.map((v) => v.toFixed(3)).join(', ')}`);
-    // Read off the card template's own collider - the one place the card's real
-    // size is written as a number - so this cannot pass by restating a constant.
-    const cardSlot = findSlot('card');
-    const box = (cardSlot?.Components?.Data ?? [])
-      .map((c) => byComp.get(c.Data.ID)).find((c) => short(c?.type) === 'BoxCollider');
-    const cardH = (arg(box, 'Size') || []).map(num)[1];
-    check('and scaled to the deck\'s card height, not left at the panel\'s',
-      k.length === 3 && Math.abs(k[1] - k[0]) < 1e-6 &&
-      Math.abs(k[1] * cardH - 0.25) < 1e-4, `${k.map((v) => v.toFixed(3)).join(', ')} x ${cardH}`);
-    // So the card has to be AUTHORED thin enough that the same uniform factor
-    // lands its collider inside the 1.6 mm pitch - otherwise two stacked cards'
-    // colliders overlap and you grab the wrong one. Ukilop's own card fills 86%
-    // of the pitch; anything at or over 100% is the bug this replaced.
-    const cardZ = (arg(box, 'Size') || []).map(num)[2];
-    const inDeck = k[2] * cardZ;
-    check('and the card is authored thin enough to sit inside the stacking pitch',
-      inDeck > 0 && inDeck < 0.0015911388909444213, `${(inDeck * 1000).toFixed(3)} mm of 1.591`);
+    const target = deref(arg(drop, 'Instance'));
+    check('at a FIXED index, not the loop iteration',
+      short(target?.type) === 'GetChild' && arg(target, 'ChildIndex') === keep.id,
+      `${short(target?.type)} index ${byField.get(arg(target, 'ChildIndex'))?.name ?? '?'}`);
+    check('off the deck Cards slot',
+      String(arg(deref(arg(byComp.get(arg(target, 'Instance')), 'Name')), 'Value')) === 'Cards');
   }
-  check('the buffer\'s packed flux lands in the deck Assets slot',
-    String(arg(deref(arg(byComp.get(arg(toAssets, 'NewParent')), 'Name')), 'Value')) === 'Assets');
-  check('the card lands inside the buffer',
-    byField.get(arg(cardIn, 'NewParent'))?.name === 'Duplicate');
-  check('and the buffer lands in the deck Cards slot',
-    String(arg(deref(arg(byComp.get(arg(bufIn, 'NewParent')), 'Name')), 'Value')) === 'Cards');
-  check('the card taken is the one on top',
-    short(deref(arg(cardIn, 'Instance'))?.type) === 'GetChild');
 
-  // The move loop re-enters DelayUpdates, which is async: coming round from a
-  // synchronous continuation runs nothing and drops every card after the first.
-  check('the move loop comes round in its own async context',
-    compsOfType('StartAsyncTask').length >= 5, `${compsOfType('StartAsyncTask').length} StartAsyncTask nodes`);
+  // ── the fill ──────────────────────────────────────────────────────────────
+  const fillLoop = fors.find((f) => f.id !== trimLoop?.id);
+  check('the fill loop runs once per card kept', arg(fillLoop, 'Count') === keep.id);
+  check('and it runs after the trim', chainFrom(arg(trimLoop, 'LoopEnd'), 1)[0]?.id === fillLoop?.id);
+  const write = chainFrom(arg(fillLoop, 'LoopIteration'), 1)[0];
+  check('each pass writes one card\'s art',
+    short(write?.type) === 'WriteDynamicObjectVariable<string>', short(write?.type));
+  // `CARD` is the PANEL's space and `Card` is the DECK's - two different names, and
+  // this is the one place they meet. Getting either wrong is a write that lands on
+  // no space at all and reports success.
+  check('into Card/url, the deck\'s own name for it',
+    String(arg(deref(arg(write, 'Path')), 'Value')) === 'Card/url',
+    String(arg(deref(arg(write, 'Path')), 'Value')));
+  const read = deref(byField.get(arg(write, 'Value'))?.comp?.id ?? arg(write, 'Value'));
+  check('and the value is read off the panel card',
+    short(read?.type) === 'ReadDynamicObjectVariable<string>', short(read?.type));
+  check('from CARD/url, the panel\'s own name for it',
+    String(arg(deref(arg(read, 'Path')), 'Value')) === 'CARD/url',
+    String(arg(deref(arg(read, 'Path')), 'Value')));
+  // Card i takes panel card i's url, so deck order is import order and list index
+  // stays stack position - the invariant the atlas order and the site's reveal
+  // order both rest on. The stock buffers already carry OrderOffset 0..51, so
+  // trimming the tail leaves 0..keep-1 and shuffle works untouched.
+  {
+    const src = deref(arg(read, 'Source'));
+    check('at the loop\'s own index, so deck order is import order',
+      short(src?.type) === 'GetChild' && arg(src, 'ChildIndex') === fillLoop.f?.Iteration ||
+      byField.get(arg(src, 'ChildIndex'))?.comp?.id === fillLoop.id,
+      `${short(src?.type)} index from ${short(byField.get(arg(src, 'ChildIndex'))?.comp?.type)}`);
+    check('off the panel Cards slot', intoPanelCards(src, 'Instance'));
+    // buffer -> Card, the deck's own two-level shape.
+    const buf = deref(arg(write, 'Target'));
+    check('and the target is the Card inside the deck buffer at that index',
+      short(buf?.type) === 'GetChild' &&
+      short(byComp.get(arg(buf, 'Instance'))?.type) === 'GetChild');
+    const outer = byComp.get(arg(buf, 'Instance'));
+    check('the buffer coming off Cards at the same index',
+      String(arg(deref(arg(byComp.get(arg(outer, 'Instance')), 'Name')), 'Value')) === 'Cards' &&
+      byField.get(arg(outer, 'ChildIndex'))?.comp?.id === fillLoop.id);
+  }
+
+  // ── the panel is cleared ──────────────────────────────────────────────────
+  // The loose cards were only ever the carrier for the urls. Left behind they show
+  // the deck twice, once as a grid in front of the panel and once in the holder.
+  const clear = chainFrom(arg(fillLoop, 'LoopEnd'), 1)[0];
+  check('the loose cards are taken away when the deck is full',
+    short(clear?.type) === 'DestroySlotChildren' && intoPanelCards(clear, 'Instance'),
+    short(clear?.type));
 
   // `InnerDeck/grid X` and `grid Y` are DRIVEN outputs of ChildrenCount, so
   // writing them is a no-op. The spread is a bool the search button writes, and
@@ -819,11 +837,10 @@ console.log(`${NEWLINE}the deck-import branch:`);
     arg(deref(arg(spread[0], 'Value')), 'Value') === false);
   check('aimed at the deck surface, the slot that owns the InnerDeck space',
     String(arg(deref(arg(byComp.get(arg(spread[0], 'Target')), 'Name')), 'Value')) === 'Surface/cards');
-  // Written on the move loop's EXHAUSTED branch, not anywhere earlier: the spread
-  // lays out from ChildrenCount, so opening a half-filled deck spreads it twice.
-  const moveGate = ifs.find((i) => chainFrom(arg(i, 'OnTrue'), 1)[0]?.id === bufDup?.id);
-  check('written on the branch the loop takes when no cards are left', !!moveGate &&
-    chainFrom(arg(moveGate, 'OnFalse'), 1)[0]?.id === spread[0].id);
+  // Written after the fill loop has finished, not inside it: the spread lays out
+  // from ChildrenCount, so opening a half-filled deck spreads it twice.
+  check('written after every card has its art, not during',
+    chainFrom(arg(clear, 'Next'), 1)[0]?.id === spread[0].id);
   // And it says so on the event line however the write itself turns out.
   const said = ['OnSuccess', 'OnNotFound', 'OnFailed'].map((k) => chainFrom(arg(spread[0], k), 1)[0]);
   check('then the event line says the deck is in the holder',
@@ -943,7 +960,13 @@ check('a third Text reports whether the request ran', !!evtProxy);
 const evtDrivers = compsOfType('DynamicValueVariableDriver<string>');
 check('the event line is driven from a dynamic variable written by the request',
   evtDrivers.some((d) => String(arg(d, 'VariableName')) === 'ResoPal/event'));
-const evtWrites = allWrites.filter((w) => !writes.includes(w) && w.id !== setUrl.id);
+// Every string write that is not a button's URL and not a card being told its art.
+// The deck branch adds a second art write - `Card/url` on a deck card, the deck's
+// own name for the panel's `CARD/url` - which is the same kind of thing as
+// `setUrl` and not an event.
+const artPaths = new Set(['CARD/url', 'Card/url']);
+const evtWrites = allWrites.filter((w) => !writes.includes(w) && w.id !== setUrl.id &&
+  !artPaths.has(String(arg(byComp.get(arg(w, 'Path')), 'Value'))));
 check('every event write targets ResoPal/event', evtWrites.length >= 1 &&
   evtWrites.every((w) => String(arg(byComp.get(arg(w, 'Path')), 'Value')) === 'ResoPal/event'));
 

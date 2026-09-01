@@ -41,7 +41,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
 import { memberOrder, isFluxNode, typeVersion } from './members.mjs';
-import { deckImport, COL_X, DECK_CARD_HEIGHT, deckCardScale, deckCardDepth } from './deck-import.mjs';
+import { deckImport, COL_X, deckCardDepth } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -120,6 +120,14 @@ const T = {
   If: PB + 'If',
   Dup: PB + 'FrooxEngine.Slots.DuplicateSlot',
   ClearKids: PB + 'FrooxEngine.Slots.DestroySlotChildren',
+  // ── the deck-import branch's own nodes ─────────────────────────────────────
+  For: PB + 'For',
+  IntMin: PB + 'Math.ValueMin<int>',
+  IntSub: PB + 'Operators.ValueSub<int>',
+  DestroySlot: PB + 'FrooxEngine.Slots.DestroySlot',
+  // The READ counterpart of WriteVar. A string is an OBJECT variable, not a value
+  // one - `ReadDynamicValueVariable<T>` is `where T : unmanaged` and string is not.
+  ReadVar: PB + 'FrooxEngine.Variables.ReadDynamicObjectVariable<string>',
   ChildCount: PB + 'FrooxEngine.Slots.ChildrenCount',
   GetChild: PB + 'FrooxEngine.Slots.GetChild',
   SetParent: PB + 'FrooxEngine.Slots.SetParent',
@@ -436,10 +444,6 @@ const { nodes: branch, entryId } = deckImport(kit, {
   panelCards: cardsSlot.ID,
   deckTemplate: null,
   decksHolder: decksSlot.ID,
-  // Read off the card template's own collider rather than restated here, so the
-  // two cannot drift: the collider is authored at the card's real size, which is
-  // the thing the deck's cell has to be reconciled with.
-  cardScale: deckCardScale(cardHeight),
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   if (donePlaced.data[k]) donePlaced.data[k].Data = entryId;

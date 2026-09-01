@@ -74,6 +74,15 @@ any receiver surface heard about it; and the card's space was `CARD`, not `Card`
 of the deck's per-card writes resolved to nothing. Match a known-good artifact field for field
 before assuming an absent member is harmless.
 
+**An imported deck is Ukilop's deck, not a deck of our cards.** A Deck Maker card's art is
+baked into its own MeshX UVs against a shared atlas, so it looks unswappable - but
+`UnlitMaterial.TextureScale`/`.TextureOffset` reach the shader as `_Tex_ST` and Unity samples
+at `uv * scale + offset`, so the cell scales back up to a whole per-card texture:
+`scale (10,7)`, `offset (-col, -(6-row))`. `build-deck-probe.mjs` gives every card its own
+front material at its cell's ST and a texture driven from `Card/url`; the import branch only
+counts, trims and writes urls. Six separate bugs came from the design before it, which spawned
+our own quads and moved them in - every one of them a property a Ukilop card already had.
+
 **A deck reads the card's slot TAG, not just its Snapper keyword.** Two independent gates that
 both say `"Card"`: `Snapper.Keywords` is what a playmat's `SnapTarget` whitelists, and
 `Slot.Tag` is what a deck's `GrabbableReceiverSurface` whitelists —

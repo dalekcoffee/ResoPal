@@ -42,7 +42,7 @@ import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
 import { memberOrder, isFluxNode, haveSource, typeVersion } from './members.mjs';
 import { asUrl } from './urlmarker.mjs';
-import { deckImport, DECK_CARD_HEIGHT, deckCardScale, deckCardDepth } from './deck-import.mjs';
+import { deckImport, deckCardDepth } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -132,6 +132,14 @@ const T = {
   // template replaces seventy pre-baked decoders.
   Dup:         PB + 'FrooxEngine.Slots.DuplicateSlot',
   ClearKids:   PB + 'FrooxEngine.Slots.DestroySlotChildren',
+  // ── the deck-import branch's own nodes ─────────────────────────────────────
+  For:         PB + 'For',
+  IntMin:      PB + 'Math.ValueMin<int>',
+  IntSub:      PB + 'Operators.ValueSub<int>',
+  DestroySlot: PB + 'FrooxEngine.Slots.DestroySlot',
+  // The READ counterpart of WriteVar. A string is an OBJECT variable, not a value
+  // one - `ReadDynamicValueVariable<T>` is `where T : unmanaged` and string is not.
+  ReadVar:     PB + 'FrooxEngine.Variables.ReadDynamicObjectVariable<string>',
   IndexOfChild: PB + 'FrooxEngine.Slots.IndexOfChild',
   // The deck-import branch. `WriteDynamicValueVariable<T>` is `where T : unmanaged`
   // - bool satisfies that where string does not, which is why the string write
@@ -1128,7 +1136,6 @@ const deck = deckImport(deckKit, {
   // this reference in. Null here is an unbound external hook, not a dangling one.
   deckTemplate: null,
   decksHolder: decksSlot._slot.id,
-  cardScale: deckCardScale(CARD_H),
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   doneSay.slot.Components.Data[0].Data[k].Data = deck.entryId;

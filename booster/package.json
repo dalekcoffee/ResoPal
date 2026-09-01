@@ -9,11 +9,12 @@
     "build:deck-probe": "node build-deck-probe.mjs",
     "test:deck-probe": "node test-deck-probe.mjs",
     "graft:url-markers": "node graft-url-markers.mjs",
-    "build:deck-template": "node build-deck-probe.mjs blank=52 back=proxy out=out/ResoPal_DeckTemplate.resonitepackage",
     "graft:deck": "node graft-deck.mjs panel=out/ResoPal_Panel_DeckImport.resonitepackage out=out/ResoPal_Panel_Deck.resonitepackage",
-    "test:graft-deck": "npm run ship && node test-graft-deck.mjs out/ResoPal_Panel_Deck.resonitepackage",
+    "test:graft-deck": "npm run ship && npm run test:template && node test-graft-deck.mjs out/ResoPal_Panel_Deck.resonitepackage",
     "graft:import": "node graft-deck-import.mjs",
-    "ship": "npm run graft:import && npm run graft:deck"
+    "ship": "npm run template:deck && npm run graft:import && npm run graft:deck",
+    "template:deck": "node build-deck-probe.mjs blank=52 mode=driven back=proxy src=../data/deck-template.resonitepackage out=out/ResoPal_DeckTemplate.resonitepackage",
+    "test:template": "node test-deck-probe.mjs out/ResoPal_DeckTemplate.resonitepackage"
   },
   "dependencies": {
     "bson": "^7.2.0",

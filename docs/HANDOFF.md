@@ -571,13 +571,9 @@ where several people may be opening at once.
 ## Open tasks
 
 1. **The card back** — above.
-1b. **Square card corners.** The imported card is our own quad, so it has none of the corner
-   rounding Ukilop's baked card mesh carries. One attempt — an `AlphaMask` on the card
-   material — shipped without a way to verify it and made things worse: corners still
-   square, fronts no longer loading. Reverted (`f2f5f83`), and the decoded document was
-   confirmed byte-identical to the commit before it. See "Square corners" below for the two
-   routes that remain. **Build a probe first** — one card, one variable, importable in
-   seconds — rather than folding a guess into the panel.
+1b. ~~**Square card corners.**~~ Closed 2026-09-01 by route 3: the imported deck IS Ukilop's
+   deck now, so the card is his, with its baked rounded outline. See "The imported deck IS
+   Ukilop's deck" below.
 2. ~~**Decks into a real Ukilop deck.**~~ Built 2026-08-31, **drag-tested the same day**.
    The mechanism is confirmed: cards spawn, move into a real deck, and the spread engages.
    Three placement bugs came out of that first import and are fixed — see "Three things a
@@ -1003,6 +999,116 @@ checks the duplicate is parented into it.
 > shows `y = 1.31130226e-06` — that is 1.3 × 10⁻⁶, i.e. zero, and its mantissa happens to
 > match the z. `0.2, 0, -1.31` is what shipped. If the deck wants to be a metre and a third
 > **above** the panel rather than level with it, `DECK_POSITION` is the one line to change.
+
+## The imported deck IS Ukilop's deck — the branch only writes urls
+
+**2026-09-01. This replaces the whole "move the panel's cards in" design, and with it
+most of what the sections above are about.**
+
+The owner put it plainly: *"why are we not using the blue green templates I gave you? they
+work perfect everywhere else. Realistically we are only changing 2 things on them: 1 the
+amount of cards, 2 the front card texture."* That was right, and the reason it had looked
+impossible was one measured fact pointing the wrong way.
+
+**A Deck Maker card's art is not a texture you can swap.** All 52 cards share three
+materials — `Deck/MaterialFront`, `MaterialBack`, `MaterialEdge` — and each card has its own
+baked MeshX with its atlas cell in the UVs. So "give this card different art" reads as
+impossible, and the branch was built around spawning our own quads and moving them in.
+
+Everything that broke for three rounds came out of that one decision:
+
+| symptom | cause | all of it a property Ukilop's card already had |
+|---|---|---|
+| cards could not be put back in the deck | no `Tag = "Card"` | ✓ |
+| ...still could not, after the tag | `Receivable` loaded false | ✓ |
+| cards snapped to nothing | `SnapCheckRadius` loaded 0 | ✓ |
+| the deck's writes did nothing | our space was `CARD`, its is `Card` | ✓ |
+| scales went wild once it accepted them | non-uniform scale sheared on reparent | ✓ |
+| square corners | a quad has square corners | ✓ |
+
+### What makes per-card art possible after all
+
+`UnlitMaterial.TextureScale` and `.TextureOffset` reach the shader as `_Tex_ST`
+(`UpdateMaterial` → `MaterialUpdateWriter.UpdateST` → `float4(scale, offset)`), and Unity
+samples at `uv * scale + offset`. So a card's atlas cell scales back up to the whole of a
+per-card texture:
+
+```
+card i at col = i % 10, row = floor(i / 10) of the 10x7 grid
+  TextureScale = (10, 7)      TextureOffset = (-col, -(6 - row))
+```
+
+`build-deck-probe.mjs` gives every card its own front material at its own cell's ST, its own
+`StaticTexture2D`, and the panel's own five-component drive chain pointed at a `Card/url`
+variable. `meshx.mjs` reads submesh 1's UV bounds out of each card's MeshX blob and
+`test-deck-probe.mjs` asserts the shipped ST against them — measured, not restated. The
+static half of this was drag-tested and confirmed before any of it was used.
+
+### The pipeline now
+
+```
+data/deck-template.resonitepackage      the owner's confirmed-good whole deck, committed
+  npm run template:deck                 -> out/ResoPal_DeckTemplate.resonitepackage
+                                           52 cards, each with its own front material,
+                                           texture and Card/url drive chain
+  npm run graft:import                  the branch into the hand-packed panel
+  npm run graft:deck                    the template into the panel
+  npm run test:graft-deck               ship + test:template + the graft suite
+```
+
+`graft-deck.mjs` used to default to the raw whole deck, on the reasoning that "the importer
+destroys all 52, so per-card art is wasted". It does not any more, and that default is now
+the probe output. It refuses to run if the file is missing rather than silently grafting the
+wrong thing.
+
+### What the branch does now
+
+Twenty-eight nodes where there were sixty, and no `SetParent`, `SetLocalScale`,
+`DuplicateSlot` of a buffer, `StartAsyncTask` or `DelayUpdates` anywhere in it:
+
+```
+ChildrenCount(panel Cards) > 30 ?
+  DuplicateSlot(deck template -> Decks)
+  keep  = Min(panel count, deck count)          a deck longer than the template
+  spare = deck count - keep                     cannot be held; the extras stay loose
+  For spare  : DestroySlot(GetChild(deckCards, keep))     <- index CONSTANT, see below
+  For keep   : Write(GetChild(GetChild(deckCards, i), 0), "Card/url",
+                     Read(GetChild(panelCards, i), "CARD/url"))
+  DestroySlotChildren(panelCards)
+  Write(Surface/cards, "InnerDeck/spread", false)
+```
+
+Three things in that worth keeping:
+
+* **The trim index is constant at `keep`, not the loop iteration.** `GetChild` is a function
+  node and re-evaluates every pass, so destroying child `keep` repeatedly walks the tail off
+  one at a time. Indexing by iteration runs past the end as the list shrinks under it.
+* **`SendDestroyingEvent: true`** is what fires each buffer's `DestroyProxy`, so the card's
+  driver under `/Deck/Assets` goes with it. The deck indexes `Assets` **by position**; a card
+  destroyed without its proxy shifts every later card's flux onto the wrong card.
+* **`CARD/url` is the panel's, `Card/url` is the deck's.** Two spaces, two names, and the
+  fill loop is the one place they meet.
+
+The stock buffers already carry `OrderOffset` 0..51, so trimming the tail leaves 0..keep-1
+and shuffle works with nothing added. The loose cards are only ever the carrier for the urls
+and are destroyed once read.
+
+### Two limits, recorded not solved
+
+* **52 cards.** That is how many baked meshes the source export has. Both trial decks are 48
+  and 50. Going past it means duplicating a buffer — which does work, since a duplicate
+  carries the same mesh and therefore the same correct ST — but it is not built.
+* **A landscape printing renders portrait in a deck.** On a loose card `TextureSizeDriver`
+  rewrites the quad to match the texture; a baked mesh cannot be rewritten and an
+  axis-aligned ST remap cannot rotate. Neither trial deck has a landscape card — they are a
+  booster thing.
+
+## ~~Square corners: the imported card is ours, not Ukilop's~~ — solved by the above
+
+**Closed 2026-09-01.** The corners were square because the imported card was our quad. It is
+not our card any more; it is Ukilop's, with its baked rounded outline, its edge submesh and
+its real back. The sections below are the record of the routes considered — route 3 is what
+shipped — and the mask attempt is kept because it is a warning, not a plan.
 
 ## Square corners: the imported card is ours, not Ukilop's
 

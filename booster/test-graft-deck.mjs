@@ -182,13 +182,36 @@ for (const buffer of cards) {
 check('every card still resolves its mesh', meshOk === cards.length, `${meshOk}/${cards.length}`);
 check('every card still resolves its front material', matOk === cards.length, `${matOk}/${cards.length}`);
 check('every card still resolves its texture', texOk === cards.length, `${texOk}/${cards.length}`);
-// A STOCK card carrying `Card/url` means the template came from
-// `build-deck-probe.mjs`, which bakes the per-card art chain into all 52. The
-// shipping template is a plain Deck Maker export and has none, which is correct:
-// the importer destroys every stock card and puts the panel's own in their place,
-// and those carry their own `CARD/url`. So this is reported, not required.
-note(artOk === cards.length ? 'stock cards carry Card/url (a probe-built template)'
-  : `stock cards carry no Card/url (${artOk}/${cards.length}) - a plain export, which the importer replaces`);
+// ── the cards ARE the import ─────────────────────────────────────────────────
+// This used to be a note. The importer threw all 52 stock cards away and moved
+// the panel's own quads in, so whether the template carried per-card art was
+// beside the point. It is the whole point now: a Deck Maker card's art is baked
+// into its mesh UVs against a shared atlas, and the only way to make one show our
+// art is to give it its OWN front material at that cell's ST, with a texture
+// driven from `Card/url`. `build-deck-probe.mjs` does that per card and
+// `test-deck-probe.mjs` checks the ST against the MeshX UV bounds it measures;
+// what this checks is that the graft brought all of it across.
+check('every card carries its own Card/url to be written', artOk === cards.length,
+  `${artOk}/${cards.length}`);
+{
+  // Shared materials would mean one texture for the whole deck - 52 cards showing
+  // whichever card loaded last. Distinct textures are what makes them 52 cards.
+  const fronts = new Set(), textures = new Set();
+  for (const buf of cards) {
+    const card = kids(buf)[0], visual = card && kids(card)[0];
+    const r = (visual?.Components?.Data ?? []).find((c) => /\.MeshRenderer$/.test(typeName(c)));
+    const m = r?.Data?.Materials?.Data?.[1]?.Data;          // submesh 1 is the front face
+    if (!m) continue;
+    fronts.add(String(m));
+    const mat = [...(doc.Assets ?? []), ...(visual ? kids(visual).flatMap((s) => s.Components?.Data ?? []) : [])]
+      .find((c) => c?.Data?.ID === m);
+    if (mat?.Data?.Texture?.Data) textures.add(String(mat.Data.Texture.Data));
+  }
+  check('and its own front material, not the deck\'s shared one',
+    fronts.size === cards.length, `${fronts.size} materials for ${cards.length} cards`);
+  check('pointing at its own texture, or every card shows the same art',
+    textures.size === cards.length, `${textures.size} textures for ${cards.length} cards`);
+}
 
 // What the importer DOES need from the stock cards is that they can be thrown
 // away cleanly. Ukilop built the hook: each buffer carries a DestroyProxy aimed at

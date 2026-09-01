@@ -3,3 +3,7 @@ node_modules/
 # out/ResoPal_Panel.resonitepackage; this is what `npm run build` makes instead,
 # so a build run to check the tests cannot clobber it.
 out/ResoPal_Panel_Build.resonitepackage
+
+# A build output: `npm run template:deck` makes it from the committed
+# data/deck-template.resonitepackage. 16.5 MB, and it changes on every rebuild.
+out/ResoPal_DeckTemplate.resonitepackage
