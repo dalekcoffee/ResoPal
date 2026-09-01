@@ -14,7 +14,8 @@
     "graft:import": "node graft-deck-import.mjs",
     "ship": "npm run template:deck && npm run graft:import && npm run graft:deck",
     "template:deck": "node build-deck-probe.mjs blank=52 mode=driven back=proxy src=../data/deck-template.resonitepackage out=out/ResoPal_DeckTemplate.resonitepackage",
-    "test:template": "node test-deck-probe.mjs out/ResoPal_DeckTemplate.resonitepackage"
+    "test:template": "node test-deck-probe.mjs out/ResoPal_DeckTemplate.resonitepackage",
+    "probe:corners": "node build-deck-probe.mjs mode=static back=proxy src=../data/deck-template.resonitepackage out=out/ResoPal_CornerProbe.resonitepackage"
   },
   "dependencies": {
     "bson": "^7.2.0",

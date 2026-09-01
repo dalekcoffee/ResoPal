@@ -96,6 +96,29 @@ if (args.blank) {
   if (!d) throw new Error(`no deck "${args.deck}" in data/decks.json - have ${Object.keys(decks).join(', ')}`);
   CODES = d.cards.flatMap((c) => Array(c.n).fill(c.code));
   if (CODES.length !== d.total) throw new Error(`${d.id} expanded to ${CODES.length}, its own total says ${d.total}`);
+} else if (args.variants) {
+  // ── the corner probe ───────────────────────────────────────────────────────
+  // Four copies of ONE card, differing only in how the front texture is set up,
+  // to answer a question that cannot be answered from a package: WHY are the
+  // corners square.
+  //
+  // A Ukilop card's front face is a FLAT 4-VERTEX QUAD - measured off the MeshX,
+  // only the 512-triangle edge submesh is rounded - so the whole of the rounded
+  // corner comes from the ART'S ALPHA, cut by `BlendMode: Cutout` at 0.72. If the
+  // art has no alpha at the width we ask for, no amount of geometry or material
+  // will round it.
+  //
+  //   0  art at w=512,  PreferredProfile sRGB       what the panel ships
+  //   1  art at w=512,  PreferredProfile sRGBAlpha  the deck's own profile
+  //   2  art at w=1024, PreferredProfile sRGBAlpha  the width the SITE bakes from
+  //   3  DefaultBack.png on the FRONT face          a KNOWN-ALPHA control
+  //
+  // Card 3 is the one that matters most: it is a PNG with transparent corners
+  // going through the same mesh, the same material and the same ST remap. If it
+  // comes out round and 0-2 do not, the path is sound and the card art is the
+  // problem. If it comes out square, the fault is in the path and the art is
+  // innocent.
+  CODES = Array(4).fill(String(args.variants));
 } else {
   CODES = String(args.cards || 'TD01-001,TD01-002,TD01-003').split(',').map((s) => s.trim()).filter(Boolean);
 }
@@ -131,6 +154,18 @@ const BACK_URL = backArg === 'site' ? BACK_SITE : backArg === 'proxy' ? `${PROXY
  * anything upstream.
  */
 const ART_VERSION = args.artv || '2';
+
+// The four setups the corner probe compares. See `variants=` above.
+const VARIANTS = [
+  { url: (c) => `${PROXY}/img/${c}?w=512&v=${ART_VERSION}`,  profile: 'sRGB',
+    say: { what: 'art w=512, sRGB       (what the panel ships)' } },
+  { url: (c) => `${PROXY}/img/${c}?w=512&v=${ART_VERSION}`,  profile: 'sRGBAlpha',
+    say: { what: "art w=512, sRGBAlpha  (the deck's own profile)" } },
+  { url: (c) => `${PROXY}/img/${c}?w=1024&v=${ART_VERSION}`, profile: 'sRGBAlpha',
+    say: { what: 'art w=1024, sRGBAlpha (the width the site bakes from)' } },
+  { url: () => BACK_URL,                                     profile: 'sRGBAlpha',
+    say: { what: 'DefaultBack.png on the front (KNOWN-ALPHA control)' } },
+];
 
 const GRID_COLS = 10, GRID_ROWS = 7;              // baked into the mesh UVs; see docs/PIPELINE.md
 const CUTOFF = 0.72;                              // docs/PIPELINE.md "White rim on card corners"
@@ -268,6 +303,7 @@ const trimmed = trimToCards(doc, CODES.length);
 
 
 const report = [];
+const variantLegend = [];
 CODES.forEach((code, i) => {
   const { scale, offset, col, row } = cellRemap(i);
   const art = code === null ? '' : `${PROXY}/img/${code}?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}`;
@@ -290,6 +326,12 @@ CODES.forEach((code, i) => {
     if (code === null) throw new Error('blank= needs mode=driven: a static build has no url to write');
     tex = cloneNode(frontTex, newId);
     tex.Data.URL.Data = asUrl(art);
+    if (args.variants) {
+      const v = VARIANTS[i];
+      tex.Data.URL.Data = asUrl(v.url(code));
+      tex.Data.PreferredProfile.Data = v.profile;
+      variantLegend.push(`  card ${i}  ${v.say.what}`);
+    }
     doc.Assets.push(tex);
     matHome = assetsSlot.Components.Data;
   } else {
@@ -306,7 +348,19 @@ CODES.forEach((code, i) => {
     home.Children = [];
     (visual.Children ??= []).push(home);
 
-    tex = cloneDonorComp(donorParts.texture);
+    // The texture is cloned from THE DECK'S OWN ATLAS TEXTURE, not from the panel
+    // card's. The panel's is authored `PreferredProfile: "sRGB"` and the deck's is
+    // `"sRGBAlpha"`, and that one field is the difference between a card with
+    // rounded corners and a card without: the front face of a Ukilop card is a
+    // FLAT 4-VERTEX QUAD - only the 512-triangle edge submesh is rounded - so the
+    // whole of the corner comes from the art's alpha, cut at 0.72. A profile that
+    // does not carry alpha is a square card, whatever the mesh looks like.
+    //
+    // Cloning the deck's own texture rather than fixing the one field also means
+    // every other setting on it is Ukilop's: `CrunchCompressed`, `MipMapFilter`,
+    // `PowerOfTwoAlignThreshold`, the lot. Only the two that MUST differ are
+    // changed - the url is driven here, and the wrap mode is clamped below.
+    tex = cloneNode(frontTex, newId);
     tex.Data.URL.Data = null;                            // driven, never written here
     const urlVar = cloneDonorComp(donorParts.urlVar);
     urlVar.Data.VariableName.Data = URL_VAR;
@@ -383,6 +437,16 @@ console.log(`  art   ${PROXY}/img/<CODE>?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}` +
   `   (v is the lever that makes Resonite refetch)`);
 console.log(`  back  ${BACK_URL}` + (backArg === 'site' ? '   (a second host: expect two access prompts)' : '') +
   (backWasPackdb ? '   [replaced the template placeholder]' : '') + '\n');
+if (variantLegend.length) {
+  console.log('  the corner probe - four copies of one card, left to right:');
+  for (const l of variantLegend) console.log(l);
+  console.log('');
+  console.log('  card 3 is the CONTROL: a PNG with transparent corners, on the same mesh,');
+  console.log('  the same material and the same ST remap. Round there and square on 0-2');
+  console.log('  means the path is sound and the card art carries no alpha at that width.');
+  console.log('  Square on ALL FOUR means the fault is in the path, not the art.');
+  console.log('');
+}
 // A full deck is too long to list a card at a time; print the row boundaries,
 // which is where the offset arithmetic is actually worth eyeballing.
 const rows = [...new Set(report.map((r) => r.row))];

@@ -1093,6 +1093,55 @@ The stock buffers already carry `OrderOffset` 0..51, so trimming the tail leaves
 and shuffle works with nothing added. The loose cards are only ever the carrier for the urls
 and are destroyed once read.
 
+### The corners did NOT close with it — and here is why
+
+Recorded because the claim was made in the same breath as the rewrite and was wrong.
+
+A Ukilop card's front face is a **flat 4-vertex quad**. Measured off the MeshX of a card
+pulled out of the Green example:
+
+```
+submesh 0: 512 Triangles, 528 verts   uv u[0,1]      v[0,1]          the EDGE, rounded
+submesh 1:   2 Triangles,   4 verts   uv u[0,0.1]    v[0.2857,0.4286]  the FRONT, one cell
+submesh 2:   2 Triangles,   4 verts   uv u[0,1]      v[0,1]          the BACK
+```
+
+Only the **edge** is rounded geometry. The front's rounded corner comes entirely from the
+**art's alpha**, cut by `BlendMode: Cutout` at `AlphaCutoff 0.72`. So swapping our quad for
+Ukilop's mesh could never have fixed the corners on its own — the front was a quad either way.
+
+What is confirmed on our side: the per-card front material is `Cutout` at 0.72, cloned from
+Ukilop's own, and the ST remap is verified per card against the mesh's UV bounds. The one
+field that differed was the texture's `PreferredProfile` — ours was `sRGB` where the deck's
+is `sRGBAlpha` — and that is fixed by cloning the deck's own texture rather than the panel
+card's. **It is not claimed as the cause**: `ColorProfileHelper` shows the two differ only in
+whether the alpha channel is gamma-transformed, and neither drops alpha.
+
+The unresolved question is whether the card art carries alpha at the width we ask for.
+The evidence points both ways and neither side can be settled from this machine (no egress
+to palify.org):
+
+* **For:** `imgfix.js` exists solely to fix "antialiased edge pixels" and carries alpha
+  through untouched; nothing in `compose.js` draws a rounded rect; and the Green/Blue decks
+  are baked by our site from that art and DO have round corners.
+* **Against:** the note below this section records "Palify's art is a square image with no
+  alpha", apparently measured earlier.
+
+They cannot both be right. `build-deck-probe.mjs variants=<CODE>` settles it in one drag:
+four copies of one card, differing only in the front texture setup —
+
+```
+card 0  art w=512,  sRGB       what the panel ships
+card 1  art w=512,  sRGBAlpha  the deck's own profile
+card 2  art w=1024, sRGBAlpha  the width the SITE bakes from
+card 3  DefaultBack.png on the FRONT face - a KNOWN-ALPHA control
+```
+
+Card 3 is the one that decides it. Round there and square on 0–2 means the mesh, the
+material and the ST are all sound and the art has no alpha at that width. Square on all four
+means the fault is in the path and the art is innocent. **Do not change anything about the
+corners again without running it.**
+
 ### Two limits, recorded not solved
 
 * **52 cards.** That is how many baked meshes the source export has. Both trial decks are 48
@@ -1172,7 +1221,9 @@ the panel's own: two `QuadMesh` quads, front and back. A quad has square corners
 
 The back looks right because `DefaultBack.png` carries transparent corners and the material
 is already `BlendMode: Cutout` at `AlphaCutoff 0.72`. The front is square because Palify's
-art is a square image with no alpha.
+art is a square image with no alpha — **contradicted, see "The corners did NOT close with it"
+above.** If that were true the Green/Blue decks would be square too, and they are not.
+The corner probe is what settles it.
 
 Three ways out, and only one of them is cheap in the wrong way:
 

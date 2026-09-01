@@ -7,3 +7,7 @@ out/ResoPal_Panel_Build.resonitepackage
 # A build output: `npm run template:deck` makes it from the committed
 # data/deck-template.resonitepackage. 16.5 MB, and it changes on every rebuild.
 out/ResoPal_DeckTemplate.resonitepackage
+
+# The corner probe: four copies of one card with different front-texture setups.
+# `node build-deck-probe.mjs mode=static variants=<CODE> ...` makes it.
+out/ResoPal_CornerProbe.resonitepackage
