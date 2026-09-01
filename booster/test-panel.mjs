@@ -767,11 +767,15 @@ console.log(`${NEWLINE}the deck-import branch:`);
   // the deck's 0.25, so unscaled it is a third of its slot.
   {
     const k = arg(deref(arg(cardBig, 'Scale')), 'Value')?.map(Number) ?? [];
-    // Z is deliberately NOT the same as X and Y. The deck stacks its buffers
-    // `cardSize`.Z apart - 1.6 mm - and a card scaled uniformly to fill the cell
-    // comes out 5.7 mm thick, so it would poke through the card above it.
-    check('the card is thinned to the deck\'s stacking pitch, not scaled uniformly',
-      k.length === 3 && k[2] < k[0], `${k.map((v) => v.toFixed(3)).join(', ')}`);
+    // The scale MUST be uniform. It was [2.84, 2.84, 0.7956] - X and Y to the
+    // cell, Z down to the 1.6 mm buffer pitch - which is correct arithmetic and a
+    // transform that cannot survive the deck's own global-preserving reparent:
+    // a non-uniform scale under a relative rotation gives a sheared matrix, and
+    // `Slot` decomposes it into position/rotation/scale, dropping the shear and
+    // getting the scale wrong. The thinness lives in the authored card instead.
+    check('the scale into a deck cell is uniform, or the deck\'s reparent shears it',
+      k.length === 3 && Math.abs(k[1] - k[0]) < 1e-6 && Math.abs(k[2] - k[0]) < 1e-6,
+      `${k.map((v) => v.toFixed(3)).join(', ')}`);
     // Read off the card template's own collider - the one place the card's real
     // size is written as a number - so this cannot pass by restating a constant.
     const cardSlot = findSlot('card');
@@ -781,9 +785,14 @@ console.log(`${NEWLINE}the deck-import branch:`);
     check('and scaled to the deck\'s card height, not left at the panel\'s',
       k.length === 3 && Math.abs(k[1] - k[0]) < 1e-6 &&
       Math.abs(k[1] * cardH - 0.25) < 1e-4, `${k.map((v) => v.toFixed(3)).join(', ')} x ${cardH}`);
+    // So the card has to be AUTHORED thin enough that the same uniform factor
+    // lands its collider inside the 1.6 mm pitch - otherwise two stacked cards'
+    // colliders overlap and you grab the wrong one. Ukilop's own card fills 86%
+    // of the pitch; anything at or over 100% is the bug this replaced.
     const cardZ = (arg(box, 'Size') || []).map(num)[2];
-    check('and its thickness lands on the deck\'s card thickness',
-      Math.abs(k[2] * cardZ - 0.0015911388909444213) < 1e-6, `${(k[2] * cardZ).toFixed(5)}`);
+    const inDeck = k[2] * cardZ;
+    check('and the card is authored thin enough to sit inside the stacking pitch',
+      inDeck > 0 && inDeck < 0.0015911388909444213, `${(inDeck * 1000).toFixed(3)} mm of 1.591`);
   }
   check('the buffer\'s packed flux lands in the deck Assets slot',
     String(arg(deref(arg(byComp.get(arg(toAssets, 'NewParent')), 'Name')), 'Value')) === 'Assets');

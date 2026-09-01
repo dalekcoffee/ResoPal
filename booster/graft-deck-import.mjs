@@ -41,7 +41,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { allocator } from './splice.mjs';
 import { memberOrder, isFluxNode, typeVersion } from './members.mjs';
-import { deckImport, COL_X, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
+import { deckImport, COL_X, DECK_CARD_HEIGHT, deckCardScale, deckCardDepth } from './deck-import.mjs';
 
 const require = createRequire(import.meta.url);
 const JSZip = require('jszip');
@@ -298,6 +298,29 @@ for (const t of doc.Types.map(String)) {
   // needed both.
   if (cardSlot.Tag === null || cardSlot.Tag === undefined) cardSlot.Tag = fd('Card');
   else cardSlot.Tag.Data = 'Card';
+
+  // ── re-author the card THIN, so the scale into a deck cell can be uniform ──
+  // The packed card's collider is 0.002 deep and the scale that took it into a
+  // cell was [2.84, 2.84, 0.7956] - X and Y to the cell, Z down to the buffer
+  // pitch. Correct arithmetic, and a transform that cannot survive a reparent:
+  // once the deck started ACCEPTING cards (which needed the tag above), its own
+  // handler reparents them preserving the global transform, and a non-uniform
+  // scale under a relative rotation gives a sheared matrix that `Slot` cannot
+  // represent. It decomposes it anyway and the scale comes out wrong - which is
+  // what "heavily misbehaving scales" looked like.
+  //
+  // So the thinness moves into the card itself and the scale becomes uniform.
+  const box = cardSlot.Components.Data.find((c) => typeIs(c, FE + 'BoxCollider'));
+  if (!box) throw new Error('the card template has no BoxCollider to re-author');
+  const h = Number(box.Data.Size.Data[1]);
+  if (!(h > 0)) throw new Error('the card collider has no height to work from');
+  const depth = deckCardDepth(h);
+  box.Data.Size.Data[2] = D(depth);
+  // The back face rides on the same number: it is offset far enough not to
+  // z-fight with the front and no further.
+  const back = (cardSlot.Children ?? []).find((c) => nm(c) === 'back');
+  if (!back) throw new Error('the card template has no back face');
+  back.Position.Data[2] = D(-depth / 4);
   console.log('  card given the deck contract: tag "Card", Card space, Card/index, Card/Grabbable; Snapper radius 0.01');
 }
 
@@ -416,8 +439,7 @@ const { nodes: branch, entryId } = deckImport(kit, {
   // Read off the card template's own collider rather than restated here, so the
   // two cannot drift: the collider is authored at the card's real size, which is
   // the thing the deck's cell has to be reconciled with.
-  cardScale: [DECK_CARD_HEIGHT / cardHeight, DECK_CARD_HEIGHT / cardHeight,
-              DECK_CARD_THICKNESS / cardThickness],
+  cardScale: deckCardScale(cardHeight),
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   if (donePlaced.data[k]) donePlaced.data[k].Data = entryId;

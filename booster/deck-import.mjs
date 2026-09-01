@@ -95,12 +95,49 @@ export const DECK_CARD_HEIGHT = 0.25;
  *
  * The deck stacks its buffers exactly this far apart - the reference deck's
  * buffers measure z = 0.0406, 0.0390, 0.0374, a 0.0016 pitch - so a card thicker
- * than this pokes through the one above it. The panel's card is 0.002 thick at the
- * collider, and scaled UNIFORMLY to fit the cell it would become 0.0057, three and
- * a half times the gap it has to sit in. So the scale is not uniform: X and Y take
- * the card to the cell, Z takes it to the pitch.
+ * than this pokes through the one above it.
  */
 export const DECK_CARD_THICKNESS = 0.0015911388909444213;
+
+/**
+ * How much of that pitch a card's collider is allowed to fill.
+ *
+ * Ukilop's own card collider is 0.0027349 deep at its 0.5 slot scale - 0.0013674
+ * in the deck, 86% of the pitch - so two stacked cards' colliders never touch.
+ */
+const DECK_CARD_CLEARANCE = 0.86;
+
+/**
+ * The scale that takes a card of `cardHeight` into a deck cell. **Uniform**, and
+ * that is the whole point of it.
+ *
+ * It used to be `[2.84, 2.84, 0.7956]` - X and Y taking the card to the cell, Z
+ * taking its 0.002 collider down to the buffer pitch. Correct arithmetic, and a
+ * transform that cannot survive being reparented. Our own `SetParent` keeps the
+ * local values and so it looked right, but the moment the DECK began accepting
+ * cards - which only happened once the slot carried its `Card` tag - its own
+ * handler started reparenting them preserving the GLOBAL transform, which is
+ * `parentGlobal⁻¹ × childGlobal`. Under a relative rotation a non-uniform scale
+ * gives a matrix with SHEAR in it, and `Slot` has only position/rotation/scale to
+ * decompose that into: the shear is dropped and the scale comes back wrong. The
+ * deck is posed a half turn about the axis between -Y and -Z, so the rotation is
+ * always there, and every card the deck received came out mangled.
+ *
+ * A uniform scale has no such failure mode. Thickness is dealt with where it
+ * belongs instead: the card is AUTHORED thin, at `deckCardDepth`, so that a single
+ * uniform factor lands it inside the pitch.
+ */
+export const deckCardScale = (cardHeight) => {
+  const s = DECK_CARD_HEIGHT / cardHeight;
+  return [s, s, s];
+};
+
+/**
+ * The collider depth to author a card at, so `deckCardScale` lands it just inside
+ * the buffer pitch. About 0.00048 for the panel's 0.088 card.
+ */
+export const deckCardDepth = (cardHeight) =>
+  (DECK_CARD_THICKNESS * DECK_CARD_CLEARANCE) / (DECK_CARD_HEIGHT / cardHeight);
 
 /**
  * The pose a spawned deck takes, in the PANEL's frame — placed in-world by the

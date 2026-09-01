@@ -916,6 +916,30 @@ agree and only one of them is ours. Match the exact classpath when finding the s
 `OnGrabbableReceiverSurfaceReceived` nodes and its `GlobalRef<GrabbableReceiverSurface>`s,
 which found ten surfaces where there are two.
 
+### And the consequence: a non-uniform scale cannot survive being received
+
+Fixing the tag made the deck start accepting cards, and the next thing reported was cards
+"heavily misbehaving scales wise". Same event, one step later.
+
+The scale taking a panel card into a deck cell was `[2.8409, 2.8409, 0.7956]` — X and Y to
+the cell, Z taking the 0.002 collider down to the 0.0016 buffer pitch. Correct arithmetic.
+Our own `SetParent` writes `PreserveGlobalPosition: false`, which keeps the local values
+verbatim, so nothing showed. But the deck's handler reparents a received card **preserving
+the global transform**, and that is `parentGlobal⁻¹ × childGlobal`. Under a relative
+rotation a non-uniform scale produces a matrix with **shear** in it, and a `Slot` has only
+position, rotation and scale to hold — it decomposes anyway, the shear is dropped and the
+scale comes back wrong. The deck is posed a half turn about the axis between -Y and -Z, so
+the rotation is always there.
+
+So the scale is uniform now and the thinness moved into the card. `deckCardDepth(h)` authors
+the collider at `pitch × 0.86 / (0.25 / h)` — about 0.00048 for the panel's 0.088 card —
+which the one uniform factor of 2.8409 lands at 0.00137 in the deck. That is Ukilop's own
+number: their collider is 0.0027349 at slot scale 0.5, and 86% of the pitch is what keeps two
+stacked cards' colliders from touching. The back face rides on the same constant.
+
+**The general rule: a slot that will be reparented by someone else's code may only carry a
+uniform scale.** Put the proportions in the geometry.
+
 ### What is deliberately NOT copied, and why it is safe
 
 Ukilop's card also carries `ValueCopy<bool>`, a `BooleanReferenceDriver<IField<bool>>` and a

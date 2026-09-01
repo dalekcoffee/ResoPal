@@ -42,7 +42,7 @@ import { createHash } from 'node:crypto';
 import JSZip from 'jszip';
 import { memberOrder, isFluxNode, haveSource, typeVersion } from './members.mjs';
 import { asUrl } from './urlmarker.mjs';
-import { deckImport, DECK_CARD_HEIGHT, DECK_CARD_THICKNESS } from './deck-import.mjs';
+import { deckImport, DECK_CARD_HEIGHT, deckCardScale, deckCardDepth } from './deck-import.mjs';
 
 const RKL = process.env.RKL || path.resolve(import.meta.dirname, '..', '..', 'Resonite-Knowledge-Library');
 const encoder = path.join(RKL, 'protoflux', 'skill', 'scripts', 'protoflux.mjs');
@@ -92,6 +92,12 @@ const RESOLVE = `${PROXY}/api/resolve?format=fixed`;
 // whatever came back. This is only how wide a row is before it wraps.
 const COLS = 10;
 const CARD_W = 0.063, CARD_H = 0.088, GAP = 0.008;
+// The card is authored THIN - about 0.00048 - rather than 0.002, so that the one
+// uniform factor `deckCardScale` applies lands its collider just inside the deck's
+// 0.0016 buffer pitch. The scale into a deck cell has to stay uniform: a
+// non-uniform one cannot survive the deck's own global-preserving reparent, which
+// decomposes a sheared matrix and gets the scale wrong. See `deck-import.mjs`.
+const CARD_T = deckCardDepth(CARD_H);
 const PITCH_X = CARD_W + GAP, PITCH_Y = CARD_H + GAP;
 
 const CANVAS_W = 620, CANVAS_H = 660, CANVAS_SCALE = 0.00058;
@@ -597,7 +603,7 @@ const backRenderer = comp(T.MeshRenderer, {
 // The back is a child rotated a half turn about Y, a hair behind the front, so
 // the two faces do not z-fight. Turning the card over shows the back, which is
 // what a card does - no flip button, no toggle, no state to get out of step.
-const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, -0.0004]);
+const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, backRenderer.comp], [0, 0, -CARD_T / 4]);
 
 // ── the card as a physical object ────────────────────────────────────────────
 // A collider is what makes a card touchable and grabbable; without one it is a
@@ -611,7 +617,7 @@ const backFace = slot('back', [backMesh.comp, backMat.comp, backTexture.comp, ba
 // a fixed 0.35 x 0.5 x 0.0027 for the same reason.
 const cardCollider = comp(T.BoxCollider, {
   Offset: V3(0, 0, 0), Type: 'Static', Mass: D(1),
-  CharacterCollider: false, IgnoreRaycasts: false, Size: V3(CARD_W, CARD_H, 0.002),
+  CharacterCollider: false, IgnoreRaycasts: false, Size: V3(CARD_W, CARD_H, CARD_T),
 });
 // `Receivable` and `DropOnDisable` are the two members `Grabbable.OnAwake` turns
 // on, and OnAwake does not run on load: an omitted `Sync<bool>` loads as FALSE.
@@ -1122,7 +1128,7 @@ const deck = deckImport(deckKit, {
   // this reference in. Null here is an unbound external hook, not a dangling one.
   deckTemplate: null,
   decksHolder: decksSlot._slot.id,
-  cardScale: [DECK_CARD_HEIGHT / CARD_H, DECK_CARD_HEIGHT / CARD_H, DECK_CARD_THICKNESS / 0.002],
+  cardScale: deckCardScale(CARD_H),
 });
 for (const k of ['OnSuccess', 'OnNotFound', 'OnFailed'])
   doneSay.slot.Components.Data[0].Data[k].Data = deck.entryId;
