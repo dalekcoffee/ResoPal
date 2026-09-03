@@ -1,8 +1,9 @@
 // Deck in, .resonitepackage out - with nothing composited.
 //
 // This replaces the atlas half of bake.js. A v1.0 card takes its face from a
-// texture it fetches itself, so an exporter's whole job per card is to write two
-// strings and let the card wire itself up in-world (docs/PIPELINE.md).
+// texture it fetches itself, so an exporter's whole job per card is to write three
+// strings - a name and two art URLs - and let the card wire itself up in-world
+// (docs/PIPELINE.md).
 //
 // The sequence below is deliberately the same one the panel's flux performs at
 // runtime - clone the template, drop the spare buffers, write each card's art -

@@ -625,7 +625,7 @@
           <div style="flex:1">
             <div data-rp="back" style="font:400 25px/1.2 'Newsreader',serif">Card back</div>
             <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Trim it here, so it can&rsquo;t be wrong in-world.</div>
-            <div style="font:400 13px/1.55 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px;max-width:640px">The frame is the output. Drag to move, scale and rotate &mdash; anything outside the card shape is cut off before it ever reaches Resonite. This back flows into both export paths.</div>
+            <div style="font:400 13px/1.55 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px;max-width:640px">The frame is the output. Drag to move, scale and rotate &mdash; anything outside the card shape is cut off. This back is used by the card sheet and the card-back image, for hand-baking in Deck Maker. The <code style="font:500 12px/1 'JetBrains Mono',monospace;color:#a3cfd8">.resonitepackage</code> deck does not carry it: its cards fetch one shared back over the network, so a custom back needs somewhere to be hosted first.</div>
           </div>
         </div>
 
@@ -1295,13 +1295,19 @@ class Component extends DCLogic {
   // Per kind, because each export reads a different part of the screen: the card
   // back owes nothing to the deck list, and the main deck owes nothing to the soul
   // count. The back's zoom/rotate/pan are deliberately absent - they are
-  // preview-only and never reach bakeDeck, so they cannot change the output.
+  // preview-only and never reach the sheet bake, so they cannot change the output.
+  //
+  // `backSrc` is in the signature for the SHEET exports only. A v1.0 deck's back is
+  // one shared URL the engine fetches in-world, not pixels in the package, so the
+  // chosen back cannot change a .resonitepackage byte - and including it there would
+  // mark a finished deck stale and make the user rebuild an identical file.
   exportSig(s, kept, kind) {
     const soul = (kind === 'soul' || kind === 'both') && !s.soulSkipped && !this.noSoul(s)
       ? s.soulCode + 'x' + s.soulCount : '-';
     const main = kind === 'soul' || kind === 'back'
       ? '-' : kept.map(r => this.sel(r.key) + ':' + r.qtyN).join(',');
-    return [kind, s.deckLabel, s.backSrc, soul, main].join('|');
+    const back = (kind === 'sheet' || kind === 'back') ? s.backSrc : '-';
+    return [kind, s.deckLabel, back, soul, main].join('|');
   }
 
   importFailed(message) {
@@ -1610,7 +1616,7 @@ class Component extends DCLogic {
       // ── the deck path reads no pixels at all ────────────────────────────────
       //
       // A v1.0 card fetches its own face from a URL, so building a deck is writing
-      // two strings per card into a template - there is no atlas to compose and
+      // three strings per card into a template - there is no atlas to compose and
       // nothing to download before it can start. The art loading below exists for
       // the SHEET export alone, which still draws an 8192 canvas for hand-baking in
       // Deck Maker, and which is why compose.js and the CORS rules around it are
