@@ -206,11 +206,17 @@ card i at col = i % 10, row = floor(i / 10) of the 10x7 grid
   TextureScale  = (10, 7)      TextureOffset = (-col, -(6 - row))
 ```
 
+**`src=` is required** and has to be an ATLAS-ERA Deck Maker export — one baked `StaticMesh` per
+card, a front material this tool clones and remaps by ST. `data/template.resonitepackage` stopped
+being that shape once it became the v1.0 deck template (`booster/extract-deck-template.mjs`: one
+shared mesh, art driven by URL, nothing per-card to remap), so there is no default any more; run
+without `src=` and it tells you so rather than probing the wrong template.
+
 ```bash
 cd booster
-RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe                # driven, the default
-RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe mode=static    # confirmed in-world
-RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe deck=td01   # a real 48-card deck
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe src=path/to/atlas-export.resonitepackage                # driven, the default
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe src=path/to/atlas-export.resonitepackage mode=static    # confirmed in-world
+RKL=/path/to/Resonite-Knowledge-Library npm run build:deck-probe src=path/to/atlas-export.resonitepackage deck=td01   # a real 48-card deck
 RKL=/path/to/Resonite-Knowledge-Library npm run test:deck-probe
 ```
 
@@ -235,11 +241,10 @@ deck chains `GetChild` (eleven, three of them taking another `GetChild` as their
 it walks `Cards -> buffer -> Card`, and those child orderings are load-bearing. `Visual
 (Baked)` is a leaf with no children, so nothing can depend on what it holds.
 
-It patches `data/template.resonitepackage`: trim to N, then give each card its own
-`StaticTexture2D` and its own front material at that ST, cloned from the template's own
-front material so the member set cannot be wrong. Edge and back stay shared. **No ProtoFlux
-at all** — the art URLs are written at build time, so the only thing being tested is the
-remap.
+It patches whatever `src=` names: trim to N, then give each card its own `StaticTexture2D` and
+its own front material at that ST, cloned from the template's own front material so the member
+set cannot be wrong. Edge and back stay shared. **No ProtoFlux at all** — the art URLs are
+written at build time, so the only thing being tested is the remap.
 
 `meshx.mjs` is why the test is worth anything. It decodes the MeshX blob behind each card's
 `StaticMesh` and reads submesh 1's UV bounds, and the test asserts the ST the package

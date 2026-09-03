@@ -339,9 +339,14 @@ function around(title, nodes, pad = 0.08, headroom = 0.14) {
 
 // ── the font ─────────────────────────────────────────────────────────────────
 // UIX Text needs a real font asset: Text.OnAttach assigns the world default, but
-// OnAttach does not run on load, so a null Font renders nothing. This is the same
-// stock font the Deck Maker template already embeds, lifted from our own template.
-const templateZip = await JSZip.loadAsync(await readFile(path.join(import.meta.dirname, '..', 'data', 'template.resonitepackage')));
+// OnAttach does not run on load, so a null Font renders nothing. This is a stock
+// Deck Maker font, borrowed from `out/ResoPal_Panel.resonitepackage` - the same
+// committed donor build-deck-probe.mjs's own DONOR default already reads from, and
+// deliberately NOT `data/template.resonitepackage`: that path is the v1.0 DECK
+// template since booster/extract-deck-template.mjs (one shared card mesh, art
+// driven by URL), and its font chain now points at the panel shell's own @resdb
+// FontChain rather than carrying this blob - see docs/PANEL-V1.md "One font chain".
+const templateZip = await JSZip.loadAsync(await readFile(path.join(import.meta.dirname, 'out', 'ResoPal_Panel.resonitepackage')));
 const FONT_HASH = 'c801b8d2522fb554678f17f4597158b1af3f9be3abd6ce35d5a3112a81e2bf39';
 const fontBytes = await templateZip.file(`Assets/${FONT_HASH}`).async('uint8array');
 if (createHash('sha256').update(fontBytes).digest('hex') !== FONT_HASH) throw new Error('font hash mismatch');

@@ -2520,435 +2520,8 @@ async function prepareBack(src, width = 1024, quality = 0.95) {
   return { blob: await encode(cv, quality), width, height };
 }
 
-// patch.js
+// fill.js
 var import_jszip = __toESM(require_jszip_min(), 1);
-
-// node_modules/brotli-wasm/pkg.web/brotli_wasm.js
-var brotli_wasm_exports = {};
-__export(brotli_wasm_exports, {
-  BrotliStreamResult: () => BrotliStreamResult,
-  BrotliStreamResultCode: () => BrotliStreamResultCode,
-  CompressStream: () => CompressStream,
-  DecompressStream: () => DecompressStream,
-  compress: () => compress,
-  decompress: () => decompress,
-  default: () => brotli_wasm_default
-});
-var wasm;
-var heap = new Array(32).fill(void 0);
-heap.push(void 0, null, true, false);
-function getObject(idx) {
-  return heap[idx];
-}
-var cachedTextDecoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
-cachedTextDecoder.decode();
-var cachegetUint8Memory0 = null;
-function getUint8Memory0() {
-  if (cachegetUint8Memory0 === null || cachegetUint8Memory0.buffer !== wasm.memory.buffer) {
-    cachegetUint8Memory0 = new Uint8Array(wasm.memory.buffer);
-  }
-  return cachegetUint8Memory0;
-}
-function getStringFromWasm0(ptr, len) {
-  return cachedTextDecoder.decode(getUint8Memory0().subarray(ptr, ptr + len));
-}
-var heap_next = heap.length;
-function addHeapObject(obj) {
-  if (heap_next === heap.length) heap.push(heap.length + 1);
-  const idx = heap_next;
-  heap_next = heap[idx];
-  heap[idx] = obj;
-  return idx;
-}
-var WASM_VECTOR_LEN = 0;
-var cachedTextEncoder = new TextEncoder("utf-8");
-var encodeString = typeof cachedTextEncoder.encodeInto === "function" ? function(arg, view) {
-  return cachedTextEncoder.encodeInto(arg, view);
-} : function(arg, view) {
-  const buf = cachedTextEncoder.encode(arg);
-  view.set(buf);
-  return {
-    read: arg.length,
-    written: buf.length
-  };
-};
-function passStringToWasm0(arg, malloc, realloc) {
-  if (realloc === void 0) {
-    const buf = cachedTextEncoder.encode(arg);
-    const ptr2 = malloc(buf.length);
-    getUint8Memory0().subarray(ptr2, ptr2 + buf.length).set(buf);
-    WASM_VECTOR_LEN = buf.length;
-    return ptr2;
-  }
-  let len = arg.length;
-  let ptr = malloc(len);
-  const mem = getUint8Memory0();
-  let offset = 0;
-  for (; offset < len; offset++) {
-    const code = arg.charCodeAt(offset);
-    if (code > 127) break;
-    mem[ptr + offset] = code;
-  }
-  if (offset !== len) {
-    if (offset !== 0) {
-      arg = arg.slice(offset);
-    }
-    ptr = realloc(ptr, len, len = offset + arg.length * 3);
-    const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
-    const ret = encodeString(arg, view);
-    offset += ret.written;
-  }
-  WASM_VECTOR_LEN = offset;
-  return ptr;
-}
-var cachegetInt32Memory0 = null;
-function getInt32Memory0() {
-  if (cachegetInt32Memory0 === null || cachegetInt32Memory0.buffer !== wasm.memory.buffer) {
-    cachegetInt32Memory0 = new Int32Array(wasm.memory.buffer);
-  }
-  return cachegetInt32Memory0;
-}
-function dropObject(idx) {
-  if (idx < 36) return;
-  heap[idx] = heap_next;
-  heap_next = idx;
-}
-function takeObject(idx) {
-  const ret = getObject(idx);
-  dropObject(idx);
-  return ret;
-}
-function passArray8ToWasm0(arg, malloc) {
-  const ptr = malloc(arg.length * 1);
-  getUint8Memory0().set(arg, ptr / 1);
-  WASM_VECTOR_LEN = arg.length;
-  return ptr;
-}
-var stack_pointer = 32;
-function addBorrowedObject(obj) {
-  if (stack_pointer == 1) throw new Error("out of js stack");
-  heap[--stack_pointer] = obj;
-  return stack_pointer;
-}
-function getArrayU8FromWasm0(ptr, len) {
-  return getUint8Memory0().subarray(ptr / 1, ptr / 1 + len);
-}
-function compress(buf, raw_options) {
-  try {
-    const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-    const ptr0 = passArray8ToWasm0(buf, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.compress(retptr, ptr0, len0, addBorrowedObject(raw_options));
-    var r0 = getInt32Memory0()[retptr / 4 + 0];
-    var r1 = getInt32Memory0()[retptr / 4 + 1];
-    var r2 = getInt32Memory0()[retptr / 4 + 2];
-    var r3 = getInt32Memory0()[retptr / 4 + 3];
-    if (r3) {
-      throw takeObject(r2);
-    }
-    var v1 = getArrayU8FromWasm0(r0, r1).slice();
-    wasm.__wbindgen_free(r0, r1 * 1);
-    return v1;
-  } finally {
-    wasm.__wbindgen_add_to_stack_pointer(16);
-    heap[stack_pointer++] = void 0;
-  }
-}
-function decompress(buf) {
-  try {
-    const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-    const ptr0 = passArray8ToWasm0(buf, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.decompress(retptr, ptr0, len0);
-    var r0 = getInt32Memory0()[retptr / 4 + 0];
-    var r1 = getInt32Memory0()[retptr / 4 + 1];
-    var r2 = getInt32Memory0()[retptr / 4 + 2];
-    var r3 = getInt32Memory0()[retptr / 4 + 3];
-    if (r3) {
-      throw takeObject(r2);
-    }
-    var v1 = getArrayU8FromWasm0(r0, r1).slice();
-    wasm.__wbindgen_free(r0, r1 * 1);
-    return v1;
-  } finally {
-    wasm.__wbindgen_add_to_stack_pointer(16);
-  }
-}
-function isLikeNone(x) {
-  return x === void 0 || x === null;
-}
-var BrotliStreamResultCode = Object.freeze({ ResultSuccess: 1, "1": "ResultSuccess", NeedsMoreInput: 2, "2": "NeedsMoreInput", NeedsMoreOutput: 3, "3": "NeedsMoreOutput" });
-var BrotliStreamResult = class _BrotliStreamResult {
-  static __wrap(ptr) {
-    const obj = Object.create(_BrotliStreamResult.prototype);
-    obj.ptr = ptr;
-    return obj;
-  }
-  __destroy_into_raw() {
-    const ptr = this.ptr;
-    this.ptr = 0;
-    return ptr;
-  }
-  free() {
-    const ptr = this.__destroy_into_raw();
-    wasm.__wbg_brotlistreamresult_free(ptr);
-  }
-  /**
-  * Result code.
-  *
-  * See [`BrotliStreamResultCode`] for available values.
-  *
-  * When error, the error code is not passed here but rather goes to `Err`.
-  */
-  get code() {
-    const ret = wasm.__wbg_get_brotlistreamresult_code(this.ptr);
-    return ret >>> 0;
-  }
-  /**
-  * Result code.
-  *
-  * See [`BrotliStreamResultCode`] for available values.
-  *
-  * When error, the error code is not passed here but rather goes to `Err`.
-  * @param {number} arg0
-  */
-  set code(arg0) {
-    wasm.__wbg_set_brotlistreamresult_code(this.ptr, arg0);
-  }
-  /**
-  * Output buffer
-  */
-  get buf() {
-    try {
-      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-      wasm.__wbg_get_brotlistreamresult_buf(retptr, this.ptr);
-      var r0 = getInt32Memory0()[retptr / 4 + 0];
-      var r1 = getInt32Memory0()[retptr / 4 + 1];
-      var v0 = getArrayU8FromWasm0(r0, r1).slice();
-      wasm.__wbindgen_free(r0, r1 * 1);
-      return v0;
-    } finally {
-      wasm.__wbindgen_add_to_stack_pointer(16);
-    }
-  }
-  /**
-  * Output buffer
-  * @param {Uint8Array} arg0
-  */
-  set buf(arg0) {
-    const ptr0 = passArray8ToWasm0(arg0, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    wasm.__wbg_set_brotlistreamresult_buf(this.ptr, ptr0, len0);
-  }
-  /**
-  * Consumed bytes of the input buffer
-  */
-  get input_offset() {
-    const ret = wasm.__wbg_get_brotlistreamresult_input_offset(this.ptr);
-    return ret >>> 0;
-  }
-  /**
-  * Consumed bytes of the input buffer
-  * @param {number} arg0
-  */
-  set input_offset(arg0) {
-    wasm.__wbg_set_brotlistreamresult_input_offset(this.ptr, arg0);
-  }
-};
-var CompressStream = class _CompressStream {
-  static __wrap(ptr) {
-    const obj = Object.create(_CompressStream.prototype);
-    obj.ptr = ptr;
-    return obj;
-  }
-  __destroy_into_raw() {
-    const ptr = this.ptr;
-    this.ptr = 0;
-    return ptr;
-  }
-  free() {
-    const ptr = this.__destroy_into_raw();
-    wasm.__wbg_compressstream_free(ptr);
-  }
-  /**
-  * @param {number | undefined} quality
-  */
-  constructor(quality) {
-    const ret = wasm.compressstream_new(!isLikeNone(quality), isLikeNone(quality) ? 0 : quality);
-    return _CompressStream.__wrap(ret);
-  }
-  /**
-  * @param {Uint8Array | undefined} input_opt
-  * @param {number} output_size
-  * @returns {BrotliStreamResult}
-  */
-  compress(input_opt, output_size) {
-    try {
-      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-      var ptr0 = isLikeNone(input_opt) ? 0 : passArray8ToWasm0(input_opt, wasm.__wbindgen_malloc);
-      var len0 = WASM_VECTOR_LEN;
-      wasm.compressstream_compress(retptr, this.ptr, ptr0, len0, output_size);
-      var r0 = getInt32Memory0()[retptr / 4 + 0];
-      var r1 = getInt32Memory0()[retptr / 4 + 1];
-      var r2 = getInt32Memory0()[retptr / 4 + 2];
-      if (r2) {
-        throw takeObject(r1);
-      }
-      return BrotliStreamResult.__wrap(r0);
-    } finally {
-      wasm.__wbindgen_add_to_stack_pointer(16);
-    }
-  }
-  /**
-  * @returns {number}
-  */
-  total_out() {
-    const ret = wasm.compressstream_total_out(this.ptr);
-    return ret >>> 0;
-  }
-};
-var DecompressStream = class _DecompressStream {
-  static __wrap(ptr) {
-    const obj = Object.create(_DecompressStream.prototype);
-    obj.ptr = ptr;
-    return obj;
-  }
-  __destroy_into_raw() {
-    const ptr = this.ptr;
-    this.ptr = 0;
-    return ptr;
-  }
-  free() {
-    const ptr = this.__destroy_into_raw();
-    wasm.__wbg_decompressstream_free(ptr);
-  }
-  /**
-  */
-  constructor() {
-    const ret = wasm.decompressstream_new();
-    return _DecompressStream.__wrap(ret);
-  }
-  /**
-  * @param {Uint8Array} input
-  * @param {number} output_size
-  * @returns {BrotliStreamResult}
-  */
-  decompress(input, output_size) {
-    try {
-      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-      const ptr0 = passArray8ToWasm0(input, wasm.__wbindgen_malloc);
-      const len0 = WASM_VECTOR_LEN;
-      wasm.decompressstream_decompress(retptr, this.ptr, ptr0, len0, output_size);
-      var r0 = getInt32Memory0()[retptr / 4 + 0];
-      var r1 = getInt32Memory0()[retptr / 4 + 1];
-      var r2 = getInt32Memory0()[retptr / 4 + 2];
-      if (r2) {
-        throw takeObject(r1);
-      }
-      return BrotliStreamResult.__wrap(r0);
-    } finally {
-      wasm.__wbindgen_add_to_stack_pointer(16);
-    }
-  }
-  /**
-  * @returns {number}
-  */
-  total_out() {
-    const ret = wasm.decompressstream_total_out(this.ptr);
-    return ret >>> 0;
-  }
-};
-async function load(module, imports) {
-  if (typeof Response === "function" && module instanceof Response) {
-    if (typeof WebAssembly.instantiateStreaming === "function") {
-      try {
-        return await WebAssembly.instantiateStreaming(module, imports);
-      } catch (e) {
-        if (module.headers.get("Content-Type") != "application/wasm") {
-          console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
-        } else {
-          throw e;
-        }
-      }
-    }
-    const bytes = await module.arrayBuffer();
-    return await WebAssembly.instantiate(bytes, imports);
-  } else {
-    const instance = await WebAssembly.instantiate(module, imports);
-    if (instance instanceof WebAssembly.Instance) {
-      return { instance, module };
-    } else {
-      return instance;
-    }
-  }
-}
-async function init(input) {
-  if (typeof input === "undefined") {
-    input = new URL("brotli_wasm_bg.wasm", import.meta.url);
-  }
-  const imports = {};
-  imports.wbg = {};
-  imports.wbg.__wbindgen_is_undefined = function(arg0) {
-    const ret = getObject(arg0) === void 0;
-    return ret;
-  };
-  imports.wbg.__wbindgen_is_object = function(arg0) {
-    const val = getObject(arg0);
-    const ret = typeof val === "object" && val !== null;
-    return ret;
-  };
-  imports.wbg.__wbindgen_string_new = function(arg0, arg1) {
-    const ret = getStringFromWasm0(arg0, arg1);
-    return addHeapObject(ret);
-  };
-  imports.wbg.__wbindgen_error_new = function(arg0, arg1) {
-    const ret = new Error(getStringFromWasm0(arg0, arg1));
-    return addHeapObject(ret);
-  };
-  imports.wbg.__wbindgen_json_serialize = function(arg0, arg1) {
-    const obj = getObject(arg1);
-    const ret = JSON.stringify(obj === void 0 ? null : obj);
-    const ptr0 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    getInt32Memory0()[arg0 / 4 + 1] = len0;
-    getInt32Memory0()[arg0 / 4 + 0] = ptr0;
-  };
-  imports.wbg.__wbg_new_693216e109162396 = function() {
-    const ret = new Error();
-    return addHeapObject(ret);
-  };
-  imports.wbg.__wbg_stack_0ddaca5d1abfb52f = function(arg0, arg1) {
-    const ret = getObject(arg1).stack;
-    const ptr0 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    getInt32Memory0()[arg0 / 4 + 1] = len0;
-    getInt32Memory0()[arg0 / 4 + 0] = ptr0;
-  };
-  imports.wbg.__wbg_error_09919627ac0992f5 = function(arg0, arg1) {
-    try {
-      console.error(getStringFromWasm0(arg0, arg1));
-    } finally {
-      wasm.__wbindgen_free(arg0, arg1);
-    }
-  };
-  imports.wbg.__wbindgen_object_drop_ref = function(arg0) {
-    takeObject(arg0);
-  };
-  imports.wbg.__wbindgen_throw = function(arg0, arg1) {
-    throw new Error(getStringFromWasm0(arg0, arg1));
-  };
-  if (typeof input === "string" || typeof Request === "function" && input instanceof Request || typeof URL === "function" && input instanceof URL) {
-    input = fetch(input);
-  }
-  const { instance, module } = await load(await input, imports);
-  wasm = instance.exports;
-  init.__wbindgen_wasm_module = module;
-  return wasm;
-}
-var brotli_wasm_default = init;
-
-// node_modules/brotli-wasm/index.web.js
-var index_web_default = brotli_wasm_default().then(() => brotli_wasm_exports);
 
 // node_modules/bson/lib/bson.mjs
 var TypedArrayPrototypeGetSymbolToStringTag = (() => {
@@ -4072,9 +3645,9 @@ function validateStringCharacters(str, radix) {
   const regex = new RegExp(`[^-+${validCharacters}]`, "i");
   return regex.test(str) ? false : str;
 }
-var wasm2 = void 0;
+var wasm = void 0;
 try {
-  wasm2 = new WebAssembly.Instance(new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 13, 2, 96, 0, 1, 127, 96, 4, 127, 127, 127, 127, 1, 127, 3, 7, 6, 0, 1, 1, 1, 1, 1, 6, 6, 1, 127, 1, 65, 0, 11, 7, 50, 6, 3, 109, 117, 108, 0, 1, 5, 100, 105, 118, 95, 115, 0, 2, 5, 100, 105, 118, 95, 117, 0, 3, 5, 114, 101, 109, 95, 115, 0, 4, 5, 114, 101, 109, 95, 117, 0, 5, 8, 103, 101, 116, 95, 104, 105, 103, 104, 0, 0, 10, 191, 1, 6, 4, 0, 35, 0, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 126, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 127, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 128, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 129, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 130, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11])), {}).exports;
+  wasm = new WebAssembly.Instance(new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 13, 2, 96, 0, 1, 127, 96, 4, 127, 127, 127, 127, 1, 127, 3, 7, 6, 0, 1, 1, 1, 1, 1, 6, 6, 1, 127, 1, 65, 0, 11, 7, 50, 6, 3, 109, 117, 108, 0, 1, 5, 100, 105, 118, 95, 115, 0, 2, 5, 100, 105, 118, 95, 117, 0, 3, 5, 114, 101, 109, 95, 115, 0, 4, 5, 114, 101, 109, 95, 117, 0, 5, 8, 103, 101, 116, 95, 104, 105, 103, 104, 0, 0, 10, 191, 1, 6, 4, 0, 35, 0, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 126, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 127, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 128, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 129, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 130, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11])), {}).exports;
 } catch {
 }
 var TWO_PWR_16_DBL = 1 << 16;
@@ -4299,12 +3872,12 @@ var Long = class _Long extends BSONValue {
       divisor = _Long.fromValue(divisor);
     if (divisor.isZero())
       throw new BSONError("division by zero");
-    if (wasm2) {
+    if (wasm) {
       if (!this.unsigned && this.high === -2147483648 && divisor.low === -1 && divisor.high === -1) {
         return this;
       }
-      const low = (this.unsigned ? wasm2.div_u : wasm2.div_s)(this.low, this.high, divisor.low, divisor.high);
-      return _Long.fromBits(low, wasm2.get_high(), this.unsigned);
+      const low = (this.unsigned ? wasm.div_u : wasm.div_s)(this.low, this.high, divisor.low, divisor.high);
+      return _Long.fromBits(low, wasm.get_high(), this.unsigned);
     }
     if (this.isZero())
       return this.unsigned ? _Long.UZERO : _Long.ZERO;
@@ -4444,9 +4017,9 @@ var Long = class _Long extends BSONValue {
   modulo(divisor) {
     if (!_Long.isLong(divisor))
       divisor = _Long.fromValue(divisor);
-    if (wasm2) {
-      const low = (this.unsigned ? wasm2.rem_u : wasm2.rem_s)(this.low, this.high, divisor.low, divisor.high);
-      return _Long.fromBits(low, wasm2.get_high(), this.unsigned);
+    if (wasm) {
+      const low = (this.unsigned ? wasm.rem_u : wasm.rem_s)(this.low, this.high, divisor.low, divisor.high);
+      return _Long.fromBits(low, wasm.get_high(), this.unsigned);
     }
     return this.sub(this.div(divisor).mul(divisor));
   }
@@ -4461,9 +4034,9 @@ var Long = class _Long extends BSONValue {
       return _Long.ZERO;
     if (!_Long.isLong(multiplier))
       multiplier = _Long.fromValue(multiplier);
-    if (wasm2) {
-      const low = wasm2.mul(this.low, this.high, multiplier.low, multiplier.high);
-      return _Long.fromBits(low, wasm2.get_high(), this.unsigned);
+    if (wasm) {
+      const low = wasm.mul(this.low, this.high, multiplier.low, multiplier.high);
+      return _Long.fromBits(low, wasm.get_high(), this.unsigned);
     }
     if (multiplier.isZero())
       return _Long.ZERO;
@@ -7182,6 +6755,433 @@ function deserialize(buffer2, options = {}) {
   return internalDeserialize(ByteUtils.toLocalBufferType(buffer2), options);
 }
 
+// node_modules/brotli-wasm/pkg.web/brotli_wasm.js
+var brotli_wasm_exports = {};
+__export(brotli_wasm_exports, {
+  BrotliStreamResult: () => BrotliStreamResult,
+  BrotliStreamResultCode: () => BrotliStreamResultCode,
+  CompressStream: () => CompressStream,
+  DecompressStream: () => DecompressStream,
+  compress: () => compress,
+  decompress: () => decompress,
+  default: () => brotli_wasm_default
+});
+var wasm2;
+var heap = new Array(32).fill(void 0);
+heap.push(void 0, null, true, false);
+function getObject(idx) {
+  return heap[idx];
+}
+var cachedTextDecoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
+cachedTextDecoder.decode();
+var cachegetUint8Memory0 = null;
+function getUint8Memory0() {
+  if (cachegetUint8Memory0 === null || cachegetUint8Memory0.buffer !== wasm2.memory.buffer) {
+    cachegetUint8Memory0 = new Uint8Array(wasm2.memory.buffer);
+  }
+  return cachegetUint8Memory0;
+}
+function getStringFromWasm0(ptr, len) {
+  return cachedTextDecoder.decode(getUint8Memory0().subarray(ptr, ptr + len));
+}
+var heap_next = heap.length;
+function addHeapObject(obj) {
+  if (heap_next === heap.length) heap.push(heap.length + 1);
+  const idx = heap_next;
+  heap_next = heap[idx];
+  heap[idx] = obj;
+  return idx;
+}
+var WASM_VECTOR_LEN = 0;
+var cachedTextEncoder = new TextEncoder("utf-8");
+var encodeString = typeof cachedTextEncoder.encodeInto === "function" ? function(arg, view) {
+  return cachedTextEncoder.encodeInto(arg, view);
+} : function(arg, view) {
+  const buf = cachedTextEncoder.encode(arg);
+  view.set(buf);
+  return {
+    read: arg.length,
+    written: buf.length
+  };
+};
+function passStringToWasm0(arg, malloc, realloc) {
+  if (realloc === void 0) {
+    const buf = cachedTextEncoder.encode(arg);
+    const ptr2 = malloc(buf.length);
+    getUint8Memory0().subarray(ptr2, ptr2 + buf.length).set(buf);
+    WASM_VECTOR_LEN = buf.length;
+    return ptr2;
+  }
+  let len = arg.length;
+  let ptr = malloc(len);
+  const mem = getUint8Memory0();
+  let offset = 0;
+  for (; offset < len; offset++) {
+    const code = arg.charCodeAt(offset);
+    if (code > 127) break;
+    mem[ptr + offset] = code;
+  }
+  if (offset !== len) {
+    if (offset !== 0) {
+      arg = arg.slice(offset);
+    }
+    ptr = realloc(ptr, len, len = offset + arg.length * 3);
+    const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
+    const ret = encodeString(arg, view);
+    offset += ret.written;
+  }
+  WASM_VECTOR_LEN = offset;
+  return ptr;
+}
+var cachegetInt32Memory0 = null;
+function getInt32Memory0() {
+  if (cachegetInt32Memory0 === null || cachegetInt32Memory0.buffer !== wasm2.memory.buffer) {
+    cachegetInt32Memory0 = new Int32Array(wasm2.memory.buffer);
+  }
+  return cachegetInt32Memory0;
+}
+function dropObject(idx) {
+  if (idx < 36) return;
+  heap[idx] = heap_next;
+  heap_next = idx;
+}
+function takeObject(idx) {
+  const ret = getObject(idx);
+  dropObject(idx);
+  return ret;
+}
+function passArray8ToWasm0(arg, malloc) {
+  const ptr = malloc(arg.length * 1);
+  getUint8Memory0().set(arg, ptr / 1);
+  WASM_VECTOR_LEN = arg.length;
+  return ptr;
+}
+var stack_pointer = 32;
+function addBorrowedObject(obj) {
+  if (stack_pointer == 1) throw new Error("out of js stack");
+  heap[--stack_pointer] = obj;
+  return stack_pointer;
+}
+function getArrayU8FromWasm0(ptr, len) {
+  return getUint8Memory0().subarray(ptr / 1, ptr / 1 + len);
+}
+function compress(buf, raw_options) {
+  try {
+    const retptr = wasm2.__wbindgen_add_to_stack_pointer(-16);
+    const ptr0 = passArray8ToWasm0(buf, wasm2.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    wasm2.compress(retptr, ptr0, len0, addBorrowedObject(raw_options));
+    var r0 = getInt32Memory0()[retptr / 4 + 0];
+    var r1 = getInt32Memory0()[retptr / 4 + 1];
+    var r2 = getInt32Memory0()[retptr / 4 + 2];
+    var r3 = getInt32Memory0()[retptr / 4 + 3];
+    if (r3) {
+      throw takeObject(r2);
+    }
+    var v1 = getArrayU8FromWasm0(r0, r1).slice();
+    wasm2.__wbindgen_free(r0, r1 * 1);
+    return v1;
+  } finally {
+    wasm2.__wbindgen_add_to_stack_pointer(16);
+    heap[stack_pointer++] = void 0;
+  }
+}
+function decompress(buf) {
+  try {
+    const retptr = wasm2.__wbindgen_add_to_stack_pointer(-16);
+    const ptr0 = passArray8ToWasm0(buf, wasm2.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    wasm2.decompress(retptr, ptr0, len0);
+    var r0 = getInt32Memory0()[retptr / 4 + 0];
+    var r1 = getInt32Memory0()[retptr / 4 + 1];
+    var r2 = getInt32Memory0()[retptr / 4 + 2];
+    var r3 = getInt32Memory0()[retptr / 4 + 3];
+    if (r3) {
+      throw takeObject(r2);
+    }
+    var v1 = getArrayU8FromWasm0(r0, r1).slice();
+    wasm2.__wbindgen_free(r0, r1 * 1);
+    return v1;
+  } finally {
+    wasm2.__wbindgen_add_to_stack_pointer(16);
+  }
+}
+function isLikeNone(x) {
+  return x === void 0 || x === null;
+}
+var BrotliStreamResultCode = Object.freeze({ ResultSuccess: 1, "1": "ResultSuccess", NeedsMoreInput: 2, "2": "NeedsMoreInput", NeedsMoreOutput: 3, "3": "NeedsMoreOutput" });
+var BrotliStreamResult = class _BrotliStreamResult {
+  static __wrap(ptr) {
+    const obj = Object.create(_BrotliStreamResult.prototype);
+    obj.ptr = ptr;
+    return obj;
+  }
+  __destroy_into_raw() {
+    const ptr = this.ptr;
+    this.ptr = 0;
+    return ptr;
+  }
+  free() {
+    const ptr = this.__destroy_into_raw();
+    wasm2.__wbg_brotlistreamresult_free(ptr);
+  }
+  /**
+  * Result code.
+  *
+  * See [`BrotliStreamResultCode`] for available values.
+  *
+  * When error, the error code is not passed here but rather goes to `Err`.
+  */
+  get code() {
+    const ret = wasm2.__wbg_get_brotlistreamresult_code(this.ptr);
+    return ret >>> 0;
+  }
+  /**
+  * Result code.
+  *
+  * See [`BrotliStreamResultCode`] for available values.
+  *
+  * When error, the error code is not passed here but rather goes to `Err`.
+  * @param {number} arg0
+  */
+  set code(arg0) {
+    wasm2.__wbg_set_brotlistreamresult_code(this.ptr, arg0);
+  }
+  /**
+  * Output buffer
+  */
+  get buf() {
+    try {
+      const retptr = wasm2.__wbindgen_add_to_stack_pointer(-16);
+      wasm2.__wbg_get_brotlistreamresult_buf(retptr, this.ptr);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var v0 = getArrayU8FromWasm0(r0, r1).slice();
+      wasm2.__wbindgen_free(r0, r1 * 1);
+      return v0;
+    } finally {
+      wasm2.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * Output buffer
+  * @param {Uint8Array} arg0
+  */
+  set buf(arg0) {
+    const ptr0 = passArray8ToWasm0(arg0, wasm2.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    wasm2.__wbg_set_brotlistreamresult_buf(this.ptr, ptr0, len0);
+  }
+  /**
+  * Consumed bytes of the input buffer
+  */
+  get input_offset() {
+    const ret = wasm2.__wbg_get_brotlistreamresult_input_offset(this.ptr);
+    return ret >>> 0;
+  }
+  /**
+  * Consumed bytes of the input buffer
+  * @param {number} arg0
+  */
+  set input_offset(arg0) {
+    wasm2.__wbg_set_brotlistreamresult_input_offset(this.ptr, arg0);
+  }
+};
+var CompressStream = class _CompressStream {
+  static __wrap(ptr) {
+    const obj = Object.create(_CompressStream.prototype);
+    obj.ptr = ptr;
+    return obj;
+  }
+  __destroy_into_raw() {
+    const ptr = this.ptr;
+    this.ptr = 0;
+    return ptr;
+  }
+  free() {
+    const ptr = this.__destroy_into_raw();
+    wasm2.__wbg_compressstream_free(ptr);
+  }
+  /**
+  * @param {number | undefined} quality
+  */
+  constructor(quality) {
+    const ret = wasm2.compressstream_new(!isLikeNone(quality), isLikeNone(quality) ? 0 : quality);
+    return _CompressStream.__wrap(ret);
+  }
+  /**
+  * @param {Uint8Array | undefined} input_opt
+  * @param {number} output_size
+  * @returns {BrotliStreamResult}
+  */
+  compress(input_opt, output_size) {
+    try {
+      const retptr = wasm2.__wbindgen_add_to_stack_pointer(-16);
+      var ptr0 = isLikeNone(input_opt) ? 0 : passArray8ToWasm0(input_opt, wasm2.__wbindgen_malloc);
+      var len0 = WASM_VECTOR_LEN;
+      wasm2.compressstream_compress(retptr, this.ptr, ptr0, len0, output_size);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var r2 = getInt32Memory0()[retptr / 4 + 2];
+      if (r2) {
+        throw takeObject(r1);
+      }
+      return BrotliStreamResult.__wrap(r0);
+    } finally {
+      wasm2.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * @returns {number}
+  */
+  total_out() {
+    const ret = wasm2.compressstream_total_out(this.ptr);
+    return ret >>> 0;
+  }
+};
+var DecompressStream = class _DecompressStream {
+  static __wrap(ptr) {
+    const obj = Object.create(_DecompressStream.prototype);
+    obj.ptr = ptr;
+    return obj;
+  }
+  __destroy_into_raw() {
+    const ptr = this.ptr;
+    this.ptr = 0;
+    return ptr;
+  }
+  free() {
+    const ptr = this.__destroy_into_raw();
+    wasm2.__wbg_decompressstream_free(ptr);
+  }
+  /**
+  */
+  constructor() {
+    const ret = wasm2.decompressstream_new();
+    return _DecompressStream.__wrap(ret);
+  }
+  /**
+  * @param {Uint8Array} input
+  * @param {number} output_size
+  * @returns {BrotliStreamResult}
+  */
+  decompress(input, output_size) {
+    try {
+      const retptr = wasm2.__wbindgen_add_to_stack_pointer(-16);
+      const ptr0 = passArray8ToWasm0(input, wasm2.__wbindgen_malloc);
+      const len0 = WASM_VECTOR_LEN;
+      wasm2.decompressstream_decompress(retptr, this.ptr, ptr0, len0, output_size);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var r2 = getInt32Memory0()[retptr / 4 + 2];
+      if (r2) {
+        throw takeObject(r1);
+      }
+      return BrotliStreamResult.__wrap(r0);
+    } finally {
+      wasm2.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * @returns {number}
+  */
+  total_out() {
+    const ret = wasm2.decompressstream_total_out(this.ptr);
+    return ret >>> 0;
+  }
+};
+async function load(module, imports) {
+  if (typeof Response === "function" && module instanceof Response) {
+    if (typeof WebAssembly.instantiateStreaming === "function") {
+      try {
+        return await WebAssembly.instantiateStreaming(module, imports);
+      } catch (e) {
+        if (module.headers.get("Content-Type") != "application/wasm") {
+          console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
+        } else {
+          throw e;
+        }
+      }
+    }
+    const bytes = await module.arrayBuffer();
+    return await WebAssembly.instantiate(bytes, imports);
+  } else {
+    const instance = await WebAssembly.instantiate(module, imports);
+    if (instance instanceof WebAssembly.Instance) {
+      return { instance, module };
+    } else {
+      return instance;
+    }
+  }
+}
+async function init(input) {
+  if (typeof input === "undefined") {
+    input = new URL("brotli_wasm_bg.wasm", import.meta.url);
+  }
+  const imports = {};
+  imports.wbg = {};
+  imports.wbg.__wbindgen_is_undefined = function(arg0) {
+    const ret = getObject(arg0) === void 0;
+    return ret;
+  };
+  imports.wbg.__wbindgen_is_object = function(arg0) {
+    const val = getObject(arg0);
+    const ret = typeof val === "object" && val !== null;
+    return ret;
+  };
+  imports.wbg.__wbindgen_string_new = function(arg0, arg1) {
+    const ret = getStringFromWasm0(arg0, arg1);
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbindgen_error_new = function(arg0, arg1) {
+    const ret = new Error(getStringFromWasm0(arg0, arg1));
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbindgen_json_serialize = function(arg0, arg1) {
+    const obj = getObject(arg1);
+    const ret = JSON.stringify(obj === void 0 ? null : obj);
+    const ptr0 = passStringToWasm0(ret, wasm2.__wbindgen_malloc, wasm2.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    getInt32Memory0()[arg0 / 4 + 1] = len0;
+    getInt32Memory0()[arg0 / 4 + 0] = ptr0;
+  };
+  imports.wbg.__wbg_new_693216e109162396 = function() {
+    const ret = new Error();
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_stack_0ddaca5d1abfb52f = function(arg0, arg1) {
+    const ret = getObject(arg1).stack;
+    const ptr0 = passStringToWasm0(ret, wasm2.__wbindgen_malloc, wasm2.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    getInt32Memory0()[arg0 / 4 + 1] = len0;
+    getInt32Memory0()[arg0 / 4 + 0] = ptr0;
+  };
+  imports.wbg.__wbg_error_09919627ac0992f5 = function(arg0, arg1) {
+    try {
+      console.error(getStringFromWasm0(arg0, arg1));
+    } finally {
+      wasm2.__wbindgen_free(arg0, arg1);
+    }
+  };
+  imports.wbg.__wbindgen_object_drop_ref = function(arg0) {
+    takeObject(arg0);
+  };
+  imports.wbg.__wbindgen_throw = function(arg0, arg1) {
+    throw new Error(getStringFromWasm0(arg0, arg1));
+  };
+  if (typeof input === "string" || typeof Request === "function" && input instanceof Request || typeof URL === "function" && input instanceof URL) {
+    input = fetch(input);
+  }
+  const { instance, module } = await load(await input, imports);
+  wasm2 = instance.exports;
+  init.__wbindgen_wasm_module = module;
+  return wasm2;
+}
+var brotli_wasm_default = init;
+
+// node_modules/brotli-wasm/index.web.js
+var index_web_default = brotli_wasm_default().then(() => brotli_wasm_exports);
+
 // frdt.js
 var MAGIC = [70, 114, 68, 84];
 var BROTLI = 3;
@@ -7207,281 +7207,183 @@ async function docToFrdt(doc, quality = 4) {
   return out;
 }
 
-// trim.js
-function trimToCards(doc, N, log = console.log) {
-  const kidsOf = (s) => s.Children ?? [];
-  const nm = (s) => String(s?.Name?.Data ?? "");
-  const typeName = (a) => {
-    const t = a.Type;
-    const i = t && typeof t === "object" ? t.value ?? t.valueOf?.() : t;
-    return String(doc.Types?.[i] ?? "");
-  };
-  const rootKids = kidsOf(doc.Object);
-  const assetsSlot = rootKids.find((c) => nm(c) === "Assets");
-  const surface = rootKids.find((c) => nm(c).startsWith("Surface"));
-  const cards = kidsOf(surface)[0];
-  const before = kidsOf(cards).length;
-  if (N > before) throw new Error(`template holds ${before} cards; cannot grow to ${N} \u2014 bake a larger template`);
-  if (kidsOf(assetsSlot).length !== before)
-    throw new Error(`/Assets proxies (${kidsOf(assetsSlot).length}) do not match card slots (${before})`);
-  cards.Children = kidsOf(cards).slice(0, N);
-  assetsSlot.Children = kidsOf(assetsSlot).slice(0, N);
-  log(`  card slots ${before} -> ${N}   /Assets driver proxies ${before} -> ${N}`);
-  let frames = 0;
-  (function w(o) {
-    if (Array.isArray(o)) return o.forEach(w);
-    if (o && typeof o === "object") {
-      if (o.GridSize && o.GridFrames) {
-        const g = o.GridSize.Data.map((v) => v && typeof v === "object" && "value" in v ? v.value : Number(v));
-        if (g[0] > 1) {
-          o.GridFrames.Data = N;
-          frames++;
-        }
+// ../booster/urlmarker.mjs
+var GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var URL_FIELD = /(^|[a-z])URL$/i;
+var isUrlValueField = (key, value) => URL_FIELD.test(key) && typeof value === "string" && value !== "" && !GUID.test(value);
+function scanUrlFields(doc) {
+  const marked = [], unmarked = [];
+  (function walk(o) {
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (!o || typeof o !== "object") return;
+    for (const [k, v] of Object.entries(o)) {
+      if (v && typeof v === "object" && !Array.isArray(v) && isUrlValueField(k, v.Data)) {
+        (v.Data.startsWith("@") && v.Data[1] !== "@" ? marked : unmarked).push({ field: k, value: v.Data });
       }
-      for (const k in o) w(o[k]);
-    }
-  })(doc.Object);
-  log(`  GridFrames -> ${N} (${frames} atlas)`);
-  const count = /* @__PURE__ */ new Map();
-  (function w(o) {
-    if (Array.isArray(o)) return o.forEach(w);
-    if (o && typeof o === "object") {
-      for (const k in o) {
-        const v = o[k];
-        if (typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(v)) count.set(v, (count.get(v) || 0) + 1);
-        else w(v);
-      }
+      walk(v);
     }
   })(doc);
-  const dropped = [], keep = [];
-  for (const a of doc.Assets) {
-    const isMesh = /StaticMesh/.test(typeName(a));
-    const id = a?.Data?.ID;
-    if (isMesh && id && (count.get(id) || 0) <= 1) {
-      const u = a?.Data?.URL?.Data;
-      if (u) dropped.push(String(u).replace(/^@?packdb:\/\/\//, ""));
-    } else keep.push(a);
-  }
-  doc.Assets = keep;
-  log(`  orphaned StaticMesh assets dropped: ${dropped.length} (expected ${before - N})`);
-  if (dropped.length !== before - N)
-    throw new Error(`mesh drop mismatch: dropped ${dropped.length}, expected ${before - N}`);
-  return dropped;
+  return { marked, unmarked };
 }
+var asUrl = (url) => String(url).startsWith("@") ? String(url) : "@" + url;
 
-// credits.js
-function addCredits(doc, log = console.log) {
+// credits-v1.js
+var DECK_CREDITS = [
+  "Card data - Palify - palify.org",
+  "Deck template - Deck Maker by Ukilop V1.4.4",
+  "Card templates & TCG field systems - Sharkmake (AKA Flux)",
+  "Tool by Dalek - dalek.coffee - ResoPal v1.0 - resopal.dalek.coffee"
+];
+function verifyCredits(doc) {
   const root = doc.Object;
-  const kidsOf = (s) => {
-    if (!s.Children) s.Children = [];
-    return s.Children;
-  };
-  const used = /* @__PURE__ */ new Set();
-  (function scan(o) {
-    if (Array.isArray(o)) return o.forEach(scan);
-    if (o && typeof o === "object") {
-      for (const k of Object.keys(o)) {
-        const v = o[k];
-        if ((k === "ID" || k === "Persistent-ID" || k === "ParentReference") && typeof v === "string") used.add(v);
-        else scan(v);
-      }
-    }
-  })(doc);
-  let counter = 0;
-  const newId = () => {
-    let id;
-    do {
-      id = `0000${(61440 + counter++).toString(16).padStart(4, "0")}-0000-0000-0000-000000000000`;
-    } while (used.has(id));
-    used.add(id);
-    return id;
-  };
-  const clone = (o) => Array.isArray(o) ? o.map(clone) : o && typeof o === "object" && o.constructor === Object ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, clone(v)])) : o;
-  const reid = (o) => {
-    if (Array.isArray(o)) return o.forEach(reid);
-    if (o && typeof o === "object" && o.constructor === Object) {
-      for (const k of Object.keys(o)) {
-        if ((k === "ID" || k === "Persistent-ID" || k === "ParentReference") && typeof o[k] === "string") o[k] = newId();
-        else reid(o[k]);
-      }
-    }
-  };
-  const rootKids = kidsOf(root);
-  const i = rootKids.findIndex((c) => typeof c?.Name?.Data === "string" && c.Name.Data.includes("Ukilop"));
-  if (i < 0) throw new Error("Ukilop credit slot not found at deck root");
-  const ukilop = rootKids[i];
-  log(`  found existing credit: ${JSON.stringify(ukilop.Name.Data)}`);
-  const makeSlot = (name) => {
-    const s = clone(ukilop);
-    reid(s);
-    s.Name.Data = name;
-    s.Children = [];
-    s.Components.Data = [];
-    return s;
-  };
-  const credits = makeSlot("credits");
-  rootKids.splice(i, 1);
-  credits.Children = [
-    ukilop,
-    // moved, untouched: name preserved verbatim
-    makeSlot("Card images & deck data by Palify - palify.org"),
-    makeSlot("ResoPal import tool by Dalek - resopal.dalek.coffee")
-  ];
-  rootKids.push(credits);
-  log(`  /credits created with ${credits.Children.length} slots:`);
-  for (const c of credits.Children) log(`      ${JSON.stringify(c.Name.Data)}`);
+  const credits = (root.Children ?? []).find((c) => String(c?.Name?.Data ?? "") === "credits");
+  if (!credits) throw new Error("the deck carries no /credits slot");
+  const got = (credits.Children ?? []).map((c) => String(c?.Name?.Data ?? ""));
+  const missing = DECK_CREDITS.filter((w) => !got.includes(w));
+  if (missing.length) throw new Error(
+    `/credits is missing ${missing.length} line(s), first: ${JSON.stringify(missing[0])}`
+  );
   return credits;
 }
 
-// patch.js
-var OLD_ATLAS = "971a5f8b1153061fc65a30f2a00dfc1ea5f305d3f1629a84bda31afece70766c";
-var OLD_BACK = "1456016c0996fa34c066751023d63ca055136dfc73e8de53e2e18051ec2f5632";
-var TEX_FRONT = "000000c5-0000-0000-0000-000000000000";
-var TEX_BACK = "00000057-0000-0000-0000-000000000000";
-var CUTOFF = 0.72;
-var enc = new TextEncoder();
-async function sha256(bytes) {
-  const d = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+// fill.js
+var IN_WORLD_WIDTH = 512;
+var ART_VERSION = 2;
+var DEFAULT_PROXY = "https://resopal-proxy.dalek.workers.dev";
+var artUrlFor = (code, proxy = DEFAULT_PROXY) => `${proxy}/img/${code}?w=${IN_WORLD_WIDTH}&v=${ART_VERSION}`;
+var backUrlFor = (proxy = DEFAULT_PROXY) => `${proxy}/back`;
+var num = (v) => v && typeof v === "object" && v._bsontype ? Number(v) : v;
+var nm = (s) => String(s?.Name?.Data ?? "");
+var kid = (s, n) => (s.Children ?? []).find((c) => nm(c) === n);
+var GUID2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var shortType = (t) => String(t).replace(/^\[[^\]]+\]/, "").split(".").pop();
+var compsOf = (doc, slot, type) => (slot.Components?.Data ?? []).filter((c) => shortType(doc.Types[num(c.Type)]) === type);
+var oneComp = (doc, slot, type, where) => {
+  const found = compsOf(doc, slot, type);
+  if (found.length !== 1) throw new Error(`${where}: expected exactly one ${type}, found ${found.length}`);
+  return found[0];
+};
+function assetRefsIn(node, assetIds) {
+  const out = /* @__PURE__ */ new Set();
+  (function w(o) {
+    if (Array.isArray(o)) return o.forEach(w);
+    if (!o || typeof o !== "object") return;
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (typeof v === "string") {
+        if (GUID2.test(v) && assetIds.has(v)) out.add(v);
+      } else w(v);
+    }
+  })(node);
+  return out;
 }
-async function patchPackage(template, { front, back, cards, name, edgeTint, log = () => {
+function readTemplate(doc) {
+  const deck = doc.Object;
+  if (nm(deck) !== "Deck") throw new Error(`template root is "${nm(deck)}", expected "Deck"`);
+  const surface = kid(deck, "Surface/cards");
+  if (!surface) throw new Error('no "Surface/cards" slot under the deck root');
+  const cards = kid(surface, "Cards");
+  if (!cards) throw new Error('no "Cards" slot under Surface/cards');
+  const assetsSlot = kid(deck, "Assets");
+  if (!assetsSlot) throw new Error('no "Assets" slot under the deck root');
+  const proxies = (assetsSlot.Children ?? []).filter((c) => nm(c) === "proxy");
+  if (proxies.length !== (assetsSlot.Children ?? []).length)
+    throw new Error(`/Assets holds ${(assetsSlot.Children ?? []).length} children but only ${proxies.length} are "proxy" slots - trimming by index would remove the wrong thing`);
+  if (proxies.length !== cards.Children.length)
+    throw new Error(`${cards.Children.length} buffers but ${proxies.length} /Assets driver proxies - they are 1:1`);
+  const size = oneComp(doc, deck, "DynamicValueVariable<float3>", "deck root");
+  if (size.Data.VariableName.Data !== "Deck/cardSize")
+    throw new Error(`deck root float3 variable is "${size.Data.VariableName.Data}", expected "Deck/cardSize"`);
+  const step = num(size.Data.Value.Data[2]);
+  if (!(step > 0)) throw new Error(`Deck/cardSize z is ${step}, which cannot be a card step`);
+  return { deck, cards, assetsSlot, buffers: cards.Children.length, step };
+}
+function writeCard(doc, buffer2, i, { code, front, back }) {
+  const card = kid(buffer2, "Card");
+  if (!card) throw new Error(`buffer ${i} has no "Card" child`);
+  const spaces = compsOf(doc, card, "DynamicVariableSpace").map((c) => c.Data.SpaceName.Data);
+  if (!spaces.includes("DATA"))
+    throw new Error(`buffer ${i}: Card carries no "DATA" variable space (has ${JSON.stringify(spaces)}) - the hoisted space is what makes DATA/FRONT addressable at the Card`);
+  const data = kid(card, "DATATEMPLATE");
+  if (!data) throw new Error(`buffer ${i}: Card has no DATATEMPLATE child`);
+  const vars = /* @__PURE__ */ new Map();
+  for (const c of compsOf(doc, data, "DynamicValueVariable<string>")) vars.set(c.Data.VariableName.Data, c);
+  for (const want of ["NAME", "FRONT", "BACK"])
+    if (!vars.has(want)) throw new Error(`buffer ${i}: DATATEMPLATE has no "${want}" variable`);
+  vars.get("NAME").Data.Value.Data = code;
+  vars.get("FRONT").Data.Value.Data = front;
+  vars.get("BACK").Data.Value.Data = back;
+  const tmpl = kid(card, "Template");
+  if (!tmpl) throw new Error(`buffer ${i}: Card has no Template child`);
+  oneComp(doc, tmpl, "StaticTexture2D", `buffer ${i} Template`).Data.URL.Data = asUrl(front);
+  const idx = compsOf(doc, card, "DynamicValueVariable<int>").find((c) => c.Data.VariableName.Data === "Card/index");
+  if (idx) idx.Data.Value.Data = new Int32(i);
+}
+async function fillDeck(template, { codes, proxy = DEFAULT_PROXY, name, log = () => {
 } }) {
+  if (!Array.isArray(codes) || !codes.length) throw new Error("fillDeck needs at least one card code");
   const zip = await import_jszip.default.loadAsync(template);
   const record = JSON.parse(await zip.file("R-Main.record").async("string"));
   const oldFrdt = String(record.assetUri).replace(/^@?packdb:\/\/\//, "");
   const doc = await frdtToDoc(await zip.file(`Assets/${oldFrdt}`).async("uint8array"));
-  const swaps = [];
-  for (const [oldHash, tex] of [[OLD_ATLAS, front], [OLD_BACK, back]]) {
-    const newHash = await sha256(tex.bytes);
-    const sidecar = JSON.parse(await zip.file(`Metadata/${oldHash}.bitmap`).async("string"));
-    sidecar.assetIdenfitier = newHash;
-    sidecar.baseFormat = "webp";
-    sidecar.width = tex.width;
-    sidecar.height = tex.height;
-    swaps.push({ oldHash, newHash, bytes: tex.bytes, sidecar: enc.encode(JSON.stringify(sidecar)) });
-    log(`  tex ${oldHash.slice(0, 8)} -> ${newHash.slice(0, 8)}  ${tex.width}x${tex.height}  ${(tex.bytes.length / 1048576).toFixed(2)}MB`);
-  }
-  const keepFonts = /* @__PURE__ */ new Set(), dropFonts = /* @__PURE__ */ new Set();
-  (function scan(o) {
-    if (Array.isArray(o)) return o.forEach(scan);
-    if (o && typeof o === "object") {
-      if (o.MainFont && o.FallbackFonts) {
-        keepFonts.add(o.MainFont.Data);
-        for (const f of o.FallbackFonts.Data || []) dropFonts.add(f.Data);
-        o.FallbackFonts.Data = [];
-      }
-      for (const k in o) scan(o[k]);
-    }
-  })(doc);
-  for (const k of keepFonts) dropFonts.delete(k);
-  log(`  fonts: keeping ${keepFonts.size} main, dropping ${dropFonts.size} fallback`);
-  const fontBlobs = /* @__PURE__ */ new Set();
-  const keptAssets = [];
-  for (const a of doc.Assets || []) {
-    const id = a.Data && a.Data.ID;
-    if (id && dropFonts.has(id)) {
-      const u = a.Data.URL && a.Data.URL.Data;
-      if (u) fontBlobs.add(String(u).replace(/^@?packdb:\/\/\//, ""));
-      continue;
-    }
-    keptAssets.push(a);
-  }
-  doc.Assets = keptAssets;
-  log(`  font blobs removed: ${fontBlobs.size}`);
-  let urlHits = 0, blend = 0, cut = 0, edgeHits = 0;
-  const targets = /* @__PURE__ */ new Set([TEX_FRONT, TEX_BACK]);
-  (function walk(o) {
-    if (Array.isArray(o)) return o.forEach(walk);
-    if (!o || typeof o !== "object") return;
-    for (const k of Object.keys(o)) if (k === "Data" && typeof o[k] === "string") {
-      for (const s of swaps) if (o[k].includes(s.oldHash)) {
-        o[k] = o[k].replace(s.oldHash, s.newHash);
-        urlHits++;
-      }
-    }
-    if (o.BlendMode && o.Texture && typeof o.Texture.Data === "string" && targets.has(o.Texture.Data)) {
-      if (o.BlendMode.Data === "Opaque") o.BlendMode.Data = "Cutout";
-      if (o.BlendMode.Data === "Cutout") blend++;
-      if (o.AlphaCutoff && o.AlphaCutoff.Data != null) {
-        o.AlphaCutoff.Data = CUTOFF;
-        cut++;
-      }
-    }
-    if (edgeTint && o.TintColor && o.TextureScale && Array.isArray(o.TextureScale.Data)) {
-      const ts = o.TextureScale.Data.map((v) => v && typeof v === "object" && "value" in v ? v.value : Number(v));
-      if (ts[1] > 10 && Array.isArray(o.TintColor.Data)) {
-        for (let i = 0; i < 3; i++) o.TintColor.Data[i] = edgeTint[i];
-        edgeHits++;
-      }
-    }
-    for (const k of Object.keys(o)) walk(o[k]);
-  })(doc);
-  log(`  URL refs=${urlHits}  Cutout materials=${blend}  AlphaCutoff->${CUTOFF} on ${cut}  edgeTint=${edgeHits}`);
-  if (urlHits !== swaps.length) throw new Error(`expected ${swaps.length} URL refs, got ${urlHits}`);
-  if (cut < 1) throw new Error("AlphaCutoff never applied");
-  if (blend < 2) throw new Error(`expected both card materials to end as Cutout, got ${blend}`);
-  const trimmed = cards ? trimToCards(doc, cards, log) : [];
-  addCredits(doc, log);
+  const { deck, cards, assetsSlot, buffers, step } = readTemplate(doc);
+  const N = codes.length;
+  if (N > buffers) throw new Error(
+    `${N} cards, but the template holds ${buffers}. A deck cannot grow past its template: re-export a larger holder, and raise the panel with it.`
+  );
+  const assetIds = new Set((doc.Assets ?? []).map((a) => a.Data.ID));
+  const before = assetRefsIn(deck, assetIds);
+  cards.Children = cards.Children.slice(0, N);
+  assetsSlot.Children = assetsSlot.Children.slice(0, N);
+  log(`  buffers ${buffers} -> ${N}   /Assets driver proxies ${buffers} -> ${N}`);
+  const after = assetRefsIn(deck, assetIds);
+  const orphaned = [...before].filter((id) => !after.has(id));
+  if (orphaned.length) throw new Error(
+    `trimming to ${N} orphaned ${orphaned.length} asset(s) - a v1.0 deck shares every card asset, so this means the template is no longer the shape fill.js expects`
+  );
+  const back = backUrlFor(proxy);
+  codes.forEach((code, i) => writeCard(doc, cards.Children[i], i, { code, front: artUrlFor(code, proxy), back }));
+  log(`  ${N} cards written  art ${artUrlFor(codes[0], proxy)}`);
+  log(`  one shared back  ${back}`);
+  const z0 = (N - 1) / 2;
+  cards.Children.forEach((buffer2, i) => {
+    const z = (i - z0) * step;
+    buffer2.Position.Data = [0, 0, z].map((v) => new Double(v));
+    const smooth = oneComp(doc, buffer2, "SmoothTransform", `buffer ${i}`);
+    smooth.Data.TargetPosition.Data = [0, 0, z].map((v) => new Double(v));
+  });
+  log(`  stack z ${(-z0 * step).toFixed(5)} .. ${(z0 * step).toFixed(5)}  step ${step}`);
+  const { marked, unmarked } = scanUrlFields(doc);
+  if (unmarked.length) throw new Error(
+    `${unmarked.length} Uri field(s) without the "@" marker, first: ${unmarked[0].field}=${unmarked[0].value}`
+  );
+  log(`  Uri fields marked: ${marked.length}, unmarked: 0`);
+  verifyCredits(doc);
+  log(`  /credits verified: ${DECK_CREDITS.length} slots`);
   const newFrdt = await docToFrdt(doc);
   const newFrdtHash = await sha256(newFrdt);
-  const drop = /* @__PURE__ */ new Set([
-    `Assets/${oldFrdt}`,
-    "R-Main.record",
-    ...swaps.flatMap((s) => [`Assets/${s.oldHash}`, `Metadata/${s.oldHash}.bitmap`]),
-    ...[...fontBlobs].map((h) => `Assets/${h}`),
-    ...trimmed.map((h) => `Assets/${h}`)
-  ]);
   const out = new import_jszip.default();
   for (const [n, f] of Object.entries(zip.files)) {
-    if (f.dir || drop.has(n)) continue;
+    if (f.dir || n === "R-Main.record" || n === `Assets/${oldFrdt}`) continue;
     out.file(n, await f.async("uint8array"));
   }
-  for (const s of swaps) {
-    out.file(`Assets/${s.newHash}`, s.bytes);
-    out.file(`Metadata/${s.newHash}.bitmap`, s.sidecar);
-  }
   out.file(`Assets/${newFrdtHash}`, newFrdt);
-  const gone = /* @__PURE__ */ new Set([oldFrdt, ...swaps.map((s) => s.oldHash), ...fontBlobs, ...trimmed]);
   record.assetUri = `packdb:///${newFrdtHash}`;
   if (name) record.name = name;
   record.assetManifest = [
-    ...record.assetManifest.filter((e) => !gone.has(e.hash)),
-    ...swaps.map((s) => ({ hash: s.newHash, bytes: s.bytes.length })),
+    ...record.assetManifest.filter((e) => e.hash !== oldFrdt),
     { hash: newFrdtHash, bytes: newFrdt.length }
   ];
   out.file("R-Main.record", JSON.stringify(record));
-  return out.generateAsync({ type: "blob", compression: "DEFLATE" });
+  return { blob: await out.generateAsync({ type: "blob", compression: "DEFLATE" }), cards: N };
+}
+async function sha256(bytes) {
+  const d = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // bake.js
-var MAX_CARDS = COLS * ROWS;
-var bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
-async function bakeDeck({ template, deck, loadArt, landscape, back, name, size = 8192, edgeTint, onPhase = () => {
-}, log = () => {
-} }) {
-  const total = deck.reduce((t, e) => t + e.n, 0);
-  if (total > MAX_CARDS) throw new Error(`${total} cards exceeds the ${COLS}x${ROWS} template grid`);
-  onPhase("art", 0, total);
-  const atlas = await composeAtlas(deck, loadArt, landscape, {
-    size,
-    onProgress: (d, t) => onPhase("art", d, t)
-  });
-  log(`  atlas ${size}x${size}  cards=${atlas.cards}  ${(atlas.blob.size / 1048576).toFixed(2)}MB`);
-  onPhase("back", 0, 1);
-  const backOut = await prepareBack(back);
-  onPhase("back", 1, 1);
-  onPhase("pack", 0, 1);
-  const pkg = await patchPackage(template, {
-    front: { bytes: await bytesOf(atlas.blob), width: size, height: size },
-    back: { bytes: await bytesOf(backOut.blob), width: backOut.width, height: backOut.height },
-    cards: atlas.cards,
-    name,
-    edgeTint,
-    log
-  });
-  onPhase("pack", 1, 1);
-  return { blob: pkg, cards: atlas.cards };
-}
+var MAX_SHEET = COLS * ROWS;
 async function bakeSheetOnly({ deck, loadArt, landscape, back, size = 8192, onPhase = () => {
 } }) {
   const atlas = await composeAtlas(deck, loadArt, landscape, { size, onProgress: (d, t) => onPhase("art", d, t) });
@@ -7498,11 +7400,16 @@ async function bakeSheetOnly({ deck, loadArt, landscape, back, size = 8192, onPh
   };
 }
 export {
+  ART_VERSION,
   COLS,
-  MAX_CARDS,
+  DEFAULT_PROXY,
+  IN_WORLD_WIDTH,
+  MAX_SHEET,
   ROWS,
-  bakeDeck,
-  bakeSheetOnly
+  artUrlFor,
+  backUrlFor,
+  bakeSheetOnly,
+  fillDeck
 };
 /*! Bundled license information:
 

@@ -6,30 +6,59 @@ whose reasons are not visible from the code, several of which have been re-broke
 
 ## Picking this up
 
-Read `docs/HANDOFF.md` first. It records where the in-world panel stands, the one open
-bug and everything already ruled out about it, and the fact that the shipped panel is a
-hand-packed file the builder does not reproduce — a change ships by grafting into it, not
-by rebuilding over it.
+Read `docs/PANEL-V1.md` first — it describes the panel that actually ships
+(`booster/out/ResoPal_Panel_v1.0.resonitepackage`) and how it's built (a UIX Studio shell
+transplanted with the ResoPal flux). `docs/HANDOFF.md` is older and describes the *previous*
+panel (`out/ResoPal_Panel.resonitepackage`, kept only because this doc still refers to it) — its
+"one open bug" (no real card back) was not fixed, it was made moot: v1.0 dropped the hand-built
+card for Sharkmake's DeckReader card, whose front/back is a texture swap on touch, not two-sided
+geometry. Read `docs/HANDOFF.md` for the card-back debugging history if you are touching a
+hand-built card again; skip it otherwise.
 
 ## What this is
 
 A static site (`index.html`, GitHub Pages, resopal.dalek.coffee) that turns a Palworld TCG deck
-into a `.resonitepackage`. The whole bake runs in the browser. A Cloudflare Worker (`worker/`)
-exists only to re-serve Palify's card art with CORS headers.
+into a `.resonitepackage`. **Two exports, and only one still bakes anything.** The deck
+(`web/fill.js`) writes each card's art as a URL into the v1.0 template and re-zips — no pixel is
+ever read. The raw sheet, for hand-baking in Deck Maker (`web/bake.js`'s `bakeSheetOnly`,
+`compose.js`), still composites an 8192² atlas client-side, the way the deck used to. A Cloudflare
+Worker (`worker/`) re-serves Palify's card art with CORS headers and does the in-world texture
+routing every card — panel-spawned or site-exported — actually fetches from at runtime.
 
 ## Invariants — breaking these is silent
 
-**The bake must stay in the browser.** An 8192² RGBA bitmap is 256 MiB; a Worker's ceiling is
-128 MB. The Worker moves bytes and nothing else.
+**The bake must stay in the browser — sheet export only.** An 8192² RGBA bitmap is 256 MiB; a
+Worker's ceiling is 128 MB. The Worker moves bytes and nothing else. **This does not apply to the
+deck export**: `fillDeck` reads no pixels, so there is nothing here for it to violate — see
+`docs/PIPELINE.md` "Deck path: a card carries its art as two URLs, nothing baked".
 
-**Card art must be same-origin or CORS-enabled.** Drawing a cross-origin image onto a canvas taints
-it and `convertToBlob`/`getImageData` throw. `crossOrigin="anonymous"` makes it worse — the image
-then fails to load at all. The loader deliberately goes `fetch → blob → createImageBitmap`, because
-a bitmap decoded from a Blob carries no origin and the canvas stays readable.
+**Card art must be same-origin or CORS-enabled — sheet export only.** Drawing a cross-origin image
+onto a canvas taints it and `convertToBlob`/`getImageData` throw. `crossOrigin="anonymous"` makes it
+worse — the image then fails to load at all. The loader deliberately goes
+`fetch → blob → createImageBitmap`, because a bitmap decoded from a Blob carries no origin and the
+canvas stays readable. **The deck export draws nothing, so this does not apply to it either** — a
+card's art is a live URL the *engine* fetches in-world, never a browser `<img>` or canvas source.
 
-**Landscape rotation is 90° clockwise, and PIL and canvas disagree about what that means.**
-`compose.py` uses `ROTATE_270`, `compose.js` uses `ROT = 90`. They agree; the constants don't.
-This has shipped wrong twice.
+**A v1.0 card's art URL must match what the Worker emits, byte for byte, or the same card is two
+different cached assets.** `web/fill.js`'s `IN_WORLD_WIDTH`/`ART_VERSION` (`?w=512&v=2`) must track
+`worker/src/roll.js`'s `IN_WORLD_WIDTH` and the `&v=` literal in `toFixed()` exactly. Resonite
+caches a texture by URL, in the install, forever — a mismatch is not a bug that shows up once, it
+is every player who owns both a panel-spawned and a site-exported copy of the same card paying for
+the download twice. The reference deck committed for comparison
+(`booster/out/ResoPal_TD02_Deck_v1.0.resonitepackage`) carries the *wrong* shape on purpose (a hand
+capture predates this URL, at `?w=1024` with no `&v=`) — do not copy it.
+
+**A v1.0 card's `DATA` variable space lives on `Card`, not on `DATATEMPLATE` where Sharkmake's own
+card puts it.** The panel's template hoists it up one level so a write addressed at the `Card` slot
+— which is how the panel fills a freshly imported deck — can find it; dynamic-variable lookup only
+walks **up**. Write to the un-hoisted location and the write finds nothing, silently: no error, no
+dangling reference, the card just never gets its art. `web/fill.js` asserts the space is on `Card`
+before writing anything, specifically because of this.
+
+**Landscape rotation is 90° clockwise, and PIL and canvas disagree about what that means — sheet
+export only.** `compose.py` uses `ROTATE_270`, `compose.js` uses `ROT = 90`. They agree; the
+constants don't. This has shipped wrong twice. The deck export rotates nothing client-side at
+all — that moved server-side, into the Worker's `/img/` route.
 
 **Verify atlases against the atlas inside a known-good `.resonitepackage`** — never against a loose
 `.webp` in a build directory. The second rotation bug happened because the comparison file predated
@@ -38,9 +67,14 @@ the first fix, so both sides were wrong in the same way and the diff came back c
 **`solidify()` runs before the resize, not after.** Card art is matted against white; downscaling
 antialiased edge pixels straight leaves a white rim that survives the alpha cutout.
 
-**Only `StaticMesh` assets may be deleted when trimming.** Reference counting must walk `doc.Assets`
-as well as `doc.Object`, because assets reference each other. Getting this wrong deleted `MainFont`
-and broke every button on the deck.
+**Only `StaticMesh` assets may be deleted when trimming — sheet-era template.** Reference counting
+must walk `doc.Assets` as well as `doc.Object`, because assets reference each other. Getting this
+wrong deleted `MainFont` and broke every button on the deck. **A v1.0 deck trim drops nothing**:
+nothing per-card is an asset any more (one mesh, one back texture, shared by every card), so
+`web/fill.js` asserts zero newly-unreferenced assets after a trim instead of a mesh-count
+subtraction. The underlying rule — walk the whole document, never just the object graph — is the
+same rule `booster/extract-deck-template.mjs` uses to prune the deck template's own `Assets` table
+by reachability, iterated to a fixpoint, when it lifts that subtree out of the panel.
 
 **A classpath is a path, not a name.** `[Asm]A.B.C` must have a file at `decompiled/Asm/A/B/C.cs`
 and nowhere else will do. `...Nodes.StartAsyncTask` does not exist — the class is
@@ -87,9 +121,10 @@ claimed.
 over the same two files, not a second implementation. A browser roll is one devtools breakpoint
 from being whatever the player wants, and the in-world spawner cannot roll at all.
 
-**A pull is ordered rarest-first, and that is stack order.** The atlas is laid out in deck-list
-order and the deck's flux drives each card's offset from `IndexOfChild`, so list index is stack
-position. Reveal order on the site is the reverse. See `docs/BOOSTER.md` "Stack order".
+**A pull is ordered rarest-first, and that is stack order.** Cards are laid out — atlas cell order
+before v1.0, card-buffer order since — in deck-list order, and the deck's flux drives each card's
+offset from `IndexOfChild`, so list index is stack position. Reveal order on the site is the
+reverse. See `docs/BOOSTER.md` "Stack order".
 
 ## Generated files that are committed
 
@@ -97,12 +132,18 @@ position. Reveal order on the site is the reverse. See `docs/BOOSTER.md` "Stack 
 site has to serve them. **Edit `web/*.js`, then `cd web && npm run build`.** Editing the bundle
 directly is silently lost on the next build.
 
-`data/template.resonitepackage` is a Deck Maker export run through `tools/strip_template.mjs`
-(20.78 MB → 1.65 MB). Re-run it after any re-bake.
+`data/template.resonitepackage` is the v1.0 deck template — **extracted, not stripped, since
+v1.0.** `booster/extract-deck-template.mjs` lifts the `Deck template` subtree straight out of
+`booster/out/ResoPal_Panel_v1.0.resonitepackage`, the same subtree the panel itself duplicates and
+fills on import, so the site and the panel produce the same object by construction. Re-run it
+whenever that subtree changes, then re-verify with `node web/test-fill.mjs`. (Before v1.0 this was
+a Deck Maker export run through `tools/strip_template.mjs` — that tool still exists, for the
+unrelated sheet-export template; see `docs/PIPELINE.md` "The shipped templates".)
 
 ## Conventions
 
 - Commit as `Dalek <dalek@users.noreply.github.com>`. Never the owner's name or email.
 - Say what you intend to commit before committing it.
-- Ukilop's and Palify's credits are a permanent requirement, not a courtesy. They ship inside every
-  generated deck in `/credits`.
+- Ukilop's, Palify's, Sharkmake's and ResoPal's own credits are a permanent requirement, not a
+  courtesy. All four ship inside every generated deck in `/credits`, verified by
+  `web/credits-v1.js` rather than built — see `docs/PIPELINE.md` "Credits".

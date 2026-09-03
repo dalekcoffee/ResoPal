@@ -306,7 +306,15 @@ function survey(doc, zip, record) {
 
 const here = survey(doc, zip, record);
 
-const srcPath = process.env.TEMPLATE || path.join(import.meta.dirname, '..', 'data', 'template.resonitepackage');
+// No default any more. This has to be the SAME atlas-era export the probe was built
+// against (whatever its own `src=` named) - `data/template.resonitepackage` is the
+// v1.0 deck template now (booster/extract-deck-template.mjs), a different shape
+// with no per-card atlas cell to compare, so defaulting to it would silently
+// compare the probe against the wrong oracle instead of failing loudly.
+if (!process.env.TEMPLATE) throw new Error(
+  'test-deck-probe.mjs needs TEMPLATE=<the same atlas-era export build-deck-probe.mjs used as src=>. '
+  + '"data/template.resonitepackage" is the v1.0 deck template now - see docs/PIPELINE.md.');
+const srcPath = process.env.TEMPLATE;
 const srcZip = await JSZip.loadAsync(await readFile(srcPath));
 const srcRecord = JSON.parse(await srcZip.file('R-Main.record').async('string'));
 const srcDoc = await deserializeBson(await frdtToBsonBytes(

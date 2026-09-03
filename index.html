@@ -625,7 +625,7 @@
           <div style="flex:1">
             <div data-rp="back" style="font:400 25px/1.2 'Newsreader',serif">Card back</div>
             <div style="font:400 13.5px/1.5 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px">Trim it here, so it can&rsquo;t be wrong in-world.</div>
-            <div style="font:400 13px/1.55 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px;max-width:640px">The frame is the output. Drag to move, scale and rotate &mdash; anything outside the card shape is cut off before it ever reaches Resonite. This back flows into both export paths.</div>
+            <div style="font:400 13px/1.55 'Figtree',sans-serif;color:#8e9ac0;margin-top:9px;max-width:640px">The frame is the output. Drag to move, scale and rotate &mdash; anything outside the card shape is cut off. This back is used by the card sheet and the card-back image, for hand-baking in Deck Maker. The <code style="font:500 12px/1 'JetBrains Mono',monospace;color:#a3cfd8">.resonitepackage</code> deck does not carry it: its cards fetch one shared back over the network, so a custom back needs somewhere to be hosted first.</div>
           </div>
         </div>
 
@@ -885,8 +885,18 @@ const RANK = ['SSS', 'SSP', 'OSR', 'SP', 'SR', 'RR', 'R', 'U', 'C', 'TD', 'TSR',
 // (tools/fetch-pool.mjs + a weights entry), not an edit to this file.
 const SET = 'BP01';
 const STACK_RAREST_FIRST = true;   // see rows(): index 0 is one fixed end of the stack
-// The template's atlas is a 10x7 grid and composeAtlas throws past it, so the card
-// finder stops adding there rather than letting the bake fail an hour later.
+// The picker's cap. Bound by the SHEET, not the deck: composeAtlas throws past a
+// 10x7 grid, so the card finder stops adding there rather than letting a hand-bake
+// fail an hour later. This is deliberately NOT the deck template's buffer count -
+// the sheet export owes nothing to the holder, and lowering this to match the
+// holder would cost sheet-only users 18 cards for no reason of theirs.
+//
+// The .resonitepackage export has its OWN, lower ceiling - the v1.0 template holds
+// 52 cards, one buffer each (docs/PIPELINE.md) - and web/fill.js enforces it
+// itself, with its own clear error, same as trimToCards did before it. A picker
+// selection or a ripped pack between 53 and 70 cards bakes fine as a sheet and
+// fails loudly, not silently, as a deck. The in-world panel meets the same wall
+// less visibly: it fills min(cards, 52) buffers and destroys the rest.
 const MAX_DECK = 70;
 const COLOR_HUE = { Red: '#dd9c9c', Blue: '#9dc2dd', Green: '#a3ccae', Purple: '#c2a3e2', Colorless: '#cfc7a8' };
 
@@ -1285,13 +1295,19 @@ class Component extends DCLogic {
   // Per kind, because each export reads a different part of the screen: the card
   // back owes nothing to the deck list, and the main deck owes nothing to the soul
   // count. The back's zoom/rotate/pan are deliberately absent - they are
-  // preview-only and never reach bakeDeck, so they cannot change the output.
+  // preview-only and never reach the sheet bake, so they cannot change the output.
+  //
+  // `backSrc` is in the signature for the SHEET exports only. A v1.0 deck's back is
+  // one shared URL the engine fetches in-world, not pixels in the package, so the
+  // chosen back cannot change a .resonitepackage byte - and including it there would
+  // mark a finished deck stale and make the user rebuild an identical file.
   exportSig(s, kept, kind) {
     const soul = (kind === 'soul' || kind === 'both') && !s.soulSkipped && !this.noSoul(s)
       ? s.soulCode + 'x' + s.soulCount : '-';
     const main = kind === 'soul' || kind === 'back'
       ? '-' : kept.map(r => this.sel(r.key) + ':' + r.qtyN).join(',');
-    return [kind, s.deckLabel, s.backSrc, soul, main].join('|');
+    const back = (kind === 'sheet' || kind === 'back') ? s.backSrc : '-';
+    return [kind, s.deckLabel, back, soul, main].join('|');
   }
 
   importFailed(message) {
@@ -1594,8 +1610,38 @@ class Component extends DCLogic {
       if (kind === 'soul' && !wantsSoul) throw new Error('There is no soul deck to export \u2014 it was skipped.');
       if (wantsMain && !main.length) throw new Error('This deck has no cards to export.');
 
-      const [{ bakeDeck, bakeSheetOnly }] = await Promise.all([import('./web/bake.bundle.js')]);
+      const [{ fillDeck, bakeSheetOnly }] = await Promise.all([import('./web/bake.bundle.js')]);
       this.pct(6);
+
+      // ── the deck path reads no pixels at all ────────────────────────────────
+      //
+      // A v1.0 card fetches its own face from a URL, so building a deck is writing
+      // three strings per card into a template - there is no atlas to compose and
+      // nothing to download before it can start. The art loading below exists for
+      // the SHEET export alone, which still draws an 8192 canvas for hand-baking in
+      // Deck Maker, and which is why compose.js and the CORS rules around it are
+      // still here.
+      if (kind !== 'sheet' && kind !== 'back') {
+        const template = await (await fetch('data/template.resonitepackage')).arrayBuffer();
+        this.pct(30);
+        // one job per package: 'package' fills the deck, 'soul' the soul deck, 'both' both
+        const jobs = [];
+        if (wantsMain) jobs.push({ deck: main, name: st.deckLabel, file: slug + '.resonitepackage' });
+        if (wantsSoul) jobs.push({ deck: soul, name: (st.deckLabel || 'Deck') + ' \u2014 Soul', file: slug + '-Soul.resonitepackage' });
+        const files = [];
+        for (let j = 0; j < jobs.length; j++) {
+          const job = jobs[j];
+          // a quantity is that many physical cards, and the stack is laid out in
+          // this order - see docs/BOOSTER.md "Stack order"
+          const codes = job.deck.flatMap(e => Array(e.n).fill(e.code));
+          const out = await fillDeck(template, { codes, name: job.name });
+          files.push({ blob: out.blob, name: job.file });
+          this.pct(30 + 66 * (j + 1) / jobs.length);
+        }
+        this.out = { kind, files };
+        this.outSig = sig;
+        return this.finishGen(kind, sig);
+      }
 
       // landscape is decided from the art's real aspect ratio, never from metadata
       const landscape = new Set(), blobs = new Map(), decoded = new Map();
@@ -1638,54 +1684,38 @@ class Component extends DCLogic {
       const back = await createImageBitmap(await (await fetch(this.state.backSrc || 'assets/DefaultBack.png')).blob());
       this.pct(60);
 
-      if (kind === 'sheet' || kind === 'back') {
-        const out = await bakeSheetOnly({ deck: main, loadArt, landscape, back });
-        this.pct(96);
-        this.out = { kind, files: kind === 'back'
-          ? [{ blob: out.back, name: slug + '-back.webp' }]
-          : [{ blob: out.front, name: slug + '-front.webp' }] };
-      } else {
-        const template = await (await fetch('data/template.resonitepackage')).arrayBuffer();
-        this.pct(66);
-        // one job per package: 'package' bakes the deck, 'soul' the soul deck, 'both' both
-        const jobs = [];
-        if (wantsMain) jobs.push({ deck: main, name: st.deckLabel, file: slug + '.resonitepackage' });
-        if (wantsSoul) jobs.push({ deck: soul, name: (st.deckLabel || 'Deck') + ' — Soul', file: slug + '-Soul.resonitepackage' });
-        const files = [];
-        for (let j = 0; j < jobs.length; j++) {
-          const job = jobs[j], lo = 66 + 30 * j / jobs.length, hi = 66 + 30 * (j + 1) / jobs.length;
-          const out = await bakeDeck({
-            template, deck: job.deck, loadArt, landscape, back, name: job.name,
-            onPhase: (ph, d, t) => {
-              if (ph === 'art') this.pct(lo + (hi - lo) * 0.6 * d / Math.max(1, t));
-              else if (ph === 'pack') this.pct(lo + (hi - lo) * 0.85);
-            },
-          });
-          files.push({ blob: out.blob, name: job.file });
-        }
-        this.out = { kind, files };
-      }
+      const out = await bakeSheetOnly({ deck: main, loadArt, landscape, back });
+      this.pct(96);
+      this.out = { kind, files: kind === 'back'
+        ? [{ blob: out.back, name: slug + '-back.webp' }]
+        : [{ blob: out.front, name: slug + '-front.webp' }] };
       this.outSig = sig;
-
-      const bytes = this.out.files.reduce((t, f) => t + f.blob.size, 0);
-      const mb = b => (b / 1048576).toFixed(2) + ' MB';
-      const sizeOf = suffix => {
-        const f = this.out.files.find(x => x.name.endsWith(suffix));
-        return f ? mb(f.blob.size) : null;
-      };
-      const soulMB = sizeOf('-Soul.resonitepackage');
-      const mainMB = kind === 'soul' ? null : sizeOf('.resonitepackage');
-      this.setState({
-        gen: { pct: 100, failed: false }, ready: true, outSize: bytes,
-        sizeMain: mainMB || st.sizeMain, sizeSoul: soulMB || st.sizeSoul,
-      });
-      // First bake downloads straight away - unless the deck changed while it was
-      // baking, in which case the file is already out of date and the render-time
-      // check is about to drop it.
-      if (this.exportSig(this.state, this.rows(this.state).filter(r => !r.discarded), kind) === sig) this.saveOut();
+      this.finishGen(kind, sig);
     } catch (e) {
       this.setState({ gen: { pct: this.state.gen ? this.state.gen.pct : 40, failed: true }, genError: String((e && e.message) || e) });
     }
+  }
+
+  // Report the finished sizes and hand the file over. Shared, because the deck path
+  // and the sheet path now return from different points in startGen.
+  finishGen(kind, sig) {
+    const st = this.state;
+    const bytes = this.out.files.reduce((t, f) => t + f.blob.size, 0);
+    const mb = b => (b / 1048576).toFixed(2) + ' MB';
+    const sizeOf = suffix => {
+      const f = this.out.files.find(x => x.name.endsWith(suffix));
+      return f ? mb(f.blob.size) : null;
+    };
+    const soulMB = sizeOf('-Soul.resonitepackage');
+    const mainMB = kind === 'soul' ? null : sizeOf('.resonitepackage');
+    this.setState({
+      gen: { pct: 100, failed: false }, ready: true, outSize: bytes,
+      sizeMain: mainMB || st.sizeMain, sizeSoul: soulMB || st.sizeSoul,
+    });
+    // The first export downloads straight away - unless the deck changed while it
+    // was building, in which case the file is already out of date and the
+    // render-time check is about to drop it.
+    if (this.exportSig(this.state, this.rows(this.state).filter(r => !r.discarded), kind) === sig) this.saveOut();
   }
 
   renderVals() {
@@ -1929,7 +1959,7 @@ class Component extends DCLogic {
         plusStyle: "width:30px;height:30px;border-radius:8px;border:0;background:transparent;color:#b0b3ea;font:600 16px/1 'Figtree',sans-serif;cursor:" + (picksFull ? 'not-allowed;opacity:.4' : 'pointer')
       })),
       picksNote: picksFull
-        ? 'That is the whole 10 \u00d7 7 sheet \u2014 ' + MAX_DECK + ' cards is as many as one deck object holds.'
+        ? 'That is the whole 10 \u00d7 7 sheet \u2014 the .resonitepackage export holds up to 52 of these.'
         : picksMerge
           ? 'Two printings of the same card are baked as one card with one art \u2014 the last printing picked wins.'
           : 'Add as many as you like, then import them as one deck. No soul deck is offered for cards picked this way.',
