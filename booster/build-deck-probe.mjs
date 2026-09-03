@@ -99,7 +99,19 @@ if (args.blank) {
 } else {
   CODES = String(args.cards || 'TD01-001,TD01-002,TD01-003').split(',').map((s) => s.trim()).filter(Boolean);
 }
-const SRC = args.src || path.join(ROOT, 'data', 'template.resonitepackage');
+// No default any more. This probe needs an ATLAS-ERA Deck Maker export - one card
+// mesh per buffer, each with its own baked-UV StaticMesh and a front material this
+// tool clones and remaps by ST (see the header comment above). `data/template.
+// resonitepackage` stopped being that shape when it became the v1.0 deck template
+// (booster/extract-deck-template.mjs): one shared mesh, art driven by URL, nothing
+// per-card to remap. Defaulting here would silently point this probe at a template
+// it cannot use - it is not shaped like what mode=static expects to write into -
+// so `src=` is required instead of assumed.
+if (!args.src) throw new Error(
+  'build-deck-probe.mjs needs src=<path to an ATLAS-ERA Deck Maker export>. '
+  + '"data/template.resonitepackage" is the v1.0 deck template now (no atlas, one shared mesh) '
+  + 'and is the wrong shape for this probe - see docs/PIPELINE.md.');
+const SRC = args.src;
 const DONOR = args.donor || path.join(ROOT, 'booster', 'out', 'ResoPal_Panel.resonitepackage');
 const OUT = args.out || path.join(ROOT, 'booster', 'out', 'ResoPal_DeckProbe.resonitepackage');
 

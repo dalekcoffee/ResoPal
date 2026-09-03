@@ -1,5 +1,22 @@
 # Handoff — the in-world panel, 2026-08-30
 
+> **Superseded by `docs/PANEL-V1.md` as of v1.0 (2026-09-02).** This file describes
+> `out/ResoPal_Panel.resonitepackage` — the panel BEFORE the UIX Studio shell transplant — kept
+> because it is the only record of the card-back debugging below. `booster/out/ResoPal_Panel_v1.0.
+> resonitepackage` is what actually ships now; read `docs/PANEL-V1.md` for it.
+>
+> **"The one open bug" below (no real card back) was not fixed — it was made moot.** v1.0 dropped
+> the hand-built card (a `QuadMesh` pair, one per face) for Sharkmake's DeckReader card, which
+> shows a front or back texture on ONE quad via a `TouchToggle`, not two truly opposite faces. There
+> is no back face to get wrong any more. Everything below about attempts 1-3 and what they ruled
+> out is still accurate history for the geometry it was about — it just is not the geometry
+> currently in use.
+>
+> The deck-package facts in this file (BSON gotchas, id declaration keys, trim mechanics) were
+> written around the atlas bake and are folded into `docs/PIPELINE.md`, split by which export path
+> each still applies to. Read that file for anything about building a package; read this one for
+> the panel's pre-v1.0 history.
+
 Where the in-world import stands, what is known, and what to do next. Written to be
 read cold. Start here, then `booster/GRAPH.md` for the graph and `docs/PIPELINE.md`
 before touching anything that produces a deck package.

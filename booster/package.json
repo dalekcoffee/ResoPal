@@ -9,7 +9,7 @@
     "build:deck-probe": "node build-deck-probe.mjs",
     "test:deck-probe": "node test-deck-probe.mjs",
     "graft:url-markers": "node graft-url-markers.mjs",
-    "build:deck-template": "node build-deck-probe.mjs blank=52 back=proxy out=out/ResoPal_DeckTemplate.resonitepackage",
+    "extract:deck-template": "node extract-deck-template.mjs",
     "graft:deck": "node graft-deck.mjs",
     "test:graft-deck": "node test-graft-deck.mjs"
   },
