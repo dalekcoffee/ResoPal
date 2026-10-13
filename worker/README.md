@@ -20,6 +20,7 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 |---|---|
 | `/health` | returns `{ok:true}` — use it to confirm the deploy |
 | `/img/<CODE>?w=256\|512\|1024` | card art, CORS-enabled, edge-cached for a year |
+| `/official/<CODE>?w=256\|512\|1024` | **opt-in** official-site art for the same code — see below. Nothing emits these URLs yet |
 | `/api/pull` | roll booster packs — see `../docs/PULL-API.md` |
 | `/api/deck` | a committed deck list, in the same records |
 | `/api/resolve` | **a pasted palify deck link or decklist**, in the same records |
@@ -30,6 +31,15 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 decklist in a query string. The body is whatever the user pasted; `src/resolve.js` works out
 whether that was a deck link, a bare deck id or a list, and every code is checked against Palify's
 own catalogue before it is served. See `../docs/PULL-API.md`.
+
+`/official/` serves the official card game site's PNG for a Palify code (`TD02-002` →
+`ETD02/ETD02-002.png`, mapped in `src/official.js`). It is a separate route on purpose: every card
+already spawned or exported carries an `/img/` URL, Resonite caches by URL forever, and `/img/` is
+not changed by any of this. When the official copy is missing, not a PNG, landscape, or the site is
+down, the route returns exactly what `/img/` would, with `x-art-source: palify` and the reason in
+`x-art-fallback`. It ignores `w` on the official copy — that PNG comes in one size. Switching a
+caller over is a deliberate change to `web/fill.js` and `src/roll.js` together; see
+`../docs/OFFICIAL-ART.md`.
 
 `/deck` and `/profile` read Palify's RSC flight payload and parse it here, in
 `src/flight.js` — the format is undocumented and will change without warning, and when it does the

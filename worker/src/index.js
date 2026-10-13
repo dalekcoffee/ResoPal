@@ -15,6 +15,8 @@
  */
 import { weights, poolBP01, decks } from './data.js';
 import { isLandscape } from './webp.js';
+import { pngSize } from './png.js';
+import { officialUrl } from './official.js';
 import { parseDeck, parseProfile, isNotFound } from './flight.js';
 import { rollPacks, toFlat, toFixed, newSeed, RECORD_WIDTH } from './roll.js';
 import { sniff, parseFlight, parseDeckList, expand, MAX_CARDS } from './resolve.js';
@@ -136,6 +138,92 @@ async function image(request, ctx, code, width, h, orig = false) {
       },
     });
     if (permanent) ctx.waitUntil(cache.put(key, hit.clone()));
+  }
+
+  return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...h } });
+}
+
+/**
+ * Card art from the official card game site, OPT-IN, alongside /img/ - not
+ * instead of it.
+ *
+ * /img/ is untouched by this and must stay that way: every card already spawned
+ * or exported carries an /img/ URL, and Resonite caches a texture by URL, in the
+ * install, forever. Changing what /img/ serves would not update those players -
+ * it would split them, old cache on Palify art and new cache on official art,
+ * for the same URL. A different source is a different URL, so it is a
+ * different route. Nothing emits /official/ URLs yet; switching a caller over is
+ * a deliberate change to web/fill.js AND roll.js's toFixed together (CLAUDE.md,
+ * "byte for byte"), with an ART_VERSION bump.
+ *
+ * The code in the URL is Palify's (TD02-002), the same code every pool, deck and
+ * catalogue check in this Worker uses; ./official.js derives the filename.
+ *
+ * Anything the official copy cannot do, Palify does, through image() itself, so
+ * a fallback is byte-identical to what /img/ would have served:
+ *   - no official file for that code (a printing they do not list): 404
+ *   - not a readable PNG (an HTML error page answered 200, say)
+ *   - landscape: the pre-turned copies under assets/rot are Palify's, and
+ *     nothing in Resonite can turn an image (see ROTATED above)
+ *   - any other upstream failure
+ * A card that falls back still loads. `x-art-source` says which one it got.
+ *
+ * `w` is accepted so a URL has the same shape as /img/'s, but the official PNG
+ * comes in one size and the Worker does not resize (docs/WORKER.md). Only the
+ * Palify fallback honours it.
+ */
+// Its own namespace and version: bumping this never touches /img/'s cache.
+const OFFICIAL_CACHE_VERSION = 'v1';
+
+async function official(request, ctx, code, width, h) {
+  if (!CODE.test(code)) return fail(400, 'bad card code', h);
+  if (!WIDTHS.has(width)) return fail(400, 'width must be 256, 512 or 1024', h);
+
+  const cache = caches.default;
+  const key = new Request(`https://resopal-cache.invalid/official/${OFFICIAL_CACHE_VERSION}/${code}`, { method: 'GET' });
+  let hit = await cache.match(key);
+
+  if (!hit) {
+    // `transient` = worth trying again later. A 404 is an answer; a 5xx is not.
+    let why = null, transient = false;
+    let source = null;
+    try {
+      // By status, not a flat cacheTtl: a printing the site has not listed yet
+      // should be found within the hour once it is, and an outage never cached.
+      source = await fetch(officialUrl(code), {
+        cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31536000, '404': 3600, '500-599': 0 } },
+        headers: { 'user-agent': 'ResoPal/1.0 (+https://resopal.dalek.coffee)' },
+      });
+    } catch (e) { why = 'fetch failed'; transient = true; }
+
+    let body = null;
+    if (source && !source.ok) { why = `official ${source.status}`; transient = source.status !== 404; }
+    else if (source) {
+      body = new Uint8Array(await source.arrayBuffer());
+      const size = pngSize(body);
+      if (!size) why = 'official copy is not a PNG';
+      else if (size.width > size.height) why = 'landscape';
+    }
+
+    if (why) {
+      const fallback = await image(request, ctx, code, width, h);
+      const headers = new Headers(fallback.headers);
+      headers.set('x-art-source', 'palify');
+      headers.set('x-art-fallback', why);
+      // A transient failure must not be remembered as the answer: the official
+      // copy may be back in a minute.
+      if (transient && fallback.ok) headers.set('cache-control', 'public, max-age=300');
+      return new Response(fallback.body, { status: fallback.status, headers });
+    }
+
+    hit = new Response(body, {
+      headers: {
+        'content-type': 'image/png',
+        'cache-control': 'public, max-age=31536000, immutable',
+        'x-art-source': 'official',
+      },
+    });
+    ctx.waitUntil(cache.put(key, hit.clone()));
   }
 
   return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...h } });
@@ -505,6 +593,10 @@ export default {
     if ((m = p.match(/^\/img\/([^/]+)$/)))
       return image(request, ctx, decodeURIComponent(m[1]).replace(/\.webp$/i, '').toUpperCase(),
         url.searchParams.get('w') || '1024', h, url.searchParams.get('orig') === '1');
+
+    if ((m = p.match(/^\/official\/([^/]+)$/)))
+      return official(request, ctx, decodeURIComponent(m[1]).replace(/\.(webp|png)$/i, '').toUpperCase(),
+        url.searchParams.get('w') || '1024', h);
 
     const raw = url.searchParams.get('raw') === '1';
 

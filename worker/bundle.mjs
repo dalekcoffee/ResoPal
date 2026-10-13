@@ -38,6 +38,7 @@ const HEADER = `// resopal-proxy - single-file build of worker/src/*.js.
 // Routes:
 //   /  /health                 liveness
 //   /img/<CODE>?w=             palify card art, CORS-enabled, cached at the edge
+//   /official/<CODE>?w=        OPT-IN official-site art; falls back to /img/'s
 //   /deck/<uuid>               palify deck page, RSC flight payload
 //   /profile/<handle>          palify profile page, RSC flight payload
 //   /api/pull?set=&packs=      roll booster packs server-side
