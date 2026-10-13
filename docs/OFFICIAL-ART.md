@@ -1,6 +1,7 @@
 # Official-site card art
 
-Status: **route built, not deployed, not used by anything.** Palify remains the only art source
+Status: **route built, not deployed, not used by anything. Measured 2026-10-13: the official
+art is 400 px wide, smaller than Palify's, so the switch is off (see "Measured" below).** Palify remains the only art source
 every shipped panel, every exported deck and the site actually use.
 
 ## What exists
@@ -27,22 +28,28 @@ Why it cannot break an existing user:
 
 Reverting it is deleting the route branch and the two modules. Nothing else references them.
 
-## Not verified yet: image quality
+## Measured: the official art is smaller than Palify's
 
-**No official image has been measured.** This was explored in a cloud session whose network
-policy blocked both `en.palworld-official-cardgame.com` and `palify.org`. Web tools there had no
-DNS either, so the dimensions, byte sizes, headers (CORS, cache-control) and filename coverage
-below are still open.
+**Verdict: do not switch.** Probed 2026-10-13 against all 256 codes in `data/pool-*.json`
+(`tools/probe-official-art.mjs`). The official cardlist PNG is 400 px wide, so it is smaller
+than Palify's 512 that ships today, let alone its 1024. Step 1 below says stop, so this
+stops here. The route stays built and unused.
 
 | | Palify `/cards/w1024/` (what `/img/` uses) | Official cardlist PNG |
 |---|---|---|
-| format | WebP | PNG (from the URL) |
-| size | 1024 wide, ratio ≈ 0.7156 (`docs/DESIGN-SPEC.md`), ~1431 tall | **unmeasured** |
-| widths | 256 / 512 / 1024 | one size, as served |
-| landscape Structures | served landscape, turned via `assets/rot/` | **unknown** |
-| parallel naming | `BP01-025SSP`, `BP01-001OSR`, `TD01-024TSR-ERR` … | `EBP01-025SSP` confirmed by a known URL; the rest are unknown |
+| format | WebP | PNG (`image/png`) |
+| size | 1024×1431 portrait, 1024×732 landscape | **400×559** portrait, **400×286** landscape (236/237 found) |
+| bytes, mean of the 237 found | 162 KB | 95 KB |
+| largest copy | `/cards/<CODE>.webp` is 1600×2236 (BP01-001); `w1536`/`w2048` 404 | the cardlist page's server HTML links no card images (they load by script), so no bigger copy was found |
+| landscape Structures | served landscape, turned via `assets/rot/` | served landscape too (33 codes: the same set as Palify's), so `/official/` falls back for all of them |
+| coverage | all 256 | 237/256. 404s: `PR-002`…`PR-009` and their `S` copies (16), `SOUL-001`, `SOUL-002`, `TD01-024TSR-ERR` |
+| headers | | no `access-control-allow-origin`, no `cache-control`, `last-modified` Jul 2026 |
 
-To fill it in, run this anywhere both hosts are reachable:
+The one exception is `TD01-024TSR`: 1117×1560 (411 KB), slightly larger than Palify's 1024×1430.
+One card does not justify the switch. Parallel naming (`E<SET>/E<CODE>.png`) held for every
+other parallel in the pool, so the mapping in `worker/src/official.js` is right as far as it goes.
+
+To re-run it, use any machine that can reach both hosts:
 
 ```
 node tools/probe-official-art.mjs out=official-vs-palify.md
