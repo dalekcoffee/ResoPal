@@ -175,6 +175,28 @@ async function image(request, ctx, code, width, h, orig = false) {
 // Its own namespace and version: bumping this never touches /img/'s cache.
 const OFFICIAL_CACHE_VERSION = 'v1';
 
+/**
+ * The official PNG's bytes, or why there are none. Shared by /official/ (which
+ * falls back) and /img/?src=official (which must not).
+ * `transient` = worth trying again later. A 404 is an answer; a 5xx is not.
+ */
+async function fetchOfficial(code) {
+  let source;
+  try {
+    // By status, not a flat cacheTtl: a printing the site has not listed yet
+    // should be found within the hour once it is, and an outage never cached.
+    source = await fetch(officialUrl(code), {
+      cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31536000, '404': 3600, '500-599': 0 } },
+      headers: { 'user-agent': 'ResoPal/1.0 (+https://resopal.dalek.coffee)' },
+    });
+  } catch (e) { return { why: 'fetch failed', transient: true }; }
+  if (!source.ok) return { why: `official ${source.status}`, transient: source.status !== 404, status: source.status };
+  const body = new Uint8Array(await source.arrayBuffer());
+  const size = pngSize(body);
+  if (!size) return { why: 'official copy is not a PNG', transient: false };
+  return { body, size };
+}
+
 async function official(request, ctx, code, width, h) {
   if (!CODE.test(code)) return fail(400, 'bad card code', h);
   if (!WIDTHS.has(width)) return fail(400, 'width must be 256, 512 or 1024', h);
@@ -184,26 +206,8 @@ async function official(request, ctx, code, width, h) {
   let hit = await cache.match(key);
 
   if (!hit) {
-    // `transient` = worth trying again later. A 404 is an answer; a 5xx is not.
-    let why = null, transient = false;
-    let source = null;
-    try {
-      // By status, not a flat cacheTtl: a printing the site has not listed yet
-      // should be found within the hour once it is, and an outage never cached.
-      source = await fetch(officialUrl(code), {
-        cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': 31536000, '404': 3600, '500-599': 0 } },
-        headers: { 'user-agent': 'ResoPal/1.0 (+https://resopal.dalek.coffee)' },
-      });
-    } catch (e) { why = 'fetch failed'; transient = true; }
-
-    let body = null;
-    if (source && !source.ok) { why = `official ${source.status}`; transient = source.status !== 404; }
-    else if (source) {
-      body = new Uint8Array(await source.arrayBuffer());
-      const size = pngSize(body);
-      if (!size) why = 'official copy is not a PNG';
-      else if (size.width > size.height) why = 'landscape';
-    }
+    let { why = null, transient = false, body = null, size } = await fetchOfficial(code);
+    if (!why && size.width > size.height) why = 'landscape';
 
     if (why) {
       const fallback = await image(request, ctx, code, width, h);
@@ -217,6 +221,47 @@ async function official(request, ctx, code, width, h) {
     }
 
     hit = new Response(body, {
+      headers: {
+        'content-type': 'image/png',
+        'cache-control': 'public, max-age=31536000, immutable',
+        'x-art-source': 'official',
+      },
+    });
+    ctx.waitUntil(cache.put(key, hit.clone()));
+  }
+
+  return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...h } });
+}
+
+/**
+ * /img/<CODE>?src=official - the official PNG and NOTHING else.
+ *
+ * For callers that must not be handed Palify's art, such as marketplace
+ * listings, where Palify's images cannot be used. So unlike /official/ there
+ * is no fallback: a code the official site does not have is a 404, an outage
+ * is a 502, and a landscape PNG is served as it is (nothing here is a Resonite
+ * texture, so nothing needs it turned). `w` is validated like /img/'s but the
+ * official PNG comes in one size; the Worker does not resize.
+ *
+ * Its own cache namespace: /official/ caches only portrait PNGs and must never
+ * find a landscape one under its key.
+ */
+async function officialStrict(request, ctx, code, width, h) {
+  if (!CODE.test(code)) return fail(400, 'bad card code', h);
+  if (!WIDTHS.has(width)) return fail(400, 'width must be 256, 512 or 1024', h);
+
+  const cache = caches.default;
+  const key = new Request(`https://resopal-cache.invalid/img-official/${OFFICIAL_CACHE_VERSION}/${code}`, { method: 'GET' });
+  let hit = await cache.match(key);
+
+  if (!hit) {
+    const got = await fetchOfficial(code);
+    if (got.why) {
+      const r = fail(got.status === 404 ? 404 : 502, `no official art for ${code}: ${got.why}`, h);
+      r.headers.set('cache-control', got.transient ? 'no-store' : 'public, max-age=3600');
+      return r;
+    }
+    hit = new Response(got.body, {
       headers: {
         'content-type': 'image/png',
         'cache-control': 'public, max-age=31536000, immutable',
@@ -590,9 +635,16 @@ export default {
     if (p === '/api/resolve') return resolve(request, url, h, ctx, url.searchParams.get('deck') || url.searchParams.get('url') || url.searchParams.get('list') || '');
 
     let m;
-    if ((m = p.match(/^\/img\/([^/]+)$/)))
-      return image(request, ctx, decodeURIComponent(m[1]).replace(/\.webp$/i, '').toUpperCase(),
-        url.searchParams.get('w') || '1024', h, url.searchParams.get('orig') === '1');
+    // `src` picks the art source. Absent or `palify` is the /img/ every shipped
+    // card uses, byte for byte; `official` is strict (officialStrict above).
+    if ((m = p.match(/^\/img\/([^/]+)$/))) {
+      const src = url.searchParams.get('src') || 'palify';
+      if (src !== 'palify' && src !== 'official') return fail(400, 'src must be palify or official', h);
+      const code = decodeURIComponent(m[1]).replace(/\.(webp|png)$/i, '').toUpperCase();
+      const width = url.searchParams.get('w') || '1024';
+      if (src === 'official') return officialStrict(request, ctx, code, width, h);
+      return image(request, ctx, code, width, h, url.searchParams.get('orig') === '1');
+    }
 
     if ((m = p.match(/^\/official\/([^/]+)$/)))
       return official(request, ctx, decodeURIComponent(m[1]).replace(/\.(webp|png)$/i, '').toUpperCase(),

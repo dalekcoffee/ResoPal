@@ -20,6 +20,7 @@ It deliberately does **not** bake anything. An 8192×8192 RGBA bitmap is 256 MiB
 |---|---|
 | `/health` | returns `{ok:true}` — use it to confirm the deploy |
 | `/img/<CODE>?w=256\|512\|1024` | card art, CORS-enabled, edge-cached for a year |
+| `/img/<CODE>?src=official` | the official site's PNG only. **No Palify fallback**: a missing one is a 404. For listings that cannot use Palify art |
 | `/official/<CODE>?w=256\|512\|1024` | **opt-in** official-site art for the same code — see below. Nothing emits these URLs yet |
 | `/api/pull` | roll booster packs — see `../docs/PULL-API.md` |
 | `/api/deck` | a committed deck list, in the same records |

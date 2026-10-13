@@ -137,6 +137,41 @@ check('/img/ still webp', r.headers.get('content-type') === 'image/webp');
 check('/img/ cache key unchanged', keys.at(-1) === 'https://resopal-cache.invalid/img/v2/512/TD02-002', keys.at(-1));
 check('/img/ carries no x-art-source', r.headers.get('x-art-source') === null);
 
+console.log('\n/img/?src=palify is the same as no src:');
+r = await get('/img/TD02-002?w=512&src=palify');
+check('palify w512', fetched[0] === 'https://palify.org/cards/w512/TD02-002.webp', fetched.join(' '));
+check('same cache key as plain /img/', keys.at(-1) === 'https://resopal-cache.invalid/img/v2/512/TD02-002', keys.at(-1));
+check('an unknown src is 400 and fetches nothing', (await get('/img/TD02-002?src=elsewhere')).status === 400 && fetched.length === 0);
+
+console.log('\n/img/?src=official serves the official PNG and never palify:');
+official = 'portrait';
+r = await get('/img/TD02-002?src=official');
+check('200', r.status === 200, String(r.status));
+check('fetched only the official site', fetched.length === 1 && fetched[0] === `${BASE}/ETD02/ETD02-002.png`, fetched.join(' '));
+check('image/png, labelled official', r.headers.get('content-type') === 'image/png' && r.headers.get('x-art-source') === 'official');
+check('cached forever', /immutable/.test(r.headers.get('cache-control')));
+check('CORS for the site', r.headers.get('access-control-allow-origin') === ORIGIN);
+check('its own cache namespace', /^https:\/\/resopal-cache\.invalid\/img-official\/v\d+\/TD02-002$/.test(keys.at(-1)), keys.at(-1));
+r = await get('/img/td02-002.png?src=official');
+check('a .png suffix and lowercase normalise', r.status === 200 && fetched[0] === `${BASE}/ETD02/ETD02-002.png`, fetched.join(' '));
+check('a bad code is still 400', (await get('/img/EVIL$CODE?src=official')).status === 400 && fetched.length === 0);
+
+official = 'landscape';
+r = await get('/img/TD01-008?src=official');
+check('landscape is served as it is, not swapped for palify',
+  r.status === 200 && pngSize(await bytes(r))?.width === 1800 && !fetched.some((u) => !u.includes('palworld-official-cardgame')),
+  fetched.join(' '));
+
+for (const [mode, status, cacheable] of [['404', 404, true], ['503', 502, false], ['throw', 502, false], ['html', 502, true]]) {
+  official = mode;
+  r = await get('/img/TD02-002?src=official');
+  check(`${mode}: ${status}, never palify`, r.status === status && !fetched.some((u) => u.includes('palify.org')),
+    `${r.status} ${fetched.join(' ')}`);
+  check(`${mode}: ${cacheable ? 'cached for an hour' : 'not cached'}`,
+    r.headers.get('cache-control') === (cacheable ? 'public, max-age=3600' : 'no-store'), r.headers.get('cache-control'));
+}
+official = 'portrait';
+
 console.log('\nfits the fixed-width record, if a caller is ever switched over:');
 // The panel decodes art URLs at RECORD_WIDTH and that width is baked into every
 // panel already spawned - an /official/ URL that does not fit cannot be used.
